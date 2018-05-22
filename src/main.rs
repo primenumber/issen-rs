@@ -28,8 +28,10 @@ impl Board {
             } else {
                 write!(std::io::stdout(), "-").unwrap();
             }
+            if i % 8 == 7 {
+                write!(std::io::stdout(), "\n").unwrap();
+            }
         }
-        write!(std::io::stdout(), "\n").unwrap();
     }
 }
 
