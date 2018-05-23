@@ -143,6 +143,25 @@ impl Board {
             }
         }
     }
+
+    pub fn score(&self) -> i8 {
+        let mut pcnt = 0i8;
+        let mut ocnt = 0i8;
+        for i in 0usize..64usize {
+            if self.player.data[i] {
+                pcnt += 1;
+            } else if self.opponent.data[i] {
+                ocnt += 1;
+            }
+        }
+        if pcnt == ocnt {
+            0
+        } else if pcnt > ocnt {
+            64 - 2*ocnt
+        } else {
+            -64 + 2*pcnt
+        }
+    }
 }
 
 use std::str::FromStr;
@@ -173,6 +192,30 @@ impl FromStr for Board {
             Err(BoardParseError{})
         }
     }
+}
+
+use std::cmp::max;
+
+fn solve(board: Board, passed: bool) -> i8 {
+    let mut pass = true;
+    let mut result = -64;
+    for i in 0usize..64usize {
+        match board.play(i) {
+            Ok(next) => {
+                result = max(result, -solve(next, false));
+                pass = false;
+            },
+            Err(_) => ()
+        }
+    }
+    if pass {
+        if passed {
+            return board.score();
+        } else {
+            return -solve(board.pass(), true);
+        }
+    }
+    result
 }
 
 use std::io::prelude::*;
@@ -227,14 +270,30 @@ fn play(mut board: Board) -> Board {
 
 use std::io::BufReader;
 use std::fs::File;
+use std::time::Instant;
 
-fn main() {
-    let file = File::open("fforum-1-19.obf").unwrap();
+fn solve_ffo(name: &str, begin_index: usize) -> () {
+    let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
-    for line in reader.lines() {
+    for (i, line) in reader.lines().enumerate() {
         match Board::from_str(&line.unwrap()) {
-            Ok(board) => play(board).print(),
+            Ok(board) => {
+                let start = Instant::now();
+                let res = solve(board, false);
+                let end = start.elapsed();
+                println!("number: {}, result: {}, time: {}.{:03}sec",
+                         i+begin_index, res, end.as_secs(),
+                         end.subsec_nanos() / 1_000_000);
+            },
             Err(_) => println!("Parse error")
         }
+
     }
+}
+
+fn main() {
+    solve_ffo("fforum-1-19.obf", 1);
+    solve_ffo("fforum-20-39.obf", 20);
+    solve_ffo("fforum-40-59.obf", 40);
+    solve_ffo("fforum-60-79.obf", 60);
 }
