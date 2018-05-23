@@ -197,20 +197,23 @@ impl FromStr for Board {
 use std::cmp::max;
 
 fn solve(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
-    let mut pass = true;
+    let mut v = vec![(0usize, board.clone()); 0];
     for i in 0usize..64usize {
         match board.play(i) {
             Ok(next) => {
-                alpha = max(alpha, -solve(next, -beta, -alpha, false));
-                if alpha >= beta {
-                    return alpha;
-                }
-                pass = false;
+                v.push((next.mobility().len(), next));
             },
             Err(_) => ()
         }
     }
-    if pass {
+    v.sort_by(|a, b| a.0.cmp(&b.0));
+    for &(_, ref next) in &v {
+        alpha = max(alpha, -solve(next.clone(), -beta, -alpha, false));
+        if alpha >= beta {
+            return alpha;
+        }
+    }
+    if v.is_empty() {
         if passed {
             return board.score();
         } else {
