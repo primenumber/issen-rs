@@ -196,13 +196,15 @@ impl FromStr for Board {
 
 use std::cmp::max;
 
-fn solve(board: Board, passed: bool) -> i8 {
+fn solve(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
     let mut pass = true;
-    let mut result = -64;
     for i in 0usize..64usize {
         match board.play(i) {
             Ok(next) => {
-                result = max(result, -solve(next, false));
+                alpha = max(alpha, -solve(next, -beta, -alpha, false));
+                if alpha >= beta {
+                    return alpha;
+                }
                 pass = false;
             },
             Err(_) => ()
@@ -212,10 +214,10 @@ fn solve(board: Board, passed: bool) -> i8 {
         if passed {
             return board.score();
         } else {
-            return -solve(board.pass(), true);
+            return -solve(board.pass(), -beta, -alpha, true);
         }
     }
-    result
+    alpha
 }
 
 use std::io::prelude::*;
@@ -279,7 +281,7 @@ fn solve_ffo(name: &str, begin_index: usize) -> () {
         match Board::from_str(&line.unwrap()) {
             Ok(board) => {
                 let start = Instant::now();
-                let res = solve(board, false);
+                let res = solve(board, -64, 64, false);
                 let end = start.elapsed();
                 println!("number: {}, result: {}, time: {}.{:03}sec",
                          i+begin_index, res, end.as_secs(),
