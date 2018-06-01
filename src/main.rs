@@ -202,7 +202,35 @@ impl FromStr for Board {
 
 use std::cmp::max;
 
-fn solve(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
+fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
+    let mut pass = true;
+    let mut empties = board.empty();
+    while empties != 0 {
+        let bit = empties  & empties.wrapping_neg();
+        empties = empties & (empties - 1);
+        let pos = popcnt(bit - 1) as usize;
+        match board.play(pos) {
+            Ok(next) => {
+                pass = false;
+                alpha = max(alpha, -solve(next, -beta, -alpha, false));
+                if alpha >= beta {
+                    return alpha;
+                }
+            },
+            Err(_) => ()
+        }
+    }
+    if pass {
+        if passed {
+            return board.score();
+        } else {
+            return -solve(board.pass(), -beta, -alpha, true);
+        }
+    }
+    alpha
+}
+
+fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
     let mut v = vec![(0usize, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -231,6 +259,14 @@ fn solve(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
         }
     }
     alpha
+}
+
+fn solve(board: Board, alpha: i8, beta: i8, passed: bool) -> i8 {
+    if popcnt(board.empty()) <= 6 {
+        solve_naive(board, alpha, beta, passed)
+    } else {
+        solve_fastest_first(board, alpha, beta, passed)
+    }
 }
 
 use std::io::prelude::*;
