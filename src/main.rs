@@ -1,13 +1,37 @@
 #[derive(Clone)]
-pub struct HalfBoard {
-    data: [bool; 64]
+pub struct Board {
+    player: u64,
+    opponent: u64,
+    is_black: bool
 }
 
-#[derive(Clone)]
-pub struct Board {
-    player: HalfBoard,
-    opponent: HalfBoard,
-    is_black: bool
+fn upper_bit(x: u64) -> u64 {
+    let mut y = x | (x >> 1);
+    y = y | (y >>  2);
+    y = y | (y >>  4);
+    y = y | (y >>  8);
+    y = y | (y >> 16);
+    y = y | (y >> 32);
+    return y & !(y >> 1);
+}
+
+fn nonzero(x: u64) -> u64 {
+    if x != 0 {
+        1
+    } else {
+        0
+    }
+}
+
+fn popcnt(x: u64) -> i8 {
+    let mut y = x;
+    y = (y & 0x5555555555555555u64) + ((y & 0xAAAAAAAAAAAAAAAAu64) >>  1);
+    y = (y & 0x3333333333333333u64) + ((y & 0xCCCCCCCCCCCCCCCCu64) >>  2);
+    y = (y & 0x0F0F0F0F0F0F0F0Fu64) + ((y & 0xF0F0F0F0F0F0F0F0u64) >>  4);
+    y = (y & 0x00FF00FF00FF00FFu64) + ((y & 0xFF00FF00FF00FF00u64) >>  8);
+    y = (y & 0x0000FFFF0000FFFFu64) + ((y & 0xFFFF0000FFFF0000u64) >> 16);
+    y = (y & 0x00000000FFFFFFFFu64) + ((y & 0xFFFFFFFF00000000u64) >> 32);
+    y as i8
 }
 
 use std::io::Write;
@@ -15,100 +39,89 @@ use std::io::Write;
 pub struct UnmovableError;
 
 impl Board {
-    fn is_movable_impl(&self, i: usize, j: usize, k: usize) -> bool {
-        let di: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
-        let dj: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
-        for l in 1..8 {
-            let ni: isize = i as isize + l * di[k];
-            let nj: isize = j as isize + l * dj[k];
-            if ni < 0 || nj < 0 || ni >= 8 || nj >= 8 {
-                return false;
-            }
-            let index: usize = (ni * 8 + nj) as usize;
-            if self.player.data[index] {
-                return l >= 2;
-            }
-            if !self.opponent.data[index] {
-                return false;
-            }
+    fn flip_impl(&self, pos: usize, simd_index: usize) -> u64 {
+        let mut om = self.opponent;
+        if simd_index != 0 {
+            om &= 0x7E7E7E7E7E7E7E7Eu64;
         }
-        false
+        const MASK1: [u64; 4] = [
+            0x0080808080808080u64,
+            0x7f00000000000000u64,
+            0x0102040810204000u64,
+            0x0040201008040201u64
+        ];
+        let mut mask = MASK1[simd_index] >> (63 - pos);
+        let mut outflank = upper_bit(!om & mask) & self.player;
+        let mut flipped = ((-(outflank as i64) << 1) as u64) & mask;
+        const MASK2: [u64; 4] = [
+            0x0101010101010100u64,
+            0x00000000000000feu64,
+            0x0002040810204080u64,
+            0x8040201008040200u64
+        ];
+        mask = MASK2[simd_index] << pos;
+        outflank = mask & ((om | !mask) + 1) & self.player;
+        flipped |= (outflank - nonzero(outflank)) & mask;
+        return flipped;
+    }
+
+    pub fn flip(&self, pos: usize) -> u64 {
+        let mut res = 0;
+        for i in 0usize..4usize {
+            res |= self.flip_impl(pos, i);
+        }
+        res
     }
 
     pub fn is_movable(&self, pos: usize) -> bool {
         if pos >= 64 {
             return false;
         }
-        let i = pos / 8;
-        let j = pos % 8;
-        if self.player.data[pos] || self.opponent.data[pos] {
+        if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
             return false;
         }
-        for k in 0..8 {
-            if self.is_movable_impl(i, j, k) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn play_impl(&self, result: &mut Board, i: usize, j: usize, k: usize) -> () {
-        let di: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
-        let dj: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
-        for l in 1..8 {
-            let ni: isize = i as isize + l * di[k];
-            let nj: isize = j as isize + l * dj[k];
-            if ni < 0 || nj < 0 || ni >= 8 || nj >= 8 {
-                return;
-            }
-            let index: usize = (ni * 8 + nj) as usize;
-            if self.player.data[index] {
-                for p in 1..l {
-                    let oi: isize = i as isize + p * di[k];
-                    let oj: isize = j as isize + p * dj[k];
-                    let flip_index: usize = (oi * 8 + oj) as usize;
-                    result.player.data[flip_index] = false;
-                    result.opponent.data[flip_index] = true;
-                }
-                return;
-            }
-            if !self.opponent.data[index] {
-                return;
-            }
-        }
+        self.flip(pos) != 0
     }
 
     pub fn play(&self, pos: usize) -> Result<Board, UnmovableError> {
-        if !self.is_movable(pos) {
+        if pos >= 64 {
             return Err(UnmovableError{});
         }
-        let mut result = Board {
-            player: self.opponent.clone(),
-            opponent: self.player.clone(),
-            is_black: !self.is_black
-        };
-        let i = pos / 8;
-        let j = pos % 8;
-        for k in 0..8 {
-            self.play_impl(&mut result, i, j, k);
+        if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
+            return Err(UnmovableError{});
         }
-        result.opponent.data[pos] = true;
-        Ok(result)
+        let flip_bits = self.flip(pos);
+        if flip_bits == 0 {
+            return Err(UnmovableError{});
+        }
+        Ok(Board {
+            player: self.opponent ^ flip_bits,
+            opponent: (self.player ^ flip_bits) | (1u64 << pos),
+            is_black: !self.is_black
+        })
     }
 
     pub fn pass(&self) -> Board {
         Board {
-            player: self.opponent.clone(),
-            opponent: self.player.clone(),
+            player: self.opponent,
+            opponent: self.player,
             is_black: !self.is_black
         }
     }
 
+    pub fn empty(&self) -> u64 {
+        !(self.player | self.opponent)
+    }
+
     pub fn mobility(&self) -> Vec<usize> {
         let mut result = Vec::new();
-        for i in 0usize..64usize {
-            if self.is_movable(i) {
-                result.push(i);
+        let mut empties = self.empty();
+        while empties != 0 {
+            let bit = empties  & empties.wrapping_neg();
+            empties = empties & (empties - 1);
+            let pos = popcnt(bit - 1) as usize;
+            if self.is_movable(pos) {
+                result.push(pos);
             }
         }
         result
@@ -123,13 +136,13 @@ impl Board {
 
     pub fn print(&self) -> () {
         for i in 0..64 {
-            if self.player.data[i] {
+            if ((self.player >> i) & 1) != 0 {
                 if self.is_black {
                     write!(std::io::stdout(), "X").unwrap();
                 } else {
                     write!(std::io::stdout(), "O").unwrap();
                 }
-            } else if self.opponent.data[i] {
+            } else if ((self.opponent >> i) & 1) != 0 {
                 if self.is_black {
                     write!(std::io::stdout(), "O").unwrap();
                 } else {
@@ -145,15 +158,8 @@ impl Board {
     }
 
     pub fn score(&self) -> i8 {
-        let mut pcnt = 0i8;
-        let mut ocnt = 0i8;
-        for i in 0usize..64usize {
-            if self.player.data[i] {
-                pcnt += 1;
-            } else if self.opponent.data[i] {
-                ocnt += 1;
-            }
-        }
+        let pcnt = popcnt(self.player);
+        let ocnt = popcnt(self.opponent);
         if pcnt == ocnt {
             0
         } else if pcnt > ocnt {
@@ -175,12 +181,12 @@ impl FromStr for Board {
         if s.len() <= 66 {
             return Err(BoardParseError{});
         }
-        let mut black = HalfBoard { data: [false; 64] };
-        let mut white = HalfBoard { data: [false; 64] };
+        let mut black = 0u64;
+        let mut white = 0u64;
         for (i, c) in s.chars().take(64).enumerate() {
             match c {
-                'X' => black.data[i] = true,
-                'O' => white.data[i] = true,
+                'X' => black |= 1u64 << i,
+                'O' => white |= 1u64 << i,
                 _ => ()
             }
         }
@@ -198,8 +204,12 @@ use std::cmp::max;
 
 fn solve(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
     let mut v = vec![(0usize, board.clone()); 0];
-    for i in 0usize..64usize {
-        match board.play(i) {
+    let mut empties = board.empty();
+    while empties != 0 {
+        let bit = empties  & empties.wrapping_neg();
+        empties = empties & (empties - 1);
+        let pos = popcnt(bit - 1) as usize;
+        match board.play(pos) {
             Ok(next) => {
                 v.push((next.mobility().len(), next));
             },
