@@ -200,6 +200,7 @@ use std::cmp::max;
 fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
     let mut pass = true;
     let mut empties = board.empty();
+    let mut res = -64;
     while empties != 0 {
         let bit = empties  & empties.wrapping_neg();
         empties = empties & (empties - 1);
@@ -207,9 +208,10 @@ fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
         match board.play(pos) {
             Ok(next) => {
                 pass = false;
-                alpha = max(alpha, -solve(next, -beta, -alpha, false));
+                res = max(res, -solve(next, -beta, -alpha, false));
+                alpha = max(alpha, res);
                 if alpha >= beta {
-                    return alpha;
+                    return res;
                 }
             },
             Err(_) => ()
@@ -222,7 +224,7 @@ fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
             return -solve(board.pass(), -beta, -alpha, true);
         }
     }
-    alpha
+    res
 }
 
 fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
@@ -240,10 +242,24 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i
         }
     }
     v.sort_by(|a, b| a.0.cmp(&b.0));
-    for &(_, ref next) in &v {
-        alpha = max(alpha, -solve(next.clone(), -beta, -alpha, false));
+    let mut res = -64;
+    for (i, &(_, ref next)) in v.iter().enumerate() {
+        if i == 0 {
+            res = max(res, -solve(next.clone(), -beta, -alpha, false));
+        } else {
+            let mut result = -solve(next.clone(), -alpha-1, -alpha, false);
+            if result >= beta {
+                return result;
+            }
+            if result > alpha {
+                alpha = result;
+                result = -solve(next.clone(), -beta, -alpha, false);
+            }
+            res = max(res, result);
+        }
+        alpha = max(alpha, res);
         if alpha >= beta {
-            return alpha;
+            return res;
         }
     }
     if v.is_empty() {
@@ -253,7 +269,7 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i
             return -solve(board.pass(), -beta, -alpha, true);
         }
     }
-    alpha
+    res
 }
 
 fn solve(board: Board, alpha: i8, beta: i8, passed: bool) -> i8 {
