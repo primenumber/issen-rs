@@ -1,6 +1,6 @@
 use packed_simd::*;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Board {
     player: u64,
     opponent: u64,
@@ -195,9 +195,11 @@ impl FromStr for Board {
     }
 }
 
-use std::cmp::max;
+use std::cmp::{min, max};
+use std::collections::HashMap;
 
-fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
+fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
+               table: &mut HashMap<Board, (i8, i8)>) -> i8 {
     let mut pass = true;
     let mut empties = board.empty();
     let mut res = -64;
@@ -208,7 +210,7 @@ fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
         match board.play(pos) {
             Ok(next) => {
                 pass = false;
-                res = max(res, -solve(next, -beta, -alpha, false));
+                res = max(res, -solve(next, -beta, -alpha, false, table));
                 alpha = max(alpha, res);
                 if alpha >= beta {
                     return res;
@@ -221,13 +223,14 @@ fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
         if passed {
             return board.score();
         } else {
-            return -solve(board.pass(), -beta, -alpha, true);
+            return -solve(board.pass(), -beta, -alpha, true, table);
         }
     }
     res
 }
 
-fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i8 {
+fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
+                       table: &mut HashMap<Board, (i8, i8)>) -> i8 {
     let mut v = vec![(0usize, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -245,15 +248,15 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i
     let mut res = -64;
     for (i, &(_, ref next)) in v.iter().enumerate() {
         if i == 0 {
-            res = max(res, -solve(next.clone(), -beta, -alpha, false));
+            res = max(res, -solve(next.clone(), -beta, -alpha, false, table));
         } else {
-            let mut result = -solve(next.clone(), -alpha-1, -alpha, false);
+            let mut result = -solve(next.clone(), -alpha-1, -alpha, false, table);
             if result >= beta {
                 return result;
             }
             if result > alpha {
                 alpha = result;
-                result = -solve(next.clone(), -beta, -alpha, false);
+                result = -solve(next.clone(), -beta, -alpha, false, table);
             }
             res = max(res, result);
         }
@@ -266,17 +269,47 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool) -> i
         if passed {
             return board.score();
         } else {
-            return -solve(board.pass(), -beta, -alpha, true);
+            return -solve(board.pass(), -beta, -alpha, true, table);
         }
     }
     res
 }
 
-fn solve(board: Board, alpha: i8, beta: i8, passed: bool) -> i8 {
-    if popcnt(board.empty()) <= 6 {
-        solve_naive(board, alpha, beta, passed)
+fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
+                    table: &mut HashMap<Board, (i8, i8)>) -> i8 {
+    let (lower, upper) = match table.get(&board) {
+        Some((lower, upper)) => (*lower, *upper),
+        None => (-64, 64)
+    };
+    let new_alpha = max(lower, alpha);
+    let new_beta = min(upper, beta);
+    if new_alpha >= new_beta {
+        return if alpha > upper {
+            upper
+        } else {
+            lower
+        }
+    }
+    let res = solve_fastest_first(board.clone(), alpha, beta, passed, table);
+    let range = if res <= new_alpha {
+        (lower, min(upper, res))
+    } else if res >= new_beta {
+        (max(lower, res), upper)
     } else {
-        solve_fastest_first(board, alpha, beta, passed)
+        (res, res)
+    };
+    table.insert(board, range);
+    res
+}
+
+fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
+         table: &mut HashMap<Board, (i8, i8)>) -> i8 {
+    if popcnt(board.empty()) <= 6 {
+        solve_naive(board, alpha, beta, passed, table)
+    } else if popcnt(board.empty()) <= 12 {
+        solve_fastest_first(board, alpha, beta, passed, table)
+    } else {
+        solve_with_table(board, alpha, beta, passed, table)
     }
 }
 
@@ -341,7 +374,8 @@ fn solve_ffo(name: &str, begin_index: usize) -> () {
         match Board::from_str(&line.unwrap()) {
             Ok(board) => {
                 let start = Instant::now();
-                let res = solve(board, -64, 64, false);
+                let mut table = HashMap::<Board, (i8, i8)>::new();
+                let res = solve(board, -64, 64, false, &mut table);
                 let end = start.elapsed();
                 println!("number: {}, result: {}, time: {}.{:03}sec",
                          i+begin_index, res, end.as_secs(),
