@@ -1,3 +1,5 @@
+use packed_simd::*;
+
 #[derive(Clone)]
 pub struct Board {
     player: u64,
@@ -5,33 +7,26 @@ pub struct Board {
     is_black: bool
 }
 
-fn upper_bit(x: u64) -> u64 {
-    let mut y = x | (x >> 1);
-    y = y | (y >>  2);
-    y = y | (y >>  4);
-    y = y | (y >>  8);
-    y = y | (y >> 16);
-    y = y | (y >> 32);
-    return y & !(y >> 1);
+fn upper_bit(mut x: u64x4) -> u64x4 {
+    x = x | (x >>  1);
+    x = x | (x >>  2);
+    x = x | (x >>  4);
+    x = x | (x >>  8);
+    x = x | (x >> 16);
+    x = x | (x >> 32);
+    let lowers: u64x4 = x >> 1;
+    x & !lowers
 }
 
-fn nonzero(x: u64) -> u64 {
-    if x != 0 {
-        1
-    } else {
-        0
-    }
+fn nonzero(x: u64x4) -> u64x4 {
+    let zero = u64x4::new(0, 0, 0, 0);
+    let mask = x.ne(zero);
+    let one = u64x4::new(1, 1, 1, 1);
+    one & u64x4::from_cast(mask)
 }
 
 fn popcnt(x: u64) -> i8 {
-    let mut y = x;
-    y = (y & 0x5555555555555555u64) + ((y & 0xAAAAAAAAAAAAAAAAu64) >>  1);
-    y = (y & 0x3333333333333333u64) + ((y & 0xCCCCCCCCCCCCCCCCu64) >>  2);
-    y = (y & 0x0F0F0F0F0F0F0F0Fu64) + ((y & 0xF0F0F0F0F0F0F0F0u64) >>  4);
-    y = (y & 0x00FF00FF00FF00FFu64) + ((y & 0xFF00FF00FF00FF00u64) >>  8);
-    y = (y & 0x0000FFFF0000FFFFu64) + ((y & 0xFFFF0000FFFF0000u64) >> 16);
-    y = (y & 0x00000000FFFFFFFFu64) + ((y & 0xFFFFFFFF00000000u64) >> 32);
-    y as i8
+    x.count_ones() as i8
 }
 
 use std::io::Write;
@@ -39,38 +34,38 @@ use std::io::Write;
 pub struct UnmovableError;
 
 impl Board {
-    fn flip_impl(&self, pos: usize, simd_index: usize) -> u64 {
-        let mut om = self.opponent;
-        if simd_index != 0 {
-            om &= 0x7E7E7E7E7E7E7E7Eu64;
-        }
-        const MASK1: [u64; 4] = [
+    fn flip_simd(&self, pos: usize) -> u64x4 {
+        let p = u64x4::new(self.player, self.player, self.player, self.player);
+        let o = u64x4::new(self.opponent, self.opponent, self.opponent, self.opponent);
+        let omask = u64x4::new(0xFFFFFFFFFFFFFFFFu64,
+                               0x7E7E7E7E7E7E7E7Eu64,
+                               0x7E7E7E7E7E7E7E7Eu64,
+                               0x7E7E7E7E7E7E7E7Eu64);
+        let om = o & omask;
+        let mask1 = u64x4::new(
             0x0080808080808080u64,
             0x7f00000000000000u64,
             0x0102040810204000u64,
             0x0040201008040201u64
-        ];
-        let mut mask = MASK1[simd_index] >> (63 - pos);
-        let mut outflank = upper_bit(!om & mask) & self.player;
-        let mut flipped = ((-(outflank as i64) << 1) as u64) & mask;
-        const MASK2: [u64; 4] = [
+        );
+        let mut mask = mask1 >> (63 - pos) as u32;
+        let mut outflank = upper_bit(!om & mask) & p;
+        let mut flipped = u64x4::from_cast(-i64x4::from_cast(outflank) << 1) & mask;
+        let mask2 = u64x4::new(
             0x0101010101010100u64,
             0x00000000000000feu64,
             0x0002040810204080u64,
             0x8040201008040200u64
-        ];
-        mask = MASK2[simd_index] << pos;
-        outflank = mask & ((om | !mask) + 1) & self.player;
+        );
+        mask = mask2 << pos as u32;
+        outflank = mask & ((om | !mask) + 1) & p;
         flipped |= (outflank - nonzero(outflank)) & mask;
         return flipped;
     }
 
     pub fn flip(&self, pos: usize) -> u64 {
-        let mut res = 0;
-        for i in 0usize..4usize {
-            res |= self.flip_impl(pos, i);
-        }
-        res
+        let flips = self.flip_simd(pos);
+        flips.or()
     }
 
     pub fn is_movable(&self, pos: usize) -> bool {
