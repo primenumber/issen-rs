@@ -353,6 +353,21 @@ impl Evaluator {
     }
 }
 
+fn solve_1(board: Board, count: &mut usize) -> i8 {
+    let bit = board.empty();
+    let pos = popcnt(bit - 1) as usize;
+    match board.play(pos) {
+        Ok(next) => -next.score(),
+        Err(_) => {
+            *count += 1;
+            match board.pass().play(pos) {
+                Ok(next) => next.score(),
+                Err(_) => board.score()
+            }
+        }
+    }
+}
+
 fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
                table: &mut HashMap<Board, (i8, i8)>,
                table_order: & HashMap<Board, (f64, f64)>, count: &mut usize) -> i8 {
@@ -542,7 +557,11 @@ fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
          table: &mut HashMap<Board, (i8, i8)>,
          table_order: & HashMap<Board, (f64, f64)>, count: &mut usize) -> i8 {
     *count += 1;
-    if popcnt(board.empty()) <= 6 {
+    if popcnt(board.empty()) == 0 {
+        board.score()
+    } else if popcnt(board.empty()) == 1 {
+        solve_1(board, count)
+    } else if popcnt(board.empty()) <= 6 {
         solve_naive(board, alpha, beta, passed, table, table_order, count)
     } else if popcnt(board.empty()) <= 12 {
         solve_fastest_first(board, alpha, beta, passed, table, table_order, count)
