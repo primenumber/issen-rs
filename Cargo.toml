@@ -7,3 +7,4 @@ authors = ["prime <prime@kmc.gr.jp>"]
 [dependencies]
 packed_simd = "0.3.3"
 bitintr = "0.2.0"
+crossbeam = "0.7.1"
