@@ -131,6 +131,33 @@ impl Board {
         !(self.player | self.opponent)
     }
 
+    pub fn mobility_bits(&self) -> u64 {
+        let shift1 = u64x4::new(1, 7, 9, 8);
+        let mask = u64x4::new(
+            0x7e7e7e7e7e7e7e7eu64,
+            0x7e7e7e7e7e7e7e7eu64,
+            0x7e7e7e7e7e7e7e7eu64,
+            0xffffffffffffffffu64
+        );
+        let v_player = u64x4::splat(self.player);
+        let masked_op = u64x4::splat(self.opponent) & mask;
+        let mut flip_l = masked_op & (v_player << shift1);
+        let mut flip_r = masked_op & (v_player >> shift1);
+        flip_l |= masked_op & (flip_l << shift1);
+        flip_r |= masked_op & (flip_r >> shift1);
+        let pre_l = masked_op & (masked_op << shift1);
+        let pre_r = pre_l >> shift1;
+        let shift2 = shift1 + shift1;
+        flip_l |= pre_l & (flip_l << shift2);
+        flip_r |= pre_r & (flip_r >> shift2);
+        flip_l |= pre_l & (flip_l << shift2);
+        flip_r |= pre_r & (flip_r >> shift2);
+        let mut res = flip_l << shift1;
+        res |= flip_r >> shift1;
+        res &= u64x4::splat(self.empty());
+        return res.or();
+    }
+
     pub fn mobility(&self) -> Vec<usize> {
         let mut result = Vec::new();
         let mut empties = self.empty();
@@ -409,7 +436,7 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
                        table: &mut Table<i8>,
                        table_order: & HashMap<Board, (f64, f64)>,
                        count: &mut usize, depth: u8) -> i8 {
-    let mut v = vec![(0usize, board.clone()); 0];
+    let mut v = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
         let bit = empties  & empties.wrapping_neg();
@@ -417,7 +444,7 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
-                v.push((next.mobility().len(), next));
+                v.push((popcnt(next.mobility_bits()), next));
             },
             Err(_) => ()
         }
