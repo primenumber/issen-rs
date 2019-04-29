@@ -380,6 +380,12 @@ impl Evaluator {
     }
 }
 
+fn weighted_mobility(board: & Board) -> i8 {
+    let b = board.mobility_bits();
+    let corner = 0x8100000000000081u64;
+    popcnt(b) + popcnt(b & corner)
+}
+
 use std::sync::{Arc, Mutex};
 type Table<T> = Arc<Mutex<HashMap<Board, (T, T)>>>;
 
@@ -444,7 +450,7 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
-                v.push((popcnt(next.mobility_bits()), next));
+                v.push((weighted_mobility(& next), next));
             },
             Err(_) => ()
         }
@@ -489,7 +495,7 @@ fn solve_move_ordering_with_table(
     table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
     depth: u8) -> i8 {
     let mut v = vec![(0f64, 0f64, board.clone()); 0];
-    let mut w = vec![(0usize, board.clone()); 0];
+    let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
         let bit = empties  & empties.wrapping_neg();
@@ -502,7 +508,7 @@ fn solve_move_ordering_with_table(
                         v.push((upper, lower, next));
                     },
                     None => {
-                        w.push((next.mobility().len(), next));
+                        w.push((weighted_mobility(& next), next));
                     }
                 }
             },
@@ -563,7 +569,7 @@ fn solve_ybwc(
     table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
     depth: u8) -> i8 {
     let mut v = vec![(0f64, 0f64, board.clone()); 0];
-    let mut w = vec![(0usize, board.clone()); 0];
+    let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
         let bit = empties  & empties.wrapping_neg();
@@ -576,7 +582,7 @@ fn solve_ybwc(
                         v.push((upper, lower, next));
                     },
                     None => {
-                        w.push((next.mobility().len(), next));
+                        w.push((weighted_mobility(& next), next));
                     }
                 }
             },
@@ -708,8 +714,8 @@ fn think_impl(board: Board, mut alpha: f64, beta: f64, passed: bool,
          evaluator: & Evaluator,
          table_cache: &mut HashMap<Board, (f64, f64)>,
          table_order: & HashMap<Board, (f64, f64)>, depth: u8) -> f64 {
-    let mut v = vec![(0f64, 0f64, 0usize, board.clone()); 0];
-    let mut w = vec![(0usize, board.clone()); 0];
+    let mut v = vec![(0f64, 0f64, 0i8, board.clone()); 0];
+    let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
         let bit = empties  & empties.wrapping_neg();
@@ -719,10 +725,10 @@ fn think_impl(board: Board, mut alpha: f64, beta: f64, passed: bool,
             Ok(next) => {
                 match table_order.get(&next) {
                     Some(&(lower, upper)) => {
-                        v.push((upper, lower, next.mobility().len(), next));
+                        v.push((upper, lower, weighted_mobility(& next), next));
                     },
                     None => {
-                        w.push((next.mobility().len(), next));
+                        w.push((weighted_mobility(& next), next));
                     }
                 }
             },
