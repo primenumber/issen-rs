@@ -265,7 +265,7 @@ use std::cmp::{min, max};
 use std::collections::HashMap;
 
 struct Evaluator {
-    weights: Vec<Vec<f64>>,
+    weights: Vec<Vec<f32>>,
     offsets: Vec<usize>,
     patterns: Vec<u64>,
     base3: Vec<usize>
@@ -323,7 +323,7 @@ impl Evaluator {
         length += 1;
 
         let files: Vec<String> = (48..61).map(|i| format!("value{}", i)).collect();
-        let mut weights = vec![vec![0f64; length]; files.len()];
+        let mut weights = vec![vec![0f32; length]; files.len()];
         for (cnt, filename) in files.iter().enumerate() {
             let mut value_file = File::open(filename).unwrap();
             let mut buf = vec![0u8; length * 8];
@@ -331,7 +331,7 @@ impl Evaluator {
             for i in 0usize..length {
                 let mut ary: [u8; 8] = Default::default();
                 ary.copy_from_slice(&buf[(8*i)..(8*(i+1))]);
-                weights[cnt][i] = unsafe { mem::transmute::<[u8; 8], f64>(ary) };
+                weights[cnt][i] = unsafe { mem::transmute::<[u8; 8], f64>(ary) } as f32;
             }
         }
 
@@ -348,8 +348,8 @@ impl Evaluator {
         Evaluator { weights, offsets, patterns, base3 }
     }
 
-    fn eval_impl(&self, board: Board) -> f64 {
-        let mut score = 0f64;
+    fn eval_impl(&self, board: Board) -> f32 {
+        let mut score = 0f32;
         let rem:usize = popcnt(board.empty()) as usize;
         for (i, pattern) in self.patterns.iter().enumerate() {
             let player_pattern = pext(board.player, *pattern) as usize;
@@ -361,8 +361,8 @@ impl Evaluator {
         score
     }
 
-    pub fn eval(&self, mut board: Board) -> f64 {
-        let mut score = 0f64;
+    pub fn eval(&self, mut board: Board) -> f32 {
+        let mut score = 0f32;
         let rem:usize = popcnt(board.empty()) as usize;
         for _i in 0..4 {
             score += self.eval_impl(board.clone());
@@ -406,7 +406,7 @@ fn solve_1(board: Board, count: &mut usize) -> i8 {
 
 fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
                table: &mut Table<i8>,
-               table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
+               table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
                depth: u8)-> i8 {
     let mut pass = true;
     let mut empties = board.empty();
@@ -440,7 +440,7 @@ fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
 
 fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
                        table: &mut Table<i8>,
-                       table_order: & HashMap<Board, (f64, f64)>,
+                       table_order: & HashMap<Board, (f32, f32)>,
                        count: &mut usize, depth: u8) -> i8 {
     let mut v = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
@@ -492,9 +492,9 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
 fn solve_move_ordering_with_table(
     board: Board, mut alpha: i8, beta: i8, passed: bool,
     table: &mut Table<i8>,
-    table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
+    table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
     depth: u8) -> i8 {
-    let mut v = vec![(0f64, 0f64, board.clone()); 0];
+    let mut v = vec![(0f32, 0f32, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -566,9 +566,9 @@ use std::sync::mpsc;
 fn solve_ybwc(
     board: Board, mut alpha: i8, beta: i8, passed: bool,
     table: &mut Table<i8>,
-    table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
+    table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
     depth: u8) -> i8 {
-    let mut v = vec![(0f64, 0f64, board.clone()); 0];
+    let mut v = vec![(0f32, 0f32, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -659,7 +659,7 @@ fn solve_ybwc(
 
 fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
                     table: &mut Table<i8>,
-                    table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
+                    table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
                     depth: u8) -> i8 {
     let (lower, upper) = match table.lock().unwrap().get(&board) {
         Some((lower, upper)) => (*lower, *upper),
@@ -694,7 +694,7 @@ fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
 
 fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
          table: &mut Table<i8>,
-         table_order: & HashMap<Board, (f64, f64)>, count: &mut usize,
+         table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
          depth: u8) -> i8 {
     *count += 1;
     if popcnt(board.empty()) == 0 {
@@ -710,11 +710,11 @@ fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
     }
 }
 
-fn think_impl(board: Board, mut alpha: f64, beta: f64, passed: bool,
+fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
          evaluator: & Evaluator,
-         table_cache: &mut HashMap<Board, (f64, f64)>,
-         table_order: & HashMap<Board, (f64, f64)>, depth: u8) -> f64 {
-    let mut v = vec![(0f64, 0f64, 0i8, board.clone()); 0];
+         table_cache: &mut HashMap<Board, (f32, f32)>,
+         table_order: & HashMap<Board, (f32, f32)>, depth: u8) -> f32 {
+    let mut v = vec![(0f32, 0f32, 0i8, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -754,7 +754,7 @@ fn think_impl(board: Board, mut alpha: f64, beta: f64, passed: bool,
     for &(_, ref next) in &w {
         nexts.push(next.clone());
     }
-    let mut res = -std::f64::INFINITY;
+    let mut res = -std::f32::INFINITY;
     for (i, next) in nexts.iter().enumerate() {
         if i == 0 {
             res = res.max(-think(
@@ -781,7 +781,7 @@ fn think_impl(board: Board, mut alpha: f64, beta: f64, passed: bool,
     }
     if nexts.is_empty() {
         if passed {
-            return board.score() as f64;
+            return board.score() as f32;
         } else {
             return -think(
                 board.pass(), -beta, -alpha, true, evaluator,
@@ -791,10 +791,10 @@ fn think_impl(board: Board, mut alpha: f64, beta: f64, passed: bool,
     res
 }
 
-fn think(board: Board, alpha: f64, beta: f64, passed: bool,
+fn think(board: Board, alpha: f32, beta: f32, passed: bool,
          evaluator: & Evaluator,
-         table_cache: &mut HashMap<Board, (f64, f64)>,
-         table_order: & HashMap<Board, (f64, f64)>, depth: u8) -> f64 {
+         table_cache: &mut HashMap<Board, (f32, f32)>,
+         table_order: & HashMap<Board, (f32, f32)>, depth: u8) -> f32 {
     if depth == 0 {
         let res = evaluator.eval(board.clone());
         table_cache.insert(board.clone(), (res, res));
@@ -802,7 +802,7 @@ fn think(board: Board, alpha: f64, beta: f64, passed: bool,
     } else {
         let (lower, upper) = match table_cache.get(&board) {
             Some(&(lower, upper)) => (lower, upper),
-            None => (-std::f64::INFINITY, std::f64::INFINITY)
+            None => (-std::f32::INFINITY, std::f32::INFINITY)
         };
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
@@ -828,9 +828,9 @@ fn think(board: Board, alpha: f64, beta: f64, passed: bool,
             },
             None => {
                 if res <= new_alpha {
-                    (-std::f64::INFINITY, res)
+                    (-std::f32::INFINITY, res)
                 } else if res >= new_beta {
-                    (res, std::f64::INFINITY)
+                    (res, std::f32::INFINITY)
                 } else {
                     (res, res)
                 }
@@ -895,12 +895,12 @@ use std::io::BufReader;
 use std::fs::File;
 use std::time::Instant;
 
-fn iddfs(board: Board, evaluator: & Evaluator) -> HashMap<Board, (f64, f64)> {
-    let mut table_order = HashMap::<Board, (f64, f64)>::new();
+fn iddfs(board: Board, evaluator: & Evaluator) -> HashMap<Board, (f32, f32)> {
+    let mut table_order = HashMap::<Board, (f32, f32)>::new();
     let rem = popcnt(board.empty()) as u8;
     for cut in [16, 15, 14, 13, 12].iter() {
         let start2 = Instant::now();
-        let mut table_cache = HashMap::<Board, (f64, f64)>::new();
+        let mut table_cache = HashMap::<Board, (f32, f32)>::new();
         let tmp = think(board.clone(), -64.0, 64.0, false, & evaluator,
         &mut table_cache, &table_order, rem - cut);
         let end2 = start2.elapsed();
@@ -919,7 +919,7 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: & Evaluator) -> () {
         match Board::from_str(&line.unwrap()) {
             Ok(board) => {
                 let start = Instant::now();
-                let mut table_order = HashMap::<Board, (f64, f64)>::new();
+                let mut table_order = HashMap::<Board, (f32, f32)>::new();
                 let rem = popcnt(board.empty()) as u8;
                 if rem > 16 {
                     table_order = iddfs(board.clone(), evaluator);
