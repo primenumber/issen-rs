@@ -322,7 +322,7 @@ impl Evaluator {
         }
         length += 1;
 
-        let files: Vec<String> = (48..61).map(|i| format!("value{}", i)).collect();
+        let files: Vec<String> = (30..61).map(|i| format!("value{}", i)).collect();
         let mut weights = vec![vec![0f32; length]; files.len()];
         for (cnt, filename) in files.iter().enumerate() {
             let mut value_file = File::open(filename).unwrap();
@@ -354,7 +354,7 @@ impl Evaluator {
         for (i, pattern) in self.patterns.iter().enumerate() {
             let player_pattern = pext(board.player, *pattern) as usize;
             let opponent_pattern = pext(board.opponent, *pattern) as usize;
-            score += self.weights[16 - rem][
+            score += self.weights[34 - rem][
                 self.offsets[i] + self.base3[player_pattern]
                 + 2*self.base3[opponent_pattern]];
         }
@@ -369,7 +369,7 @@ impl Evaluator {
             score += self.eval_impl(board.flip_diag());
             board = board.rot90();
         }
-        let raw_score = score + *self.weights[16 - rem].last().unwrap();
+        let raw_score = score + *self.weights[34 - rem].last().unwrap();
         if raw_score > 63.0 {
             64.0 - 1.0 / (raw_score - 62.0)
         } else if raw_score < -63.0 {
@@ -713,7 +713,7 @@ fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
 fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
          evaluator: & Evaluator,
          table_cache: &mut HashMap<Board, (f32, f32)>,
-         table_order: & HashMap<Board, (f32, f32)>, depth: u8) -> f32 {
+         table_order: & HashMap<Board, (f32, f32)>, depth: i8) -> f32 {
     let mut v = vec![(0f32, 0f32, 0i8, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
@@ -761,9 +761,14 @@ fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
                     next.clone(), -beta, -alpha, false, evaluator,
                     table_cache, table_order, depth-1));
         } else {
+            let reduce = if -evaluator.eval(next.clone()) < alpha - 16.0 {
+                2
+            } else {
+                1
+            };
             res = res.max(-think(
-                    next.clone(), -alpha-1.0, -alpha, false, evaluator,
-                    table_cache, table_order, depth-1));
+                    next.clone(), -alpha-0.001, -alpha, false, evaluator,
+                    table_cache, table_order, depth-reduce));
             if res >= beta {
                 return res;
             }
@@ -794,8 +799,8 @@ fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
 fn think(board: Board, alpha: f32, beta: f32, passed: bool,
          evaluator: & Evaluator,
          table_cache: &mut HashMap<Board, (f32, f32)>,
-         table_order: & HashMap<Board, (f32, f32)>, depth: u8) -> f32 {
-    if depth == 0 {
+         table_order: & HashMap<Board, (f32, f32)>, depth: i8) -> f32 {
+    if depth <= 0 {
         let res = evaluator.eval(board.clone());
         table_cache.insert(board.clone(), (res, res));
         res
@@ -897,7 +902,7 @@ use std::time::Instant;
 
 fn iddfs(board: Board, evaluator: & Evaluator) -> HashMap<Board, (f32, f32)> {
     let mut table_order = HashMap::<Board, (f32, f32)>::new();
-    let rem = popcnt(board.empty()) as u8;
+    let rem = popcnt(board.empty());
     for cut in [16, 15, 14, 13, 12].iter() {
         let start2 = Instant::now();
         let mut table_cache = HashMap::<Board, (f32, f32)>::new();
