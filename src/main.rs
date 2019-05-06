@@ -623,7 +623,7 @@ fn solve_ybwc(
                 handles.push(scope.spawn(move |_| {
                     let mut count = 0;
                     res = max(res, -solve(
-                            next.clone(), -alpha-1, -alpha, false, &mut table, table_order, &mut count, depth+1));
+                            next.clone(), -alpha-1, -alpha, false, &mut table, table_order, &mut count, depth+2));
                     if res >= beta {
                         let _ = tx.send(res);
                         let _ = txcount.send(count);
@@ -632,7 +632,7 @@ fn solve_ybwc(
                     if res > alpha {
                         alpha = res;
                         res = max(res, -solve(
-                                next.clone(), -beta, -alpha, false, &mut table, table_order, &mut count, depth+1));
+                                next.clone(), -beta, -alpha, false, &mut table, table_order, &mut count, depth+2));
                     }
                     let _ = tx.send(res);
                     let _ = txcount.send(count);
@@ -674,7 +674,7 @@ fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
             lower
         }
     }
-    let res = if depth >= 3 {
+    let res = if depth >= 5 || popcnt(board.empty()) <= 16 {
         solve_move_ordering_with_table(
             board.clone(), alpha, beta, passed, table, table_order, count, depth)
     } else {
