@@ -322,7 +322,7 @@ impl Evaluator {
         }
         length += 1;
 
-        let files: Vec<String> = (30..61).map(|i| format!("value{}", i)).collect();
+        let files: Vec<String> = (30..61).map(|i| format!("table/value{}", i)).collect();
         let mut weights = vec![vec![0f32; length]; files.len()];
         for (cnt, filename) in files.iter().enumerate() {
             let mut value_file = File::open(filename).unwrap();
