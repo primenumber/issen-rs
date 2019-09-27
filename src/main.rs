@@ -64,13 +64,13 @@ fn play(mut board: Board) -> Board {
     board
 }
 
-fn iddfs(board: Board, evaluator: & Evaluator) -> HashMap<Board, (f32, f32)> {
-    let mut table_order = HashMap::<Board, (f32, f32)>::new();
+fn iddfs(board: Board, evaluator: & Evaluator) -> HashMap<Board, (i16, i16)> {
+    let mut table_order = HashMap::<Board, (i16, i16)>::new();
     let rem = popcnt(board.empty());
     for cut in [16, 15, 14, 13, 12].iter() {
         let start2 = Instant::now();
-        let mut table_cache = HashMap::<Board, (f32, f32)>::new();
-        let tmp = think(board.clone(), -64.0, 64.0, false, & evaluator,
+        let mut table_cache = HashMap::<Board, (i16, i16)>::new();
+        let tmp = think(board.clone(), -64 * scale, 64 * scale, false, & evaluator,
         &mut table_cache, &table_order, rem - cut);
         let end2 = start2.elapsed();
         println!("think: {}, nodes: {}nodes, time: {}.{:03}sec",
@@ -88,7 +88,7 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: & Evaluator) -> () {
         match Board::from_str(&line.unwrap()) {
             Ok(board) => {
                 let start = Instant::now();
-                let mut table_order = HashMap::<Board, (f32, f32)>::new();
+                let mut table_order = HashMap::<Board, (i16, i16)>::new();
                 let rem = popcnt(board.empty()) as u8;
                 if rem > 16 {
                     table_order = iddfs(board.clone(), evaluator);

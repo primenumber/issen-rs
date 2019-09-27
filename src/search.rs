@@ -24,7 +24,7 @@ fn solve_1(board: Board, count: &mut usize) -> i8 {
 
 fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
                table: &mut Table<i8>,
-               table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
+               table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
                depth: u8)-> i8 {
     let mut pass = true;
     let mut empties = board.empty();
@@ -58,7 +58,7 @@ fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
 
 fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
                        table: &mut Table<i8>,
-                       table_order: & HashMap<Board, (f32, f32)>,
+                       table_order: & HashMap<Board, (i16, i16)>,
                        count: &mut usize, depth: u8) -> i8 {
     let mut v = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
@@ -110,9 +110,9 @@ fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
 fn solve_move_ordering_with_table(
     board: Board, mut alpha: i8, beta: i8, passed: bool,
     table: &mut Table<i8>,
-    table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
+    table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
     depth: u8) -> i8 {
-    let mut v = vec![(0f32, 0f32, board.clone()); 0];
+    let mut v = vec![(0i16, 0i16, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -135,9 +135,9 @@ fn solve_move_ordering_with_table(
     }
     v.sort_by(|a, b| {
         if a.0 == b.0 {
-            a.1.partial_cmp(&b.1).unwrap()
+            a.1.cmp(&b.1)
         } else {
-            a.0.partial_cmp(&b.0).unwrap()
+            a.0.cmp(&b.0)
         }
     });
     w.sort_by(|a, b| a.0.cmp(&b.0));
@@ -184,9 +184,9 @@ use std::sync::mpsc;
 fn solve_ybwc(
     board: Board, mut alpha: i8, beta: i8, passed: bool,
     table: &mut Table<i8>,
-    table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
+    table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
     depth: u8) -> i8 {
-    let mut v = vec![(0f32, 0f32, board.clone()); 0];
+    let mut v = vec![(0i16, 0i16, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -209,9 +209,9 @@ fn solve_ybwc(
     }
     v.sort_by(|a, b| {
         if a.0 == b.0 {
-            a.1.partial_cmp(&b.1).unwrap()
+            a.1.cmp(&b.1)
         } else {
-            a.0.partial_cmp(&b.0).unwrap()
+            a.0.cmp(&b.0)
         }
     });
     w.sort_by(|a, b| a.0.cmp(&b.0));
@@ -277,7 +277,7 @@ fn solve_ybwc(
 
 fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
                     table: &mut Table<i8>,
-                    table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
+                    table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
                     depth: u8) -> i8 {
     let (lower, upper) = match table.lock().unwrap().get(&board) {
         Some((lower, upper)) => (*lower, *upper),
@@ -312,7 +312,7 @@ fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
 
 pub fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
          table: &mut Table<i8>,
-         table_order: & HashMap<Board, (f32, f32)>, count: &mut usize,
+         table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
          depth: u8) -> i8 {
     *count += 1;
     if popcnt(board.empty()) == 0 {
@@ -328,11 +328,11 @@ pub fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
     }
 }
 
-fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
+fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
          evaluator: & Evaluator,
-         table_cache: &mut HashMap<Board, (f32, f32)>,
-         table_order: & HashMap<Board, (f32, f32)>, depth: i8) -> f32 {
-    let mut v = vec![(0f32, 0f32, 0i8, board.clone()); 0];
+         table_cache: &mut HashMap<Board, (i16, i16)>,
+         table_order: & HashMap<Board, (i16, i16)>, depth: i8) -> i16 {
+    let mut v = vec![(0i16, 0i16, 0i8, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -358,10 +358,10 @@ fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
             if a.1 == b.1 {
                 a.2.cmp(&b.2)
             } else {
-                a.1.partial_cmp(&b.1).unwrap()
+                a.1.cmp(&b.1)
             }
         } else {
-            a.0.partial_cmp(&b.0).unwrap()
+            a.0.cmp(&b.0)
         }
     });
     w.sort_by(|a, b| a.0.cmp(&b.0));
@@ -372,20 +372,20 @@ fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
     for &(_, ref next) in &w {
         nexts.push(next.clone());
     }
-    let mut res = -std::f32::INFINITY;
+    let mut res = std::i16::MIN;
     for (i, next) in nexts.iter().enumerate() {
         if i == 0 {
             res = res.max(-think(
                     next.clone(), -beta, -alpha, false, evaluator,
                     table_cache, table_order, depth-1));
         } else {
-            let reduce = if -evaluator.eval(next.clone()) < alpha - 16.0 {
+            let reduce = if -evaluator.eval(next.clone()) < alpha - 16 * scale {
                 2
             } else {
                 1
             };
             res = res.max(-think(
-                    next.clone(), -alpha-0.001, -alpha, false, evaluator,
+                    next.clone(), -alpha-1, -alpha, false, evaluator,
                     table_cache, table_order, depth-reduce));
             if res >= beta {
                 return res;
@@ -404,7 +404,7 @@ fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
     }
     if nexts.is_empty() {
         if passed {
-            return board.score() as f32;
+            return (board.score() as i16) * scale;
         } else {
             return -think(
                 board.pass(), -beta, -alpha, true, evaluator,
@@ -414,10 +414,10 @@ fn think_impl(board: Board, mut alpha: f32, beta: f32, passed: bool,
     res
 }
 
-pub fn think(board: Board, alpha: f32, beta: f32, passed: bool,
+pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
          evaluator: & Evaluator,
-         table_cache: &mut HashMap<Board, (f32, f32)>,
-         table_order: & HashMap<Board, (f32, f32)>, depth: i8) -> f32 {
+         table_cache: &mut HashMap<Board, (i16, i16)>,
+         table_order: & HashMap<Board, (i16, i16)>, depth: i8) -> i16 {
     if depth <= 0 {
         let res = evaluator.eval(board.clone());
         table_cache.insert(board.clone(), (res, res));
@@ -425,7 +425,7 @@ pub fn think(board: Board, alpha: f32, beta: f32, passed: bool,
     } else {
         let (lower, upper) = match table_cache.get(&board) {
             Some(&(lower, upper)) => (lower, upper),
-            None => (-std::f32::INFINITY, std::f32::INFINITY)
+            None => (std::i16::MIN, std::i16::MAX)
         };
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
@@ -451,9 +451,9 @@ pub fn think(board: Board, alpha: f32, beta: f32, passed: bool,
             },
             None => {
                 if res <= new_alpha {
-                    (-std::f32::INFINITY, res)
+                    (std::i16::MIN, res)
                 } else if res >= new_beta {
-                    (res, std::f32::INFINITY)
+                    (res, std::i16::MAX)
                 } else {
                     (res, res)
                 }
@@ -463,4 +463,3 @@ pub fn think(board: Board, alpha: f32, beta: f32, passed: bool,
         res
     }
 }
-

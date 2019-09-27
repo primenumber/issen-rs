@@ -187,6 +187,7 @@ impl Board {
     }
 }
 
+#[derive(Debug)]
 pub struct BoardParseError;
 
 impl FromStr for Board {

@@ -1,5 +1,6 @@
+
 pub struct Evaluator {
-    weights: Vec<Vec<f32>>,
+    weights: Vec<Vec<i16>>,
     offsets: Vec<usize>,
     patterns: Vec<u64>,
     base3: Vec<usize>
@@ -12,6 +13,8 @@ fn pow3(x: i8) -> usize {
         3 * pow3(x-1)
     }
 }
+
+pub const scale: i16 = 128;
 
 use std::mem;
 use std::cmp::max;
@@ -50,7 +53,7 @@ impl Evaluator {
         length += 1;
 
         let files: Vec<String> = (30..61).map(|i| format!("table/value{}", i)).collect();
-        let mut weights = vec![vec![0f32; length]; files.len()];
+        let mut weights = vec![vec![0i16; length]; files.len()];
         for (cnt, filename) in files.iter().enumerate() {
             let mut value_file = File::open(filename).unwrap();
             let mut buf = vec![0u8; length * 8];
@@ -58,7 +61,7 @@ impl Evaluator {
             for i in 0usize..length {
                 let mut ary: [u8; 8] = Default::default();
                 ary.copy_from_slice(&buf[(8*i)..(8*(i+1))]);
-                weights[cnt][i] = unsafe { mem::transmute::<[u8; 8], f64>(ary) } as f32;
+                weights[cnt][i] = (scale as f64 * unsafe { mem::transmute::<[u8; 8], f64>(ary) }).max(scale as f64 * -64.0).min(scale as f64 * 64.0).round() as i16;
             }
         }
 
@@ -75,35 +78,36 @@ impl Evaluator {
         Evaluator { weights, offsets, patterns, base3 }
     }
 
-    fn eval_impl(&self, board: Board) -> f32 {
-        let mut score = 0f32;
+    fn eval_impl(&self, board: Board) -> i32 {
+        let mut score = 0i32;
         let rem:usize = popcnt(board.empty()) as usize;
         for (i, pattern) in self.patterns.iter().enumerate() {
             let player_pattern = pext(board.player, *pattern) as usize;
             let opponent_pattern = pext(board.opponent, *pattern) as usize;
             score += self.weights[34 - rem][
                 self.offsets[i] + self.base3[player_pattern]
-                + 2*self.base3[opponent_pattern]];
+                + 2*self.base3[opponent_pattern]] as i32;
         }
         score
     }
 
-    pub fn eval(&self, mut board: Board) -> f32 {
-        let mut score = 0f32;
+    pub fn eval(&self, mut board: Board) -> i16 {
+        let mut score = 0i32;
         let rem:usize = popcnt(board.empty()) as usize;
         for _i in 0..4 {
             score += self.eval_impl(board.clone());
             score += self.eval_impl(board.flip_diag());
             board = board.rot90();
         }
-        let raw_score = score + *self.weights[34 - rem].last().unwrap();
-        if raw_score > 63.0 {
-            64.0 - 1.0 / (raw_score - 62.0)
-        } else if raw_score < -63.0 {
-            -64.0 - 1.0 / (raw_score + 62.0)
+        let raw_score = score + *self.weights[34 - rem].last().unwrap() as i32;
+        let scale32 = scale as i32;
+        (if raw_score > 63 * scale32 {
+            64 * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
+        } else if raw_score < -63 * scale32 {
+            -64 * scale32 - scale32 * scale32 / (raw_score + 62 * scale32)
         } else {
             raw_score
-        }
+        }) as i16
     }
 }
 
