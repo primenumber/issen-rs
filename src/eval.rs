@@ -14,7 +14,7 @@ fn pow3(x: i8) -> usize {
     }
 }
 
-pub const scale: i16 = 128;
+pub const SCALE: i16 = 128;
 
 use std::mem;
 use std::cmp::max;
@@ -61,7 +61,7 @@ impl Evaluator {
             for i in 0usize..length {
                 let mut ary: [u8; 8] = Default::default();
                 ary.copy_from_slice(&buf[(8*i)..(8*(i+1))]);
-                weights[cnt][i] = (scale as f64 * unsafe { mem::transmute::<[u8; 8], f64>(ary) }).max(scale as f64 * -64.0).min(scale as f64 * 64.0).round() as i16;
+                weights[cnt][i] = (SCALE as f64 * unsafe { mem::transmute::<[u8; 8], f64>(ary) }).max(SCALE as f64 * -64.0).min(SCALE as f64 * 64.0).round() as i16;
             }
         }
 
@@ -78,13 +78,12 @@ impl Evaluator {
         Evaluator { weights, offsets, patterns, base3 }
     }
 
-    fn eval_impl(&self, board: Board) -> i32 {
+    fn eval_impl(&self, board: Board, index: usize) -> i32 {
         let mut score = 0i32;
-        let rem:usize = popcnt(board.empty()) as usize;
         for (i, pattern) in self.patterns.iter().enumerate() {
             let player_pattern = pext(board.player, *pattern) as usize;
             let opponent_pattern = pext(board.opponent, *pattern) as usize;
-            score += self.weights[34 - rem][
+            score += self.weights[index][
                 self.offsets[i] + self.base3[player_pattern]
                 + 2*self.base3[opponent_pattern]] as i32;
         }
@@ -93,14 +92,15 @@ impl Evaluator {
 
     pub fn eval(&self, mut board: Board) -> i16 {
         let mut score = 0i32;
-        let rem:usize = popcnt(board.empty()) as usize;
+        let rem: usize = popcnt(board.empty()) as usize;
+        let index = (34 - rem).max(0).min(30);
         for _i in 0..4 {
-            score += self.eval_impl(board.clone());
-            score += self.eval_impl(board.flip_diag());
+            score += self.eval_impl(board.clone(), index);
+            score += self.eval_impl(board.flip_diag(), index);
             board = board.rot90();
         }
-        let raw_score = score + *self.weights[34 - rem].last().unwrap() as i32;
-        let scale32 = scale as i32;
+        let raw_score = score + *self.weights[index].last().unwrap() as i32;
+        let scale32 = SCALE as i32;
         (if raw_score > 63 * scale32 {
             64 * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
         } else if raw_score < -63 * scale32 {

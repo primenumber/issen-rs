@@ -1,337 +1,347 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::cmp::{min, max};
+use std::sync::mpsc;
+use std::cell::Cell;
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
+use crate::table::*;
 
-type Table<T> = Arc<Mutex<HashMap<Board, (T, T)>>>;
+type ResCacheTable = Arc<Mutex<HashMap<Board, (i8, i8)>>>;
 
-fn solve_1(board: Board, count: &mut usize) -> i8 {
-    let bit = board.empty();
-    let pos = popcnt(bit - 1) as usize;
-    match board.play(pos) {
-        Ok(next) => -next.score(),
-        Err(_) => {
-            *count += 1;
-            match board.pass().play(pos) {
-                Ok(next) => next.score(),
-                Err(_) => board.score()
-            }
-        }
-    }
+pub struct SolveObj<'a> {
+    res_cache: ResCacheTable,
+    pub eval_cache: EvalCacheTable,
+    evaluator: &'a Evaluator,
+    pub count: Cell<usize>
 }
 
-fn solve_naive(board: Board, mut alpha: i8, beta: i8, passed: bool,
-               table: &mut Table<i8>,
-               table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
-               depth: u8)-> i8 {
-    let mut pass = true;
-    let mut empties = board.empty();
-    let mut res = -64;
-    while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
-        empties = empties & (empties - 1);
+impl SolveObj<'_> {
+    pub fn new(res_cache: ResCacheTable, eval_cache: EvalCacheTable,
+           evaluator: &Evaluator) -> SolveObj {
+        SolveObj {
+            res_cache,
+            eval_cache,
+            evaluator,
+            count: Cell::new(0)
+        }
+    }
+
+    fn near_leaf(&self, board: Board) -> i8 {
+        let bit = board.empty();
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
-            Ok(next) => {
-                pass = false;
-                res = max(res, -solve(
-                        next, -beta, -alpha, false, table, table_order, count, depth+1));
-                alpha = max(alpha, res);
-                if alpha >= beta {
-                    return res;
+            Ok(next) => -next.score(),
+            Err(_) => {
+                self.count.set(self.count.get() + 1);
+                match board.pass().play(pos) {
+                    Ok(next) => next.score(),
+                    Err(_) => board.score()
                 }
-            },
-            Err(_) => ()
-        }
-    }
-    if pass {
-        if passed {
-            return board.score();
-        } else {
-            return -solve(board.pass(), -beta, -alpha, true, table, table_order, count, depth);
-        }
-    }
-    res
-}
-
-fn solve_fastest_first(board: Board, mut alpha: i8, beta: i8, passed: bool,
-                       table: &mut Table<i8>,
-                       table_order: & HashMap<Board, (i16, i16)>,
-                       count: &mut usize, depth: u8) -> i8 {
-    let mut v = vec![(0i8, board.clone()); 0];
-    let mut empties = board.empty();
-    while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
-        empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
-        match board.play(pos) {
-            Ok(next) => {
-                v.push((weighted_mobility(& next), next));
-            },
-            Err(_) => ()
-        }
-    }
-    v.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut res = -64;
-    for (i, &(_, ref next)) in v.iter().enumerate() {
-        if i == 0 {
-            res = max(res, -solve(
-                    next.clone(), -beta, -alpha, false, table, table_order, count, depth+1));
-        } else {
-            let mut result = -solve(
-                next.clone(), -alpha-1, -alpha, false, table, table_order, count, depth+1);
-            if result >= beta {
-                return result;
             }
-            if result > alpha {
-                alpha = result;
-                result = -solve(
-                    next.clone(), -beta, -alpha, false, table, table_order, count, depth+1);
-            }
-            res = max(res, result);
-        }
-        alpha = max(alpha, res);
-        if alpha >= beta {
-            return res;
         }
     }
-    if v.is_empty() {
-        if passed {
-            return board.score();
-        } else {
-            return -solve(board.pass(), -beta, -alpha, true, table, table_order, count, depth);
-        }
-    }
-    res
-}
 
-fn solve_move_ordering_with_table(
-    board: Board, mut alpha: i8, beta: i8, passed: bool,
-    table: &mut Table<i8>,
-    table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
-    depth: u8) -> i8 {
-    let mut v = vec![(0i16, 0i16, board.clone()); 0];
-    let mut w = vec![(0i8, board.clone()); 0];
-    let mut empties = board.empty();
-    while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
-        empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
-        match board.play(pos) {
-            Ok(next) => {
-                match table_order.get(&next) {
-                    Some(&(lower, upper)) => {
-                        v.push((upper, lower, next));
-                    },
-                    None => {
-                        w.push((weighted_mobility(& next), next));
+    fn naive(
+            &self, board: Board, mut alpha: i8, beta: i8, passed: bool,
+            depth: i8)-> i8 {
+        let mut pass = true;
+        let mut empties = board.empty();
+        let mut res = -64;
+        while empties != 0 {
+            let bit = empties  & empties.wrapping_neg();
+            empties = empties & (empties - 1);
+            let pos = popcnt(bit - 1) as usize;
+            match board.play(pos) {
+                Ok(next) => {
+                    pass = false;
+                    res = max(res, -self.solve(
+                            next, -beta, -alpha, false, depth+1));
+                    alpha = max(alpha, res);
+                    if alpha >= beta {
+                        return res;
                     }
+                },
+                Err(_) => ()
+            }
+        }
+        if pass {
+            if passed {
+                return board.score();
+            } else {
+                return -self.solve(board.pass(), -beta, -alpha, true, depth);
+            }
+        }
+        res
+    }
+
+    fn fastest_first(
+            &self, board: Board, mut alpha: i8, beta: i8, passed: bool,
+            depth: i8) -> i8 {
+        let mut v = vec![(0i8, board.clone()); 0];
+        let mut empties = board.empty();
+        while empties != 0 {
+            let bit = empties  & empties.wrapping_neg();
+            empties = empties & (empties - 1);
+            let pos = popcnt(bit - 1) as usize;
+            match board.play(pos) {
+                Ok(next) => {
+                    v.push((weighted_mobility(& next), next));
+                },
+                Err(_) => ()
+            }
+        }
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut res = -64;
+        for (i, &(_, ref next)) in v.iter().enumerate() {
+            if i == 0 {
+                res = max(res, -self.solve(
+                        next.clone(), -beta, -alpha, false, depth+1));
+            } else {
+                let mut result = -self.solve(
+                    next.clone(), -alpha-1, -alpha, false, depth+1);
+                if result >= beta {
+                    return result;
                 }
-            },
-            Err(_) => ()
-        }
-    }
-    v.sort_by(|a, b| {
-        if a.0 == b.0 {
-            a.1.cmp(&b.1)
-        } else {
-            a.0.cmp(&b.0)
-        }
-    });
-    w.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut vw = Vec::<Board>::new();
-    for &(_, _, ref next) in &v {
-        vw.push(next.clone());
-    }
-    for &(_, ref next) in &w {
-        vw.push(next.clone());
-    }
-    let mut res = -64;
-    for (i, next) in vw.iter().enumerate() {
-        if i == 0 {
-            res = -solve(next.clone(), -beta, -alpha, false, table, table_order, count, depth+1);
+                if result > alpha {
+                    alpha = result;
+                    result = -self.solve(
+                        next.clone(), -beta, -alpha, false, depth+1);
+                }
+                res = max(res, result);
+            }
             alpha = max(alpha, res);
             if alpha >= beta {
                 return res;
             }
-        } else {
-            res = max(res, -solve(
-                    next.clone(), -alpha-1, -alpha, false, table, table_order, count, depth+1));
-            if res >= beta {
-                return res;
-            }
-            if res > alpha {
-                alpha = res;
-                res = max(res, -solve(
-                        next.clone(), -beta, -alpha, false, table, table_order, count, depth+1));
+        }
+        if v.is_empty() {
+            if passed {
+                return board.score();
+            } else {
+                return -self.solve(board.pass(), -beta, -alpha, true, depth);
             }
         }
+        res
     }
-    if v.is_empty() && w.is_empty() {
-        if passed {
-            return board.score();
-        } else {
-            return -solve(board.pass(), -beta, -alpha, true, table, table_order, count, depth);
+
+    fn move_ordering_impl(&self, board: Board, depth: i8) -> Vec<Board> {
+        let mut nexts = vec![(0i16, board.clone()); 0];
+        let mut empties = board.empty();
+        while empties != 0 {
+            let bit = empties  & empties.wrapping_neg();
+            empties = empties & (empties - 1);
+            let pos = popcnt(bit - 1) as usize;
+            match board.play(pos) {
+                Ok(next) => {
+                    nexts.push((0, next));
+                },
+                Err(_) => ()
+            }
         }
-    }
-    res
-}
 
-use std::sync::mpsc;
-
-fn solve_ybwc(
-    board: Board, mut alpha: i8, beta: i8, passed: bool,
-    table: &mut Table<i8>,
-    table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
-    depth: u8) -> i8 {
-    let mut v = vec![(0i16, 0i16, board.clone()); 0];
-    let mut w = vec![(0i8, board.clone()); 0];
-    let mut empties = board.empty();
-    while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
-        empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
-        match board.play(pos) {
-            Ok(next) => {
-                match table_order.get(&next) {
-                    Some(&(lower, upper)) => {
-                        v.push((upper, lower, next));
-                    },
-                    None => {
-                        w.push((weighted_mobility(& next), next));
+        let rem = popcnt(board.empty());
+        let max_depth = ((rem - 12) as f32 / 1.8) as i8;
+        let min_depth = (max_depth - 6).max(0);
+        for think_depth in min_depth..=max_depth {
+            let mut tmp = vec![(0i16, board.clone()); 0];
+            let mut res = 64 * SCALE;
+            for (i, (score, next)) in nexts.iter().enumerate() {
+                if i == 0 {
+                    const WINDOW: i16 = 10;
+                    let alpha = (score - WINDOW * SCALE).max(-64 * SCALE);
+                    let beta = (score + WINDOW * SCALE).min(64 * SCALE);
+                    let new_res = think(next.clone(), alpha, beta, false, self.evaluator, &self.eval_cache, think_depth);
+                    if new_res <= alpha {
+                        let new_alpha = -64 * SCALE;
+                        let new_beta = new_res;
+                        res = think(next.clone(), new_alpha, new_beta, false, self.evaluator, &self.eval_cache, think_depth);
+                        tmp.push((res, next.clone()));
+                    } else if new_res >= beta {
+                        let new_alpha = new_res;
+                        let new_beta = 64 * SCALE;
+                        res = think(next.clone(), new_alpha, new_beta, false, self.evaluator, &self.eval_cache, think_depth);
+                        tmp.push((res, next.clone()));
+                    } else {
+                        res = new_res;
+                        tmp.push((res, next.clone()));
+                    }
+                } else {
+                    let new_res = think(next.clone(), res, res+1, false, self.evaluator, &self.eval_cache, think_depth);
+                    if new_res < res {
+                        let fixed_res = think(next.clone(), -64 * SCALE, new_res, false, self.evaluator, &self.eval_cache, think_depth);
+                        tmp.push((fixed_res, next.clone()));
+                        res = fixed_res;
+                    } else {
+                        let score = new_res;// + weighted_mobility(next) as i16 * SCALE;
+                        tmp.push((score, next.clone()));
                     }
                 }
-            },
-            Err(_) => ()
+            }
+            tmp.sort_by(|a, b| {
+                a.0.cmp(&b.0)
+            });
+            nexts = tmp;
         }
+        nexts.into_iter().map(|e| e.1).collect()
     }
-    v.sort_by(|a, b| {
-        if a.0 == b.0 {
-            a.1.cmp(&b.1)
-        } else {
-            a.0.cmp(&b.0)
-        }
-    });
-    w.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut vw = Vec::<Board>::new();
-    for &(_, _, ref next) in &v {
-        vw.push(next.clone());
-    }
-    for &(_, ref next) in &w {
-        vw.push(next.clone());
-    }
-    let (tx, rx) = mpsc::channel();
-    let (txcount, rxcount) = mpsc::channel();
-    let res = crossbeam::scope(|scope| {
-        let mut handles = Vec::new();
+
+    fn move_ordering_by_eval(
+            &self, board: Board, mut alpha: i8, beta: i8, passed: bool,
+            depth: i8) -> i8 {
+        let v = self.move_ordering_impl(board.clone(), depth);
         let mut res = -64;
-        for (i, next) in vw.iter().enumerate() {
+        for (i, next) in v.iter().enumerate() {
             if i == 0 {
-                res = -solve(next.clone(), -beta, -alpha, false, table, table_order, count, depth+1);
+                res = -self.solve(next.clone(), -beta, -alpha, false, depth+1);
                 alpha = max(alpha, res);
                 if alpha >= beta {
                     return res;
                 }
             } else {
-                let tx = tx.clone();
-                let txcount = txcount.clone();
-                let mut table = table.clone();
-                handles.push(scope.spawn(move |_| {
-                    let mut count = 0;
-                    res = max(res, -solve(
-                            next.clone(), -alpha-1, -alpha, false, &mut table, table_order, &mut count, depth+2));
-                    if res >= beta {
-                        let _ = tx.send(res);
-                        let _ = txcount.send(count);
-                        return;
-                    }
-                    if res > alpha {
-                        alpha = res;
-                        res = max(res, -solve(
-                                next.clone(), -beta, -alpha, false, &mut table, table_order, &mut count, depth+2));
-                    }
-                    let _ = tx.send(res);
-                    let _ = txcount.send(count);
-                }));
+                res = max(res, -self.solve(
+                        next.clone(), -alpha-1, -alpha, false, depth+1));
+                if res >= beta {
+                    return res;
+                }
+                if res > alpha {
+                    alpha = res;
+                    res = max(res, -self.solve(
+                            next.clone(), -beta, -alpha, false, depth+1));
+                }
             }
         }
-        for h in handles {
-            let _ = h.join();
-            *count += rxcount.recv().unwrap();
-            res = max(res, rx.recv().unwrap());
+        if v.is_empty() {
+            if passed {
+                return board.score();
+            } else {
+                return -self.solve(board.pass(), -beta, -alpha, true, depth);
+            }
         }
-        alpha = max(alpha, res);
         res
-    }).unwrap();
-    if v.is_empty() && w.is_empty() {
-        if passed {
-            return board.score();
-        } else {
-            return -solve(board.pass(), -beta, -alpha, true, table, table_order, count, depth);
-        }
     }
-    res 
-}
 
-fn solve_with_table(board: Board, alpha: i8, beta: i8, passed: bool,
-                    table: &mut Table<i8>,
-                    table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
-                    depth: u8) -> i8 {
-    let (lower, upper) = match table.lock().unwrap().get(&board) {
-        Some((lower, upper)) => (*lower, *upper),
-        None => (-64, 64)
-    };
-    let new_alpha = max(lower, alpha);
-    let new_beta = min(upper, beta);
-    if new_alpha >= new_beta {
-        return if alpha > upper {
-            upper
-        } else {
-            lower
+    fn ybwc(
+            &self, board: Board, mut alpha: i8, beta: i8, passed: bool,
+            depth: i8) -> i8 {
+        let v = self.move_ordering_impl(board.clone(), depth);
+        let (tx, rx) = mpsc::channel();
+        let (txcount, rxcount) = mpsc::channel();
+        let res = crossbeam::scope(|scope| {
+            let mut handles = Vec::new();
+            let mut res = -64;
+            for (i, next) in v.iter().enumerate() {
+                if i == 0 {
+                    res = -self.solve(next.clone(), -beta, -alpha, false, depth+1);
+                    alpha = max(alpha, res);
+                    if alpha >= beta {
+                        return res;
+                    }
+                } else {
+                    let tx = tx.clone();
+                    let txcount = txcount.clone();
+                    let child_obj = SolveObj::new(
+                        self.res_cache.clone(),
+                        self.eval_cache.clone(),
+                        self.evaluator);
+                    handles.push(scope.spawn(move |_| {
+                        res = max(res, -child_obj.solve(
+                                next.clone(), -alpha-1, -alpha, false, depth+2));
+                        if res >= beta {
+                            let _ = tx.send(res);
+                            let _ = txcount.send((child_obj.count.get(), child_obj.eval_cache.cnt_get.get(), child_obj.eval_cache.cnt_update.get(), child_obj.eval_cache.cnt_hit.get()));
+                            return;
+                        }
+                        if res > alpha {
+                            alpha = res;
+                            res = max(res, -child_obj.solve(
+                                    next.clone(), -beta, -alpha, false, depth+2));
+                        }
+                        let _ = tx.send(res);
+                        let _ = txcount.send((child_obj.count.get(), child_obj.eval_cache.cnt_get.get(), child_obj.eval_cache.cnt_update.get(), child_obj.eval_cache.cnt_hit.get()));
+                    }));
+                }
+            }
+            for h in handles {
+                let _ = h.join();
+                let (cnt_solve, cnt_get, cnt_update, cnt_hit) = rxcount.recv().unwrap();
+                self.count.set(self.count.get() + cnt_solve);
+                self.eval_cache.add_cnt_get(cnt_get);
+                self.eval_cache.add_cnt_update(cnt_update);
+                self.eval_cache.add_cnt_hit(cnt_hit);
+                res = max(res, rx.recv().unwrap());
+            }
+            alpha = max(alpha, res);
+            res
+        }).unwrap();
+        if v.is_empty() {
+            if passed {
+                return board.score();
+            } else {
+                return -self.solve(board.pass(), -beta, -alpha, true, depth);
+            }
         }
+        res 
     }
-    let res = if depth >= 5 || popcnt(board.empty()) <= 16 {
-        solve_move_ordering_with_table(
-            board.clone(), alpha, beta, passed, table, table_order, count, depth)
-    } else {
-        solve_ybwc(
-            board.clone(), alpha, beta, passed, table, table_order, count, depth)
-    };
-    let range = if res <= new_alpha {
-        (lower, min(upper, res))
-    } else if res >= new_beta {
-        (max(lower, res), upper)
-    } else {
-        (res, res)
-    };
-    table.lock().unwrap().insert(board, range);
-    res
-}
 
-pub fn solve(board: Board, alpha: i8, beta: i8, passed: bool,
-         table: &mut Table<i8>,
-         table_order: & HashMap<Board, (i16, i16)>, count: &mut usize,
-         depth: u8) -> i8 {
-    *count += 1;
-    if popcnt(board.empty()) == 0 {
-        board.score()
-    } else if popcnt(board.empty()) == 1 {
-        solve_1(board, count)
-    } else if popcnt(board.empty()) <= 6 {
-        solve_naive(board, alpha, beta, passed, table, table_order, count, depth)
-    } else if popcnt(board.empty()) <= 12 {
-        solve_fastest_first(board, alpha, beta, passed, table, table_order, count, depth)
-    } else {
-        solve_with_table(board, alpha, beta, passed, table, table_order, count, depth)
+    fn lookup_and_update_table(
+            &self, board: Board, alpha: i8, beta: i8, passed: bool,
+            depth: i8) -> i8 {
+        let (lower, upper) = match self.res_cache.lock().unwrap().get(&board) {
+            Some((lower, upper)) => (*lower, *upper),
+            None => (-64, 64)
+        };
+        let new_alpha = max(lower, alpha);
+        let new_beta = min(upper, beta);
+        if new_alpha >= new_beta {
+            return if alpha > upper {
+                upper
+            } else {
+                lower
+            }
+        }
+        let res = if depth >= 5 || popcnt(board.empty()) <= 16 {
+            self.move_ordering_by_eval(
+                board.clone(), alpha, beta, passed, depth)
+        } else {
+            self.ybwc(
+                board.clone(), alpha, beta, passed, depth)
+        };
+        let range = if res <= new_alpha {
+            (lower, min(upper, res))
+        } else if res >= new_beta {
+            (max(lower, res), upper)
+        } else {
+            (res, res)
+        };
+        self.res_cache.lock().unwrap().insert(board, range);
+        res
+    }
+
+    pub fn solve(
+            &self, board: Board, alpha: i8, beta: i8, passed: bool,
+            depth: i8) -> i8 {
+        self.count.set(self.count.get() + 1);
+        let rem = popcnt(board.empty());
+        if rem == 0 {
+            board.score()
+        } else if rem == 1 {
+            self.near_leaf(board)
+        } else if rem <= 6 {
+            self.naive(board, alpha, beta, passed, depth)
+        } else if rem <= 12 {
+            self.fastest_first(board, alpha, beta, passed, depth)
+        } else {
+            self.lookup_and_update_table(board, alpha, beta, passed, depth)
+        }
     }
 }
 
 fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
          evaluator: & Evaluator,
-         table_cache: &mut HashMap<Board, (i16, i16)>,
-         table_order: & HashMap<Board, (i16, i16)>, depth: i8) -> i16 {
+         cache: &EvalCacheTable,
+         depth: i8) -> i16 {
     let mut v = vec![(0i16, 0i16, 0i8, board.clone()); 0];
     let mut w = vec![(0i8, board.clone()); 0];
     let mut empties = board.empty();
@@ -341,12 +351,12 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
-                match table_order.get(&next) {
-                    Some(&(lower, upper)) => {
-                        v.push((upper, lower, weighted_mobility(& next), next));
+                match cache.get(next.clone()) {
+                    Some(entry) => {
+                        v.push((entry.upper, entry.lower, weighted_mobility(&next), next));
                     },
                     None => {
-                        w.push((weighted_mobility(& next), next));
+                        w.push((weighted_mobility(&next), next));
                     }
                 }
             },
@@ -375,18 +385,18 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
     let mut res = std::i16::MIN;
     for (i, next) in nexts.iter().enumerate() {
         if i == 0 {
-            res = res.max(-think(
+            res = -think(
                     next.clone(), -beta, -alpha, false, evaluator,
-                    table_cache, table_order, depth-1));
+                    cache, depth-1);
         } else {
-            let reduce = if -evaluator.eval(next.clone()) < alpha - 16 * scale {
+            let reduce = if -evaluator.eval(next.clone()) < alpha - 16 * SCALE {
                 2
             } else {
                 1
             };
             res = res.max(-think(
                     next.clone(), -alpha-1, -alpha, false, evaluator,
-                    table_cache, table_order, depth-reduce));
+                    cache, depth-reduce));
             if res >= beta {
                 return res;
             }
@@ -394,7 +404,7 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
                 alpha = res;
                 res = res.max(-think(
                         next.clone(), -beta, -alpha, false, evaluator,
-                        table_cache, table_order, depth-1));
+                        cache, depth-1));
             }
         }
         alpha = alpha.max(res);
@@ -404,11 +414,11 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
     }
     if nexts.is_empty() {
         if passed {
-            return (board.score() as i16) * scale;
+            return (board.score() as i16) * SCALE;
         } else {
             return -think(
                 board.pass(), -beta, -alpha, true, evaluator,
-                table_cache, table_order, depth);
+                cache, depth);
         }
     }
     res
@@ -416,15 +426,27 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
 
 pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
          evaluator: & Evaluator,
-         table_cache: &mut HashMap<Board, (i16, i16)>,
-         table_order: & HashMap<Board, (i16, i16)>, depth: i8) -> i16 {
+         cache: &EvalCacheTable,
+         depth: i8) -> i16 {
     if depth <= 0 {
         let res = evaluator.eval(board.clone());
-        table_cache.insert(board.clone(), (res, res));
+        let entry = EvalCache {
+            board: board.clone(),
+            lower: res,
+            upper: res,
+            depth: 0
+        };
+        cache.update(entry);
         res
     } else {
-        let (lower, upper) = match table_cache.get(&board) {
-            Some(&(lower, upper)) => (lower, upper),
+        let (lower, upper) = match cache.get(board.clone()) {
+            Some(entry) => {
+                if entry.depth >= depth {
+                    (entry.lower, entry.upper)
+                } else {
+                    (std::i16::MIN, std::i16::MAX)
+                }
+            },
             None => (std::i16::MIN, std::i16::MAX)
         };
         let new_alpha = alpha.max(lower);
@@ -438,28 +460,21 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
         }
         let res = think_impl(
             board.clone(), new_alpha, new_beta, passed, evaluator,
-            table_cache, table_order, depth);
-        let range = match table_cache.get(&board) {
-            Some(&(lower, upper)) => {
-                if res <= new_alpha {
-                    (lower, res.min(upper))
-                } else if res >= new_beta {
-                    (lower.max(res), upper)
-                } else {
-                    (res, res)
-                }
-            },
-            None => {
-                if res <= new_alpha {
-                    (std::i16::MIN, res)
-                } else if res >= new_beta {
-                    (res, std::i16::MAX)
-                } else {
-                    (res, res)
-                }
-            }
+            cache, depth);
+        let range = if res <= new_alpha {
+            (std::i16::MIN, res)
+        } else if res >= new_beta {
+            (res, std::i16::MAX)
+        } else {
+            (res, res)
         };
-        table_cache.insert(board.clone(), range);
+        let entry = EvalCache {
+            board: board.clone(),
+            lower: range.0,
+            upper: range.1,
+            depth
+        };
+        cache.update(entry);
         res
     }
 }

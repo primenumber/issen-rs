@@ -1,10 +1,10 @@
 mod bits;
 mod board;
 mod eval;
+mod table;
 mod search;
 
 use std::io::prelude::*;
-use std::mem;
 use std::io::BufReader;
 use std::fs::File;
 use std::time::Instant;
@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
+use crate::table::*;
 use crate::search::*;
 
 pub struct HandParseError;
@@ -64,42 +65,28 @@ fn play(mut board: Board) -> Board {
     board
 }
 
-fn iddfs(board: Board, evaluator: & Evaluator) -> HashMap<Board, (i16, i16)> {
-    let mut table_order = HashMap::<Board, (i16, i16)>::new();
-    let rem = popcnt(board.empty());
-    for cut in [16, 15, 14, 13, 12].iter() {
-        let start2 = Instant::now();
-        let mut table_cache = HashMap::<Board, (i16, i16)>::new();
-        let tmp = think(board.clone(), -64 * scale, 64 * scale, false, & evaluator,
-        &mut table_cache, &table_order, rem - cut);
-        let end2 = start2.elapsed();
-        println!("think: {}, nodes: {}nodes, time: {}.{:03}sec",
-                 tmp, table_cache.len(),
-                 end2.as_secs(), end2.subsec_nanos() / 1_000_000);
-        mem::swap(&mut table_order, &mut table_cache);
-    }
-    table_order
-}
-
-fn solve_ffo(name: &str, begin_index: usize, evaluator: & Evaluator) -> () {
+fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator) -> () {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     for (i, line) in reader.lines().enumerate() {
         match Board::from_str(&line.unwrap()) {
             Ok(board) => {
+                let rem = popcnt(board.empty());
                 let start = Instant::now();
-                let mut table_order = HashMap::<Board, (i16, i16)>::new();
-                let rem = popcnt(board.empty()) as u8;
-                if rem > 16 {
-                    table_order = iddfs(board.clone(), evaluator);
-                }
-                let mut table = Arc::new(Mutex::new(HashMap::<Board, (i8, i8)>::new()));
-                let mut count = 0;
-                let res = solve(
-                    board, -64, 64, false, &mut table, &table_order, &mut count, 0);
+                let res_cache = Arc::new(Mutex::new(HashMap::<Board, (i8, i8)>::new()));
+                let eval_cache = EvalCacheTable::new(256, 65536);
+                let obj = SolveObj::new(
+                    res_cache, eval_cache, evaluator);
+                let res = obj.solve(
+                    board, -64, 64, false, 0);
                 let end = start.elapsed();
-                println!("number: {}, result: {}, count: {}, time: {}.{:03}sec",
-                         i+begin_index, res, count, end.as_secs(),
+                println!("n: {}, rem: {}, res: {}, cnt: {}s/{}g/{}u/{}h, t: {}.{:03}s",
+                         i+begin_index, rem, res,
+                         obj.count.get(),
+                         obj.eval_cache.cnt_get.get(),
+                         obj.eval_cache.cnt_update.get(),
+                         obj.eval_cache.cnt_hit.get(),
+                         end.as_secs(),
                          end.subsec_nanos() / 1_000_000);
             },
             Err(_) => println!("Parse error")
