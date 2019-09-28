@@ -65,6 +65,34 @@ fn play(mut board: Board) -> Board {
     board
 }
 
+fn to_SI(x: usize) -> String {
+    if x == 0 {
+        return "0".to_string();
+    }
+    let mut digits = 0;
+    let mut y = x;
+    while y > 0 {
+        digits += 1;
+        y /= 10;
+    }
+    if digits <= 3 {
+        return format!("{}", x);
+    }
+    let mut x3 = x;
+    for _ in 3..digits {
+        x3 /= 10;
+    }
+    const SI: &str = " kMGTP";
+    let base1000_digits = (digits - 1) / 3;
+    let prefix = SI.chars().nth(base1000_digits).unwrap();
+    match digits % 3 {
+        0 => format!("{}{}", x3, prefix),
+        1 => format!("{}.{}{}", x3 / 100, x3 % 100, prefix),
+        2 => format!("{}.{}{}", x3 / 10, x3 % 10, prefix),
+        _ => panic!()
+    }
+}
+
 fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: &EvalCacheTable) -> () {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
@@ -81,10 +109,10 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: 
                 let end = start.elapsed();
                 println!("n: {}, rem: {}, res: {}, cnt: {}s/{}g/{}u/{}h, t: {}.{:03}s",
                          i+begin_index, rem, res,
-                         obj.count.get(),
-                         obj.eval_cache.cnt_get.get(),
-                         obj.eval_cache.cnt_update.get(),
-                         obj.eval_cache.cnt_hit.get(),
+                         to_SI(obj.count.get()),
+                         to_SI(obj.eval_cache.cnt_get.get()),
+                         to_SI(obj.eval_cache.cnt_update.get()),
+                         to_SI(obj.eval_cache.cnt_hit.get()),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000);
                 eval_cache.inc_gen();
