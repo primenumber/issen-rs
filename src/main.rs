@@ -65,7 +65,7 @@ fn play(mut board: Board) -> Board {
     board
 }
 
-fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator) -> () {
+fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: &EvalCacheTable) -> () {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     for (i, line) in reader.lines().enumerate() {
@@ -74,9 +74,8 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator) -> () {
                 let rem = popcnt(board.empty());
                 let start = Instant::now();
                 let res_cache = Arc::new(Mutex::new(HashMap::<Board, (i8, i8)>::new()));
-                let eval_cache = EvalCacheTable::new(256, 65536);
                 let obj = SolveObj::new(
-                    res_cache, eval_cache, evaluator);
+                    res_cache, eval_cache.clone(), evaluator);
                 let res = obj.solve(
                     board, -64, 64, false, 0);
                 let end = start.elapsed();
@@ -88,6 +87,7 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator) -> () {
                          obj.eval_cache.cnt_hit.get(),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000);
+                eval_cache.inc_gen();
             },
             Err(_) => println!("Parse error")
         }
@@ -97,8 +97,9 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator) -> () {
 
 fn main() {
     let evaluator = Evaluator::new("subboard.txt");
-    solve_ffo("fforum-1-19.obf", 1, & evaluator);
-    solve_ffo("fforum-20-39.obf", 20, & evaluator);
-    solve_ffo("fforum-40-59.obf", 40, & evaluator);
-    solve_ffo("fforum-60-79.obf", 60, & evaluator);
+    let eval_cache = EvalCacheTable::new(1024, 65536);
+    solve_ffo("fforum-1-19.obf", 1, &evaluator, &eval_cache);
+    solve_ffo("fforum-20-39.obf", 20, &evaluator, &eval_cache);
+    solve_ffo("fforum-40-59.obf", 40, &evaluator, &eval_cache);
+    solve_ffo("fforum-60-79.obf", 60, &evaluator, &eval_cache);
 }

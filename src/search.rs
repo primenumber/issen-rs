@@ -434,6 +434,7 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
             board: board.clone(),
             lower: res,
             upper: res,
+            gen: cache.gen.get(),
             depth: 0
         };
         cache.update(entry);
@@ -472,6 +473,7 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
             board: board.clone(),
             lower: range.0,
             upper: range.1,
+            gen: cache.gen.get(),
             depth
         };
         cache.update(entry);

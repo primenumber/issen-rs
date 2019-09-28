@@ -11,6 +11,7 @@ pub struct EvalCache {
     pub board: Board,
     pub lower: i16,
     pub upper: i16,
+    pub gen: u16,
     pub depth: i8
 }
 
@@ -25,6 +26,7 @@ impl EvalCacheArray {
             board: Board::from_str("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX X;").unwrap(),
             lower: 0,
             upper: 0,
+            gen: 0,
             depth: 0
         };
         EvalCacheArray{
@@ -43,7 +45,7 @@ impl EvalCacheArray {
         }
     }
 
-    fn update(&mut self, mut cache: EvalCache, hash: u64) -> bool {
+    fn update(&mut self, mut cache: EvalCache, hash: u64, gen: u16) -> bool {
         let index = (hash % self.cycle) as usize;
         let old = &self.ary[index];
         if cache.board == old.board {
@@ -58,7 +60,7 @@ impl EvalCacheArray {
         } else {
             let empty_cache = popcnt(cache.board.empty());
             let empty_old = popcnt(old.board.empty());
-            if empty_cache > empty_old {
+            if empty_cache > empty_old || gen > old.gen {
                 self.ary[index] = cache;
             }
             false
@@ -69,6 +71,7 @@ impl EvalCacheArray {
 pub struct EvalCacheTable {
     arrays: Arc<Vec<Mutex<EvalCacheArray>>>,
     buckets: u64,
+    pub gen: Cell<u16>,
     pub cnt_get: Cell<usize>,
     pub cnt_update: Cell<usize>,
     pub cnt_hit: Cell<usize>,
@@ -79,6 +82,7 @@ impl Clone for EvalCacheTable {
         EvalCacheTable {
             arrays: self.arrays.clone(),
             buckets: self.buckets,
+            gen: self.gen.clone(),
             cnt_get: Cell::new(0),
             cnt_update: Cell::new(0),
             cnt_hit: Cell::new(0)
@@ -95,6 +99,7 @@ impl EvalCacheTable {
         EvalCacheTable {
             arrays: Arc::new(vec),
             buckets: buckets as u64,
+            gen: Cell::new(0),
             cnt_get: Cell::new(0),
             cnt_update: Cell::new(0),
             cnt_hit: Cell::new(0)
@@ -123,9 +128,13 @@ impl EvalCacheTable {
         let hash = hasher.finish();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
-        if self.arrays[bucket_id].lock().unwrap().update(cache, bucket_hash) {
+        if self.arrays[bucket_id].lock().unwrap().update(cache, bucket_hash, self.gen.get()) {
             self.cnt_hit.set(self.cnt_hit.get() + 1);
         }
+    }
+
+    pub fn inc_gen(&self) {
+        self.gen.set(self.gen.get() + 1);
     }
 
     pub fn add_cnt_get(&self, add: usize) {
