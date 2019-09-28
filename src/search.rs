@@ -382,7 +382,7 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
     for &(_, ref next) in &w {
         nexts.push(next.clone());
     }
-    let mut res = std::i16::MIN;
+    let mut res = -64 * SCALE;
     for (i, next) in nexts.iter().enumerate() {
         if i == 0 {
             res = -think(
@@ -444,10 +444,10 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
                 if entry.depth >= depth {
                     (entry.lower, entry.upper)
                 } else {
-                    (std::i16::MIN, std::i16::MAX)
+                    (-64 * SCALE, 64 * SCALE)
                 }
             },
-            None => (std::i16::MIN, std::i16::MAX)
+            None => (-64 * SCALE, 64 * SCALE)
         };
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
@@ -462,9 +462,9 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
             board.clone(), new_alpha, new_beta, passed, evaluator,
             cache, depth);
         let range = if res <= new_alpha {
-            (std::i16::MIN, res)
+            (-64 * SCALE, res)
         } else if res >= new_beta {
-            (res, std::i16::MAX)
+            (res, 64 * SCALE)
         } else {
             (res, res)
         };
