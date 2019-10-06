@@ -12,6 +12,7 @@ pub struct EvalCache {
     pub lower: i16,
     pub upper: i16,
     pub gen: u16,
+    pub best: u8,
     pub depth: i8
 }
 
@@ -27,6 +28,7 @@ impl EvalCacheArray {
             lower: 0,
             upper: 0,
             gen: 0,
+            best: PASS as u8,
             depth: 0
         };
         EvalCacheArray{
