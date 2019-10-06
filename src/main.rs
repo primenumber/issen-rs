@@ -129,7 +129,7 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: 
 
 fn main() {
     let evaluator = Evaluator::new("subboard.txt");
-    let eval_cache = EvalCacheTable::new(1024, 65536);
+    let eval_cache = EvalCacheTable::new(1024, 262144);
     solve_ffo("fforum-1-19.obf", 1, &evaluator, &eval_cache);
     solve_ffo("fforum-20-39.obf", 20, &evaluator, &eval_cache);
     solve_ffo("fforum-40-59.obf", 40, &evaluator, &eval_cache);
