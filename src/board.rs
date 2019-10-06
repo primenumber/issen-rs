@@ -15,6 +15,8 @@ use std::str::FromStr;
 use packed_simd::*;
 use crate::bits::*;
 
+pub const PASS: usize = 64;
+
 impl Board {
     fn flip_simd(&self, pos: usize) -> u64x4 {
         let p = u64x4::new(self.player, self.player, self.player, self.player);
@@ -51,7 +53,7 @@ impl Board {
     }
 
     pub fn is_movable(&self, pos: usize) -> bool {
-        if pos >= 64 {
+        if pos >= PASS {
             return false;
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
@@ -61,7 +63,7 @@ impl Board {
     }
 
     pub fn play(&self, pos: usize) -> Result<Board, UnmovableError> {
-        if pos >= 64 {
+        if pos >= PASS {
             return Err(UnmovableError{});
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
