@@ -7,6 +7,9 @@ pub struct Board {
 
 pub struct UnmovableError;
 
+#[derive(Debug)]
+pub struct BoardParseError;
+
 use std::io::Write;
 use std::str::FromStr;
 use packed_simd::*;
@@ -185,10 +188,50 @@ impl Board {
             is_black: self.is_black
         }
     }
-}
 
-#[derive(Debug)]
-pub struct BoardParseError;
+    pub fn stable_partial(&self) -> (u64, u64) {
+        const MASK_TOP: u64 = 0x0000_0000_0000_00FF;
+        const MASK_BOTTOM: u64 = 0xFF00_0000_0000_0000;
+        const MASK_LEFT: u64 = 0x0101_0101_0101_0101;
+        const MASK_RIGHT: u64 = 0x8080_8080_8080_8080;
+        const MASKS: [u64; 4] = [
+            MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT
+        ];
+        let mut res = 0;
+        for mask in &MASKS {
+            let me = pext(self.player, *mask) as usize;
+            let op = pext(self.opponent, *mask) as usize;
+            let base3 = BASE3[me] + 2 * BASE3[op];
+            res |= pdep(STABLE[base3], *mask);
+        }
+        for r in 0..8 {
+            let mask_h = MASK_TOP << (r * 8);
+            for c in 0..8 {
+                let mask_v = MASK_LEFT << c;
+                const MASK_D_A1H8: u64 = 0x8040201008040201;
+                let mask_d_a1h8 = if (r - c) >= 0 {
+                    MASK_D_A1H8 << ((r - c) * 8)
+                } else {
+                    MASK_D_A1H8 >> ((c - r) * 8)
+                };
+                const MASK_D_A8H1: u64 = 0x0102040810204080;
+                let mask_d_a8h1 = if (r + c - 7) >= 0 {
+                    MASK_D_A8H1 << ((r + c - 7) * 8)
+                } else {
+                    MASK_D_A8H1 >> ((7 - r - c) * 8)
+                };
+                let mask = mask_h | mask_v | mask_d_a1h8 | mask_d_a8h1;
+                let pos = r * 8 + 1;
+                if (self.empty() & mask) == 0 {
+                    res |= 1 << pos;
+                }
+            }
+        }
+        let res_me = res & self.player;
+        let res_op = res & self.opponent;
+        (res_me, res_op)
+    }
+}
 
 impl FromStr for Board {
     type Err = BoardParseError;
@@ -220,4 +263,77 @@ pub fn weighted_mobility(board: & Board) -> i8 {
     let b = board.mobility_bits();
     let corner = 0x8100000000000081u64;
     popcnt(b) + popcnt(b & corner)
+}
+
+fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
+    let index = BASE3[board.player as usize] + 2 * BASE3[board.opponent as usize];
+    match memo[index] {
+        Some(res) => return res,
+        None => ()
+    }
+    let mut res = 0xFFFF_FFFF_FFFF_FFFF;
+    let mut pass = true;
+    for next_pos in board.mobility() {
+        pass = false;
+        let next = board.play(next_pos).unwrap();
+        let flip = board.flip(next_pos);
+        res &= !flip;
+        res &= !(1 << next_pos);
+        res &= stable_bits_8(next, false, memo);
+    }
+    if pass {
+        if !passed {
+            let next = board.pass();
+            res &= stable_bits_8(next, true, memo);
+        }
+    }
+    for pos in 0..8 {
+        if ((board.empty() >> pos) & 1) != 1 {
+            continue;
+        }
+        let flip = board.flip(pos);
+        if flip != 0 {
+            continue;
+        }
+        let next = Board {
+            player: board.opponent,
+            opponent: board.player | (1 << pos),
+            is_black: !board.is_black
+        };
+        res &= !(1 << pos);
+        res &= stable_bits_8(next, false, memo);
+    }
+    memo[index] = Some(res);
+    return res;
+}
+
+lazy_static! {
+    static ref STABLE: [u64; 6561] = {
+        let mut memo = [None; 6561];
+        for i in 0..6561 {
+            let mut me = 0;
+            let mut op = 0;
+            let mut tmp = i;
+            for j in 0..8 {
+                let state = tmp % 3;
+                match state {
+                    1 => {me |= 1 << j},
+                    2 => {op |= 1 << j},
+                    _ => ()
+                }
+                tmp /= 3;
+            }
+            let board = Board{
+                player: me,
+                opponent: op,
+                is_black: true
+            };
+            stable_bits_8(board, false, &mut memo);
+        }
+        let mut res = [0; 6561];
+        for i in 0..6561 {
+            res[i] = memo[i].unwrap() & 0xFF;
+        }
+        res
+    };
 }

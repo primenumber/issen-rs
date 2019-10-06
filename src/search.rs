@@ -14,7 +14,14 @@ pub struct SolveObj<'a> {
     res_cache: ResCacheTable,
     pub eval_cache: EvalCacheTable,
     evaluator: &'a Evaluator,
-    pub count: Cell<usize>
+    pub count: Cell<usize>,
+    pub st_cut: Cell<usize>
+}
+
+enum CutType {
+    NoCut,
+    MoreThanBeta(i8),
+    LessThanAlpha(i8)
 }
 
 impl SolveObj<'_> {
@@ -24,7 +31,8 @@ impl SolveObj<'_> {
             res_cache,
             eval_cache,
             evaluator,
-            count: Cell::new(0)
+            count: Cell::new(0),
+            st_cut: Cell::new(0)
         }
     }
 
@@ -319,6 +327,23 @@ impl SolveObj<'_> {
         res
     }
 
+    fn stability_cut(&self, board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
+        let (bits_me, bits_op) = board.stable_partial();
+        let lower = 2 * popcnt(bits_me) - 64;
+        let upper = 64 - 2 * popcnt(bits_op);
+        if upper <= *alpha {
+            self.st_cut.set(self.st_cut.get() + 1);
+            CutType::LessThanAlpha(upper)
+        } else if lower >= *beta {
+            self.st_cut.set(self.st_cut.get() + 1);
+            CutType::MoreThanBeta(lower)
+        } else {
+            (*alpha).max(lower);
+            (*beta).min(upper);
+            CutType::NoCut
+        }
+    }
+
     pub fn solve(
             &self, board: Board, alpha: i8, beta: i8, passed: bool,
             depth: i8) -> i8 {
@@ -331,9 +356,21 @@ impl SolveObj<'_> {
         } else if rem <= 6 {
             self.naive(board, alpha, beta, passed, depth)
         } else if rem <= 12 {
-            self.fastest_first(board, alpha, beta, passed, depth)
+            let mut new_alpha = alpha;
+            let mut new_beta = beta;
+            match self.stability_cut(board.clone(), &mut new_alpha, &mut new_beta) {
+                CutType::NoCut => self.fastest_first(board, new_alpha, new_beta, passed, depth),
+                CutType::MoreThanBeta(v) => v,
+                CutType::LessThanAlpha(v) => v
+            }
         } else {
-            self.lookup_and_update_table(board, alpha, beta, passed, depth)
+            let mut new_alpha = alpha;
+            let mut new_beta = beta;
+            match self.stability_cut(board.clone(), &mut new_alpha, &mut new_beta) {
+                CutType::NoCut => self.lookup_and_update_table(board, new_alpha, new_beta, passed, depth),
+                CutType::MoreThanBeta(v) => v,
+                CutType::LessThanAlpha(v) => v
+            }
         }
     }
 }

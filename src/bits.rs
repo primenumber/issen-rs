@@ -52,8 +52,30 @@ pub fn mirror_under_8(mut x: u64) -> u64 {
     x
 }
 
-use bitintr::Pext;
+use bitintr::{Pext, Pdep};
 
 pub fn pext(x: u64, mask: u64) -> u64 {
     x.pext(mask)
+}
+
+pub fn pdep(x: u64, mask: u64) -> u64 {
+    x.pdep(mask)
+}
+
+lazy_static! {
+    pub static ref BASE3: [usize; 256] = {
+        let mut res = [0usize; 256];
+        for x in 0..256 {
+            let mut pow3 = 1;
+            let mut sum = 0;
+            for i in 0..8 {
+                if ((x >> i) & 1) == 1 {
+                    sum += pow3;
+                }
+                pow3 *= 3;
+            }
+            res[x] = sum;
+        }
+        res
+    };
 }

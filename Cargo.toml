@@ -8,3 +8,4 @@ authors = ["prime <prime@kmc.gr.jp>"]
 packed_simd = "0.3.3"
 bitintr = "0.2.0"
 crossbeam = "0.7.1"
+lazy_static = "1.4.0"
