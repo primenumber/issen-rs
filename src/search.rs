@@ -509,14 +509,6 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
          depth: i8) -> i16 {
     if depth <= 0 {
         let res = evaluator.eval(board.clone());
-        let entry = EvalCache {
-            board: board.clone(),
-            lower: res,
-            upper: res,
-            gen: cache.gen.get(),
-            depth: 0
-        };
-        cache.update(entry);
         res
     } else {
         let (lower, upper, old_best) = match cache.get(board.clone()) {
