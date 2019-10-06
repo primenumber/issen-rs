@@ -47,9 +47,17 @@ impl Board {
         return flipped;
     }
 
-    pub fn flip(&self, pos: usize) -> u64 {
+    pub fn flip_unchecked(&self, pos: usize) -> u64 {
         let flips = self.flip_simd(pos);
         flips.or()
+    }
+
+    pub fn flip(&self, pos: usize) -> u64 {
+        if ((self.empty() >> pos) & 1) == 0 {
+            0
+        } else {
+            self.flip_unchecked(pos)
+        }
     }
 
     pub fn is_movable(&self, pos: usize) -> bool {
