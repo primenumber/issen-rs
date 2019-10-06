@@ -1,10 +1,11 @@
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Board {
     pub player: u64,
     pub opponent: u64,
     pub is_black: bool
 }
 
+#[derive(Debug)]
 pub struct UnmovableError;
 
 #[derive(Debug)]
@@ -240,6 +241,37 @@ impl Board {
         let res_me = res & self.player;
         let res_op = res & self.opponent;
         (res_me, res_op)
+    }
+
+    pub fn from_base81(s: &str) -> Result<Board, BoardParseError> {
+        if s.len() != 16 {
+            return Err(BoardParseError{});
+        }
+        let mut player = 0;
+        let mut opponent = 0;
+        for (i, b) in s.as_bytes().iter().enumerate() {
+            let ofs = b - 33;
+            let mut a = [0; 4];
+            a[3] = ofs / 32;
+            let mut rem = ofs % 32;
+            a[2] = rem / 9;
+            rem %= 9;
+            a[1] = rem / 3;
+            a[0] = rem % 3;
+            for (j, t) in a.iter().enumerate() {
+                match t {
+                    1 => {
+                        player |= 1 << (i * 4 + j);
+                    },
+                    2 => {
+                        opponent |= 1 << (i * 4 + j);
+                    },
+                    0 => (),
+                    _ => return Err(BoardParseError{})
+                }
+            }
+        }
+        Ok(Board{ player, opponent, is_black: true })
     }
 }
 
