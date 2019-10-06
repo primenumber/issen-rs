@@ -106,7 +106,7 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: 
                 let start = Instant::now();
                 let res_cache = Arc::new(Mutex::new(HashMap::<Board, (i8, i8, u8)>::new()));
                 let obj = SolveObj::new(
-                    res_cache, eval_cache.clone(), evaluator);
+                    res_cache, eval_cache.clone(), evaluator, false);
                 let res = obj.solve(
                     board, -64, 64, false, 0);
                 let end = start.elapsed();

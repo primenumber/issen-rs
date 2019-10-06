@@ -15,7 +15,8 @@ pub struct SolveObj<'a> {
     pub eval_cache: EvalCacheTable,
     evaluator: &'a Evaluator,
     pub count: Cell<usize>,
-    pub st_cut: Cell<usize>
+    pub st_cut: Cell<usize>,
+    reduce: bool
 }
 
 enum CutType {
@@ -26,13 +27,14 @@ enum CutType {
 
 impl SolveObj<'_> {
     pub fn new(res_cache: ResCacheTable, eval_cache: EvalCacheTable,
-           evaluator: &Evaluator) -> SolveObj {
+           evaluator: &Evaluator, reduce: bool) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
             count: Cell::new(0),
-            st_cut: Cell::new(0)
+            st_cut: Cell::new(0),
+            reduce
         }
     }
 
@@ -213,7 +215,15 @@ impl SolveObj<'_> {
             });
             nexts = tmp;
         }
-        nexts.into_iter().map(|e| (e.1, e.2)).collect()
+        if nexts.len() > 0 && self.reduce {
+            let score_min = nexts[0].0;
+            nexts.into_iter()
+                .filter(|e| e.0 < score_min + 16 * SCALE)
+                .map(|e| (e.1, e.2))
+                .collect()
+        } else {
+            nexts.into_iter().map(|e| (e.1, e.2)).collect()
+        }
     }
 
     fn move_ordering_by_eval(
@@ -281,7 +291,8 @@ impl SolveObj<'_> {
                     let child_obj = SolveObj::new(
                         self.res_cache.clone(),
                         self.eval_cache.clone(),
-                        self.evaluator);
+                        self.evaluator,
+                        self.reduce);
                     handles.push(scope.spawn(move |_| {
                         let tmp = -child_obj.solve(
                                 next.clone(), -alpha-1, -alpha, false, depth+2);
