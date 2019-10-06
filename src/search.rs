@@ -151,8 +151,19 @@ impl SolveObj<'_> {
         }
 
         let rem = popcnt(board.empty());
-        let max_depth = ((rem - 12) as f32 / 1.8) as i8;
-        let min_depth = (max_depth - 6).max(0);
+        let mut th_depth = 9;
+        if rem <= 27 {
+            th_depth += (30 - rem) / 3;
+        }
+        let mut max_depth = 0;
+        if rem >= th_depth {
+            max_depth = (rem - 15) / 3;
+            if rem >= 27 {
+                max_depth += 1;
+            }
+            max_depth = max_depth.max(0).min(6);
+        }
+        let min_depth = (max_depth - 3).max(0);
         for think_depth in min_depth..=max_depth {
             let mut tmp = vec![(0i16, 0u8, board.clone()); 0];
             let mut res = 64 * SCALE;
@@ -163,9 +174,13 @@ impl SolveObj<'_> {
                     0
                 };
                 if i == 0 {
-                    const WINDOW: i16 = 10;
-                    let alpha = (score - WINDOW * SCALE).max(-64 * SCALE);
-                    let beta = (score + WINDOW * SCALE).min(64 * SCALE);
+                    let window = if think_depth == min_depth {
+                        16
+                    } else {
+                        8
+                    };
+                    let alpha = (score - window * SCALE).max(-64 * SCALE);
+                    let beta = (score + window * SCALE).min(64 * SCALE);
                     let new_res = think(next.clone(), alpha, beta, false, self.evaluator, &self.eval_cache, think_depth);
                     if new_res <= alpha {
                         let new_alpha = -64 * SCALE;
