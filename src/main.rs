@@ -68,7 +68,7 @@ fn play(mut board: Board) -> Board {
     board
 }
 
-fn to_SI(x: usize) -> String {
+fn to_si(x: usize) -> String {
     if x == 0 {
         return "0".to_string();
     }
@@ -110,12 +110,13 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: 
                 let res = obj.solve(
                     board, -64, 64, false, 0);
                 let end = start.elapsed();
-                println!("n: {}, rem: {}, res: {}, cnt: {}s/{}g/{}u/{}h, t: {}.{:03}s",
+                println!("n: {}, rem: {}, res: {}, cnt: {}s/{}c/{}g/{}u/{}h, t: {}.{:03}s",
                          i+begin_index, rem, res,
-                         to_SI(obj.count.get()),
-                         to_SI(obj.eval_cache.cnt_get.get()),
-                         to_SI(obj.eval_cache.cnt_update.get()),
-                         to_SI(obj.eval_cache.cnt_hit.get()),
+                         to_si(obj.count.get()),
+                         to_si(obj.st_cut.get()),
+                         to_si(obj.eval_cache.cnt_get.get()),
+                         to_si(obj.eval_cache.cnt_update.get()),
+                         to_si(obj.eval_cache.cnt_hit.get()),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000);
                 eval_cache.inc_gen();
