@@ -1,3 +1,9 @@
+use std::io::Write;
+use std::str::FromStr;
+use packed_simd::*;
+use crate::bits::*;
+use lazy_static::lazy_static;
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Board {
     pub player: u64,
@@ -10,12 +16,6 @@ pub struct UnmovableError;
 
 #[derive(Debug)]
 pub struct BoardParseError;
-
-use std::io::Write;
-use std::str::FromStr;
-use packed_simd::*;
-use crate::bits::*;
-use lazy_static::lazy_static;
 
 pub const PASS: usize = 64;
 

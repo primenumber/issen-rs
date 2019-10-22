@@ -1,3 +1,10 @@
+use std::mem;
+use std::cmp::max;
+use std::io::{BufRead,BufReader,Read};
+use std::fs::File;
+use std::str::FromStr;
+use crate::bits::*;
+use crate::board::*;
 
 pub struct Evaluator {
     weights: Vec<Vec<i16>>,
@@ -15,14 +22,6 @@ fn pow3(x: i8) -> usize {
 }
 
 pub const SCALE: i16 = 128;
-
-use std::mem;
-use std::cmp::max;
-use std::io::{BufRead,BufReader,Read};
-use std::fs::File;
-use std::str::FromStr;
-use crate::bits::*;
-use crate::board::*;
 
 impl Evaluator {
     pub fn new(subboard_filename: &str) -> Evaluator {
