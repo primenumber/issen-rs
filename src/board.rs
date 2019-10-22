@@ -15,6 +15,7 @@ use std::io::Write;
 use std::str::FromStr;
 use packed_simd::*;
 use crate::bits::*;
+use lazy_static::lazy_static;
 
 pub const PASS: usize = 64;
 

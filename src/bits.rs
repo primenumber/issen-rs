@@ -1,4 +1,6 @@
 use packed_simd::*;
+use lazy_static::lazy_static;
+use bitintr::{Pext, Pdep};
 
 pub fn upper_bit(mut x: u64x4) -> u64x4 {
     x = x | (x >>  1);
@@ -51,8 +53,6 @@ pub fn mirror_under_8(mut x: u64) -> u64 {
     x = ((x >> 1) & 0x55) | ((x << 1) & 0xAA);
     x
 }
-
-use bitintr::{Pext, Pdep};
 
 pub fn pext(x: u64, mask: u64) -> u64 {
     x.pext(mask)

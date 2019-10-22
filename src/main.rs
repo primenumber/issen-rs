@@ -4,9 +4,6 @@ mod eval;
 mod table;
 mod search;
 
-#[macro_use]
-extern crate lazy_static;
-
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
