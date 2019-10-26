@@ -583,9 +583,7 @@ mod tests {
         let board = Board::from_base81(TEST_BASE81).unwrap();
         let naive_board = NaiveBoard::from(board.clone());
         assert_eq!(board.clone(), Board::from(naive_board.clone()));
-        board.print();
         for i in 0..64 {
-            println!("{}", i);
             assert_eq!(board.flip(i), naive_board.flip(i));
             assert_eq!(board.is_movable(i), naive_board.is_movable(i));
             if board.is_movable(i) {
