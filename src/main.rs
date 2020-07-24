@@ -97,8 +97,8 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     let pool = ThreadPool::new().unwrap();
-    println!("|No|empties|result|answer|nodes|time|");
-    println!("|----|----|----|----|----|----|");
+    println!("|No.|empties|result|answer|nodes|time|NPS|");
+    println!("|----|----|----|----|----|----|----|");
     for (i, line) in reader.lines().enumerate() {
         let line_str = line.unwrap();
         let desired = line_str[71..].split(';').next().unwrap();
@@ -111,11 +111,14 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
                 let (res, stat) = solve(
                     &mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
-                println!("|{:2}|{:2}|{:+3}|{:>3}|{:>5}|{:4}.{}s|",
+                let milli_seconds = end.as_millis() + 1;  // ceil up, avoid zero-division
+                let nodes_per_sec = (stat.node_count * 1000) as u128 / milli_seconds;
+                println!("|{:2}|{:2}|{:+3}|{:>3}|{:>5}|{:4}.{:03}s|{}M/s|",
                          i+begin_index, rem, res, desired,
                          to_si(stat.node_count),
                          end.as_secs(),
-                         end.subsec_nanos() / 100_000_000);
+                         end.subsec_nanos() / 1_000_000,
+                         nodes_per_sec / 1_000_000);
                 eval_cache.inc_gen();
                 res_cache.inc_gen();
             },
