@@ -136,7 +136,7 @@ impl<T: CacheElement> CacheArray<T> {
 
     fn update(&mut self, new_elem: &T, hash: u64, gen: u16) {
         let index = (hash % self.cycle) as usize;
-        let mut elem = &mut self.ary[index];
+        let elem = &mut self.ary[index];
         elem.update(new_elem, gen);
     }
 }

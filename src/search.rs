@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::cmp::{min, max};
 use futures::executor;
 use futures::executor::ThreadPool;
