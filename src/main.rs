@@ -87,7 +87,7 @@ fn to_si(x: usize) -> String {
     let prefix = SI.chars().nth(base1000_digits).unwrap();
     match digits % 3 {
         0 => format!("{}{}", x3, prefix),
-        1 => format!("{}.{}{}", x3 / 100, x3 % 100, prefix),
+        1 => format!("{}.{:02}{}", x3 / 100, x3 % 100, prefix),
         2 => format!("{}.{}{}", x3 / 10, x3 % 10, prefix),
         _ => panic!()
     }
@@ -97,9 +97,11 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     let pool = ThreadPool::new().unwrap();
+    println!("|No|empties|result|answer|nodes|time|");
+    println!("|----|----|----|----|----|----|");
     for (i, line) in reader.lines().enumerate() {
         let line_str = line.unwrap();
-        let desired = line_str[68..].split(';').next().unwrap();
+        let desired = line_str[71..].split(';').next().unwrap();
         match Board::from_str(&line_str) {
             Ok(board) => {
                 let rem = popcnt(board.empty());
@@ -109,11 +111,11 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
                 let (res, stat) = solve(
                     &mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
-                println!("n: {}, rem: {}, res: {}, desired: {}, nodes: {}, st-cut: {}, t: {}.{:03}s",
+                println!("|{:2}|{:2}|{:+3}|{:>3}|{:>5}|{:4}.{}s|",
                          i+begin_index, rem, res, desired,
-                         stat.node_count, stat.st_cut_count,
+                         to_si(stat.node_count),
                          end.as_secs(),
-                         end.subsec_nanos() / 1_000_000);
+                         end.subsec_nanos() / 100_000_000);
                 eval_cache.inc_gen();
                 res_cache.inc_gen();
             },
