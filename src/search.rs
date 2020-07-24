@@ -466,7 +466,7 @@ fn solve_outer(
     let mut solve_obj = solve_obj.clone();
     async move {
         let rem = popcnt(board.empty());
-        if rem <= 12 {
+        if rem <= 14 {
             solve_inner(&mut solve_obj, board, alpha, beta, passed, depth)
         } else {
             let mut new_alpha = alpha;

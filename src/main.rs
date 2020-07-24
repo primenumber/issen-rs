@@ -126,8 +126,8 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
 
 fn main() {
     let evaluator = Arc::new(Evaluator::new("subboard.txt"));
-    let mut res_cache = ResCacheTable::new(1024, 262144);
-    let mut eval_cache = EvalCacheTable::new(1024, 262144);
+    let mut res_cache = ResCacheTable::new(256, 65536);
+    let mut eval_cache = EvalCacheTable::new(256, 65536);
     solve_ffo("problem/fforum-1-19.obf",   1, evaluator.clone(), &mut res_cache, &mut eval_cache);
     solve_ffo("problem/fforum-20-39.obf", 20, evaluator.clone(), &mut res_cache, &mut eval_cache);
     solve_ffo("problem/fforum-40-59.obf", 40, evaluator.clone(), &mut res_cache, &mut eval_cache);
