@@ -56,7 +56,7 @@ impl CacheElement for EvalCache {
         } else {
             let empty_self = popcnt(self.board.empty());
             let empty_that = popcnt(that.board.empty());
-            if empty_that > empty_self || gen > self.gen {
+            if empty_that >= empty_self || gen > self.gen {
                 *self = that.clone();
                 self.gen = gen;
             }
@@ -101,7 +101,7 @@ impl CacheElement for ResCache {
         } else {
             let empty_self = popcnt(self.board.empty());
             let empty_that = popcnt(that.board.empty());
-            if empty_that > empty_self || gen > self.gen {
+            if empty_that >= empty_self || gen > self.gen {
                 *self = that.clone();
                 self.gen = gen;
             }
