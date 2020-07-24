@@ -433,8 +433,6 @@ fn stability_cut(board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
     } else if lower >= *beta {
         CutType::MoreThanBeta(lower)
     } else {
-        (*alpha).max(lower);
-        (*beta).min(upper);
         CutType::NoCut
     }
 }
