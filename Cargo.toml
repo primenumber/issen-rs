@@ -7,7 +7,7 @@ authors = ["prime <prime@kmc.gr.jp>"]
 [dependencies]
 packed_simd = "0.3.3"
 bitintr = "0.2.0"
-crossbeam = "0.7.1"
 lazy_static = "1.4.0"
 rand = "0.7"
 rand_xoshiro = "0.3.0"
+futures = { version = "0.3", features = ["thread-pool"] }

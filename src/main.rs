@@ -11,6 +11,7 @@ use std::time::Instant;
 use std::str::FromStr;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use futures::executor::ThreadPool;
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
@@ -93,30 +94,32 @@ fn to_si(x: usize) -> String {
     }
 }
 
-fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: &EvalCacheTable) -> () {
+fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable) -> () {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
+    let pool = ThreadPool::new().unwrap();
     for (i, line) in reader.lines().enumerate() {
-        match Board::from_str(&line.unwrap()) {
+        let line_str = line.unwrap();
+        let desired = line_str[68..].split(';').next().unwrap();
+        match Board::from_str(&line_str) {
             Ok(board) => {
                 let rem = popcnt(board.empty());
                 let start = Instant::now();
-                let res_cache = Arc::new(Mutex::new(HashMap::<Board, (i8, i8, u8)>::new()));
-                let obj = SolveObj::new(
-                    res_cache, eval_cache.clone(), evaluator, false);
-                let res = obj.solve(
-                    board, -64, 64, false, 0);
+                let mut obj = SolveObj::new(
+                    res_cache.clone(), eval_cache.clone(), evaluator.clone(), false, pool.clone());
+                let (res, stat) = solve(
+                    &mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
-                println!("n: {}, rem: {}, res: {}, cnt: {}s/{}c/{}g/{}u/{}h, t: {}.{:03}s",
-                         i+begin_index, rem, res,
-                         to_si(obj.count.get()),
-                         to_si(obj.st_cut.get()),
-                         to_si(obj.eval_cache.cnt_get.get()),
-                         to_si(obj.eval_cache.cnt_update.get()),
-                         to_si(obj.eval_cache.cnt_hit.get()),
+                println!("n: {}, rem: {}, res: {}, desired: {}, nodes: {}, st-cut: {}, cnt: {}g/{}u/{}h, t: {}.{:03}s",
+                         i+begin_index, rem, res, desired,
+                         stat.node_count, stat.st_cut_count,
+                         to_si(obj.eval_cache.cnt_get),
+                         to_si(obj.eval_cache.cnt_update),
+                         to_si(obj.eval_cache.cnt_hit),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000);
                 eval_cache.inc_gen();
+                res_cache.inc_gen();
             },
             Err(_) => println!("Parse error")
         }
@@ -125,10 +128,11 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: &Evaluator, eval_cache: 
 }
 
 fn main() {
-    let evaluator = Evaluator::new("subboard.txt");
-    let eval_cache = EvalCacheTable::new(1024, 262144);
-    solve_ffo("problem/fforum-1-19.obf", 1, &evaluator, &eval_cache);
-    solve_ffo("problem/fforum-20-39.obf", 20, &evaluator, &eval_cache);
-    solve_ffo("problem/fforum-40-59.obf", 40, &evaluator, &eval_cache);
-    solve_ffo("problem/fforum-60-79.obf", 60, &evaluator, &eval_cache);
+    let evaluator = Arc::new(Evaluator::new("subboard.txt"));
+    let mut res_cache = ResCacheTable::new(1024, 262144);
+    let mut eval_cache = EvalCacheTable::new(1024, 262144);
+    solve_ffo("problem/fforum-1-19.obf",   1, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-20-39.obf", 20, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-40-59.obf", 40, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-60-79.obf", 60, evaluator.clone(), &mut res_cache, &mut eval_cache);
 }

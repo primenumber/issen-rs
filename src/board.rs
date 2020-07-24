@@ -4,7 +4,7 @@ use packed_simd::*;
 use crate::bits::*;
 use lazy_static::lazy_static;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Board {
     pub player: u64,
     pub opponent: u64,
