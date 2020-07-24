@@ -47,10 +47,14 @@ impl CacheElement for EvalCache {
         if that.board == self.board {
             if that.depth >= self.depth {
                 if that.depth == self.depth {
-                    self.lower = self.lower.max(that.lower);
-                    self.upper = self.upper.min(that.upper);
+                    let lower = self.lower.max(that.lower);
+                    let upper = self.upper.min(that.upper);
+                    *self = that.clone();
+                    self.lower = lower;
+                    self.upper = upper;
+                } else {
+                    *self = that.clone();
                 }
-                *self = that.clone();
                 self.gen = gen;
             }
         } else {
@@ -96,7 +100,11 @@ impl CacheElement for ResCache {
 
     fn update(&mut self, that: &Self, gen: u16) {
         if that.board == self.board {
+            let lower = self.lower.max(that.lower);
+            let upper = self.upper.min(that.upper);
             *self = that.clone();
+            self.lower = lower;
+            self.upper = upper;
             self.gen = gen;
         } else {
             let empty_self = popcnt(self.board.empty());
