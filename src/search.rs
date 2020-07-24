@@ -11,8 +11,6 @@ use crate::board::*;
 use crate::eval::*;
 use crate::table::*;
 
-//type ResCacheTable = Arc<Mutex<HashMap<Board, (i8, i8, u8)>>>;
-
 #[derive(Clone)]
 pub struct SolveObj {
     res_cache: ResCacheTable,
@@ -368,18 +366,13 @@ async fn ybwc(
                     }
                 }
                 let res_tuple = (res, best);
-                let count_tuple = (stat, child_obj.eval_cache.cnt_get, child_obj.eval_cache.cnt_update, child_obj.eval_cache.cnt_hit);
-                let _ = tx.unbounded_send((res_tuple, count_tuple));
+                let _ = tx.unbounded_send((res_tuple, stat));
             });
         }
     }
     drop(tx);
-    while let Some((res_tuple, count_tuple)) = rx.next().await {
-        let (child_stat, cnt_get, cnt_update, cnt_hit) = count_tuple;
+    while let Some((res_tuple, child_stat)) = rx.next().await {
         stat.merge(child_stat);
-        solve_obj.eval_cache.add_cnt_get(cnt_get);
-        solve_obj.eval_cache.add_cnt_update(cnt_update);
-        solve_obj.eval_cache.add_cnt_hit(cnt_hit);
         let (child_res, child_best) = res_tuple;
         if child_res > res {
             res = child_res;

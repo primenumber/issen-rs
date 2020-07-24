@@ -110,12 +110,9 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
                 let (res, stat) = solve(
                     &mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
-                println!("n: {}, rem: {}, res: {}, desired: {}, nodes: {}, st-cut: {}, cnt: {}g/{}u/{}h, t: {}.{:03}s",
+                println!("n: {}, rem: {}, res: {}, desired: {}, nodes: {}, st-cut: {}, t: {}.{:03}s",
                          i+begin_index, rem, res, desired,
                          stat.node_count, stat.st_cut_count,
-                         to_si(obj.eval_cache.cnt_get),
-                         to_si(obj.eval_cache.cnt_update),
-                         to_si(obj.eval_cache.cnt_hit),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000);
                 eval_cache.inc_gen();
