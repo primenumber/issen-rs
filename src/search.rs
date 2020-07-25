@@ -19,8 +19,9 @@ pub struct SearchParams {
     pub ybwc_elder_add: i8,
     pub ybwc_younger_add: i8,
     pub ybwc_empties_limit: i8,
-    pub res_cache_limit: i8,
     pub eval_ordering_limit: i8,
+    pub res_cache_limit: i8,
+    pub stability_cut_limit: i8,
     pub ffs_ordering_limit: i8,
 }
 
@@ -464,10 +465,12 @@ fn solve_inner(
     } else if rem < solve_obj.params.ffs_ordering_limit {
         naive(solve_obj, board, alpha, beta, passed, depth)
     } else {
-        match stability_cut(board.clone(), &mut alpha, &mut beta) {
-            CutType::NoCut => (),
-            CutType::MoreThanBeta(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 }),
-            CutType::LessThanAlpha(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 })
+        if rem >= solve_obj.params.stability_cut_limit {
+            match stability_cut(board.clone(), &mut alpha, &mut beta) {
+                CutType::NoCut => (),
+                CutType::MoreThanBeta(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 }),
+                CutType::LessThanAlpha(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 })
+            }
         }
         if rem < solve_obj.params.res_cache_limit {
             fastest_first(solve_obj, board, alpha, beta, passed, depth)
