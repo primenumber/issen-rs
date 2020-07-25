@@ -93,10 +93,12 @@ fn to_si(x: usize) -> String {
     }
 }
 
-fn solve_ffo(name: &str, begin_index: usize, search_params: &SearchParams, evaluator: Arc<Evaluator>, res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable) -> () {
+fn solve_ffo(name: &str, begin_index: usize,
+             search_params: &SearchParams, evaluator: Arc<Evaluator>,
+             res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable,
+             pool: &ThreadPool) -> () {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
-    let pool = ThreadPool::new().unwrap();
     println!("|No.|empties|result|answer|nodes|time|NPS|");
     println!("|----|----|----|----|----|----|----|");
     for (i, line) in reader.lines().enumerate() {
@@ -143,8 +145,9 @@ fn main() {
     let evaluator = Arc::new(Evaluator::new("subboard.txt"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
-    solve_ffo("problem/fforum-1-19.obf",   1, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
-    solve_ffo("problem/fforum-20-39.obf", 20, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
-    solve_ffo("problem/fforum-40-59.obf", 40, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
-    solve_ffo("problem/fforum-60-79.obf", 60, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    let pool = ThreadPool::new().unwrap();
+    solve_ffo("problem/fforum-1-19.obf",   1, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-20-39.obf", 20, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-40-59.obf", 40, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-60-79.obf", 60, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
 }
