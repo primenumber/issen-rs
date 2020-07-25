@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::cmp::{min, max};
+use std::mem::MaybeUninit;
 use futures::executor;
 use futures::executor::ThreadPool;
 use futures::channel::mpsc;
@@ -129,7 +130,11 @@ fn naive(
 fn fastest_first(
     solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
     depth: i8) -> (i8, SolveStat) {
-    let mut v = vec![(0i8, board.clone()); 0];
+    const MAX_FFS_NEXT: usize = 20;
+    let mut nexts: [(i8, Board); MAX_FFS_NEXT] = unsafe {
+        MaybeUninit::uninit().assume_init()
+    };
+    let mut count = 0;
     let mut empties = board.empty();
     while empties != 0 {
         let bit = empties  & empties.wrapping_neg();
@@ -137,15 +142,17 @@ fn fastest_first(
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
-                v.push((weighted_mobility(& next), next));
+                nexts[count] = (weighted_mobility(& next), next);
+                count += 1;
+                assert!(count <= MAX_FFS_NEXT);
             },
             Err(_) => ()
         }
     }
-    v.sort_by(|a, b| a.0.cmp(&b.0));
+    nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
     let mut res = -64;
     let mut stat = SolveStat::one();
-    for (i, &(_, ref next)) in v.iter().enumerate() {
+    for (i, &(_, ref next)) in nexts[0..count].iter().enumerate() {
         if i == 0 {
             let (child_res, child_stat) = solve_inner(
                 solve_obj, next.clone(), -beta, -alpha, false, depth+1);
@@ -173,7 +180,7 @@ fn fastest_first(
             return (res, stat);
         }
     }
-    if v.is_empty() {
+    if count == 0 {
         if passed {
             return (board.score(), stat);
         } else {
