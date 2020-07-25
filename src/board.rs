@@ -233,7 +233,7 @@ impl Board {
                     MASK_D_A8H1 >> ((7 - r - c) * 8)
                 };
                 let mask = mask_h | mask_v | mask_d_a1h8 | mask_d_a8h1;
-                let pos = r * 8 + 1;
+                let pos = r * 8 + c;
                 if (self.empty() & mask) == 0 {
                     res |= 1 << pos;
                 }
