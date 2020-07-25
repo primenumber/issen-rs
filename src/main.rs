@@ -93,7 +93,7 @@ fn to_si(x: usize) -> String {
     }
 }
 
-fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable) -> () {
+fn solve_ffo(name: &str, begin_index: usize, search_params: &SearchParams, evaluator: Arc<Evaluator>, res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable) -> () {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     let pool = ThreadPool::new().unwrap();
@@ -107,7 +107,7 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
                 let rem = popcnt(board.empty());
                 let start = Instant::now();
                 let mut obj = SolveObj::new(
-                    res_cache.clone(), eval_cache.clone(), evaluator.clone(), false, pool.clone());
+                    res_cache.clone(), eval_cache.clone(), evaluator.clone(), search_params.clone(), pool.clone());
                 let (res, stat) = solve(
                     &mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
@@ -129,11 +129,21 @@ fn solve_ffo(name: &str, begin_index: usize, evaluator: Arc<Evaluator>, res_cach
 }
 
 fn main() {
+    let search_params = SearchParams {
+        reduce: false,
+        ybwc_depth_limit: 10,
+        ybwc_elder_add: 1,
+        ybwc_younger_add: 2,
+        ybwc_empties_limit: 17,
+        eval_ordering_limit: 16,
+        res_cache_limit: 16,
+        ffs_ordering_limit: 7,
+    };
     let evaluator = Arc::new(Evaluator::new("subboard.txt"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
-    solve_ffo("problem/fforum-1-19.obf",   1, evaluator.clone(), &mut res_cache, &mut eval_cache);
-    solve_ffo("problem/fforum-20-39.obf", 20, evaluator.clone(), &mut res_cache, &mut eval_cache);
-    solve_ffo("problem/fforum-40-59.obf", 40, evaluator.clone(), &mut res_cache, &mut eval_cache);
-    solve_ffo("problem/fforum-60-79.obf", 60, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-1-19.obf",   1, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-20-39.obf", 20, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-40-59.obf", 40, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
+    solve_ffo("problem/fforum-60-79.obf", 60, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache);
 }

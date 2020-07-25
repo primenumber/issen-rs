@@ -11,11 +11,23 @@ use crate::eval::*;
 use crate::table::*;
 
 #[derive(Clone)]
+pub struct SearchParams {
+    pub reduce: bool,
+    pub ybwc_depth_limit: i8,
+    pub ybwc_elder_add: i8,
+    pub ybwc_younger_add: i8,
+    pub ybwc_empties_limit: i8,
+    pub res_cache_limit: i8,
+    pub eval_ordering_limit: i8,
+    pub ffs_ordering_limit: i8,
+}
+
+#[derive(Clone)]
 pub struct SolveObj {
     res_cache: ResCacheTable,
     pub eval_cache: EvalCacheTable,
     evaluator: Arc<Evaluator>,
-    reduce: bool,
+    params: SearchParams,
     pool: ThreadPool
 }
 
@@ -46,13 +58,13 @@ impl SolveStat {
 
 impl SolveObj {
     pub fn new(res_cache: ResCacheTable, eval_cache: EvalCacheTable,
-               evaluator: Arc<Evaluator>, reduce: bool,
+               evaluator: Arc<Evaluator>, params: SearchParams,
                pool: ThreadPool) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
-            reduce,
+            params,
             pool
         }
     }
@@ -252,7 +264,7 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
         });
         nexts = tmp;
     }
-    if nexts.len() > 0 && solve_obj.reduce {
+    if nexts.len() > 0 && solve_obj.params.reduce {
         let score_min = nexts[0].0;
         nexts.into_iter()
             .filter(|e| e.0 < score_min + 16 * SCALE)
@@ -332,7 +344,8 @@ async fn ybwc(
     let (tx, mut rx) = mpsc::unbounded();
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
-            let (child_res, child_stat) = solve_outer(solve_obj, next.clone(), -beta, -alpha, false, depth+1).await;
+            let next_depth = depth + solve_obj.params.ybwc_elder_add;
+            let (child_res, child_stat) = solve_outer(solve_obj, next.clone(), -beta, -alpha, false, next_depth).await;
             stat.merge(child_stat);
             res = -child_res;
             best = pos;
@@ -345,8 +358,9 @@ async fn ybwc(
             let mut child_obj = solve_obj.clone();
             let mut stat = SolveStat::zero();
             solve_obj.pool.spawn_ok(async move {
+                let next_depth = depth + child_obj.params.ybwc_younger_add;
                 let child_future = solve_outer(
-                    &mut child_obj, next, -alpha-1, -alpha, false, depth+2);
+                    &mut child_obj, next, -alpha-1, -alpha, false, next_depth);
                 let (child_res, child_stat) = child_future.await;
                 stat.merge(child_stat);
                 let tmp = -child_res;
@@ -358,7 +372,7 @@ async fn ybwc(
                     if res > alpha {
                         alpha = res;
                         let child_future = solve_outer(
-                            &mut child_obj, next, -beta, -alpha, false, depth+2);
+                            &mut child_obj, next, -beta, -alpha, false, next_depth);
                         let (child_res, child_stat) = child_future.await;
                         stat.merge(child_stat);
                         res = max(res, -child_res);
@@ -400,7 +414,7 @@ async fn lookup_and_update_table(
             SolveStat::zero()
         )
     }
-    let (res, best, stat) = if depth >= 10 || popcnt(board.empty()) <= 16 {
+    let (res, best, stat) = if depth >= solve_obj.params.ybwc_depth_limit || popcnt(board.empty()) < solve_obj.params.ybwc_empties_limit {
         move_ordering_by_eval(
             solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await
     } else {
@@ -444,7 +458,7 @@ fn solve_inner(
         (board.score(), SolveStat::zero())
     } else if rem == 1 {
         near_leaf(board)
-    } else if rem <= 6 {
+    } else if rem < solve_obj.params.ffs_ordering_limit {
         naive(solve_obj, board, alpha, beta, passed, depth)
     } else {
         let mut new_alpha = alpha;
@@ -463,7 +477,7 @@ fn solve_outer(
     let mut solve_obj = solve_obj.clone();
     async move {
         let rem = popcnt(board.empty());
-        if rem <= 15 {
+        if rem < solve_obj.params.res_cache_limit {
             solve_inner(&mut solve_obj, board, alpha, beta, passed, depth)
         } else {
             let mut new_alpha = alpha;
