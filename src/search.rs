@@ -275,7 +275,7 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
     }
 }
 
-async fn move_ordering_by_eval(
+fn move_ordering_by_eval(
         solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
         old_best: u8, depth: i8) -> (i8, u8, SolveStat) {
     let v = move_ordering_impl(solve_obj, board.clone(), old_best, depth);
@@ -284,7 +284,7 @@ async fn move_ordering_by_eval(
     let mut stat = SolveStat::one();
     for (i, (pos, next)) in v.iter().enumerate() {
         if i == 0 {
-            let (child_res, child_stat) = solve_outer(solve_obj, next.clone(), -beta, -alpha, false, depth+1).await;
+            let (child_res, child_stat) = solve_inner(solve_obj, next.clone(), -beta, -alpha, false, depth+1);
             stat.merge(child_stat);
             res = -child_res;
             best = *pos;
@@ -293,8 +293,8 @@ async fn move_ordering_by_eval(
                 return (res, best, stat);
             }
         } else {
-            let (child_res, child_stat) = solve_outer(
-                    solve_obj, next.clone(), -alpha-1, -alpha, false, depth+1).await;
+            let (child_res, child_stat) = solve_inner(
+                    solve_obj, next.clone(), -alpha-1, -alpha, false, depth+1);
             stat.merge(child_stat);
             let tmp = -child_res;
             if tmp >= res {
@@ -306,8 +306,8 @@ async fn move_ordering_by_eval(
             }
             if res > alpha {
                 alpha = res;
-                let (child_res, child_stat) = solve_outer(
-                        solve_obj, next.clone(), -beta, -alpha, false, depth+1).await;
+                let (child_res, child_stat) = solve_inner(
+                        solve_obj, next.clone(), -beta, -alpha, false, depth+1);
                 stat.merge(child_stat);
                 res = max(res, -child_res);
             }
@@ -317,7 +317,7 @@ async fn move_ordering_by_eval(
         if passed {
             return (board.score(), PASS as u8, stat);
         } else {
-            let (child_res, child_stat) = solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
             stat.merge(child_stat);
             return (-child_res, PASS as u8, stat);
         }
@@ -395,35 +395,34 @@ async fn ybwc(
     (res, best, stat)
 }
 
-async fn lookup_and_update_table(
-        solve_obj: &mut SolveObj, board: Board, alpha: i8, beta: i8, passed: bool,
-        depth: i8) -> (i8, SolveStat) {
+enum CacheLookupResult {
+    Cut(i8),
+    NoCut(i8, i8, u8)
+}
+
+fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
     let (lower, upper, old_best) = match solve_obj.res_cache.get(board) {
         Some(cache) => (cache.lower, cache.upper, cache.best),
         None => (-64, 64, PASS as u8)
     };
-    let new_alpha = max(lower, alpha);
-    let new_beta = min(upper, beta);
-    if new_alpha >= new_beta {
-        return (
-            if alpha > upper {
-                upper
-            } else {
-                lower
-            },
-            SolveStat::zero()
-        )
-    }
-    let (res, best, stat) = if depth >= solve_obj.params.ybwc_depth_limit || popcnt(board.empty()) < solve_obj.params.ybwc_empties_limit {
-        move_ordering_by_eval(
-            solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await
+    let old_alpha = *alpha;
+    *alpha = max(lower, *alpha);
+    *beta = min(upper, *beta);
+    if *alpha >= *beta {
+        if old_alpha > upper {
+            CacheLookupResult::Cut(upper)
+        } else {
+            CacheLookupResult::Cut(lower)
+        }
     } else {
-        ybwc(
-            solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await
-    };
-    let range = if res <= new_alpha {
+        CacheLookupResult::NoCut(lower, upper, old_best)
+    }
+}
+
+fn update_table(solve_obj: &mut SolveObj, board: Board, res: i8, best: u8, alpha: i8, beta: i8, lower: i8, upper: i8) {
+    let range = if res <= alpha {
         (lower, min(upper, res))
-    } else if res >= new_beta {
+    } else if res >= beta {
         (max(lower, res), upper)
     } else {
         (res, res)
@@ -434,7 +433,6 @@ async fn lookup_and_update_table(
         upper: range.1,
         gen: solve_obj.res_cache.gen,
         best });
-    (res, stat)
 }
 
 fn stability_cut(board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
@@ -451,7 +449,7 @@ fn stability_cut(board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
 }
 
 fn solve_inner(
-        solve_obj: &mut SolveObj, board: Board, alpha: i8, beta: i8, passed: bool,
+        solve_obj: &mut SolveObj, board: Board, mut alpha: i8, mut beta: i8, passed: bool,
         depth: i8) -> (i8, SolveStat) {
     let rem = popcnt(board.empty());
     if rem == 0 {
@@ -461,32 +459,51 @@ fn solve_inner(
     } else if rem < solve_obj.params.ffs_ordering_limit {
         naive(solve_obj, board, alpha, beta, passed, depth)
     } else {
-        let mut new_alpha = alpha;
-        let mut new_beta = beta;
-        match stability_cut(board.clone(), &mut new_alpha, &mut new_beta) {
-            CutType::NoCut => fastest_first(solve_obj, board, new_alpha, new_beta, passed, depth),
-            CutType::MoreThanBeta(v) => (v, SolveStat { node_count: 1, st_cut_count: 1 }),
-            CutType::LessThanAlpha(v) => (v, SolveStat { node_count: 1, st_cut_count: 1 })
+        match stability_cut(board.clone(), &mut alpha, &mut beta) {
+            CutType::NoCut => (),
+            CutType::MoreThanBeta(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 }),
+            CutType::LessThanAlpha(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 })
+        }
+        if rem < solve_obj.params.res_cache_limit {
+            fastest_first(solve_obj, board, alpha, beta, passed, depth)
+        } else {
+            let (lower, upper, old_best) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
+                CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
+                CacheLookupResult::NoCut(l, u, b) => (l, u, b)
+            };
+            let (res, best, stat) = if rem < solve_obj.params.eval_ordering_limit {
+                let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed, depth);
+                (res, PASS as u8, stat)
+            } else {
+                move_ordering_by_eval(solve_obj, board.clone(), alpha, beta, passed, old_best, depth)
+            };
+            update_table(solve_obj, board, res, best, alpha, beta, lower, upper);
+            (res, stat)
         }
     }
 }
 
 fn solve_outer(
-    solve_obj: &mut SolveObj, board: Board, alpha: i8, beta: i8, passed: bool,
+    solve_obj: &mut SolveObj, board: Board, mut alpha: i8, mut beta: i8, passed: bool,
     depth: i8) -> BoxFuture<'static, (i8, SolveStat)> {
     let mut solve_obj = solve_obj.clone();
     async move {
         let rem = popcnt(board.empty());
-        if rem < solve_obj.params.res_cache_limit {
+        if depth >= solve_obj.params.ybwc_depth_limit || rem < solve_obj.params.ybwc_empties_limit {
             solve_inner(&mut solve_obj, board, alpha, beta, passed, depth)
         } else {
-            let mut new_alpha = alpha;
-            let mut new_beta = beta;
-            match stability_cut(board.clone(), &mut new_alpha, &mut new_beta) {
-                CutType::NoCut => lookup_and_update_table(&mut solve_obj, board, new_alpha, new_beta, passed, depth).await,
-                CutType::MoreThanBeta(v) => (v, SolveStat { node_count: 1, st_cut_count: 1 }),
-                CutType::LessThanAlpha(v) => (v, SolveStat { node_count: 1, st_cut_count: 1 })
+            match stability_cut(board.clone(), &mut alpha, &mut beta) {
+                CutType::NoCut => (),
+                CutType::MoreThanBeta(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 }),
+                CutType::LessThanAlpha(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 })
             }
+            let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
+                CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
+                CacheLookupResult::NoCut(l, u, b) => (l, u, b)
+            };
+            let (res, best, stat) = ybwc(&mut solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await;
+            update_table(&mut solve_obj, board, res, best, alpha, beta, lower, upper);
+            (res, stat)
         }
     }.boxed()
 }
