@@ -136,7 +136,7 @@ fn main() {
         ybwc_younger_add: 2,
         ybwc_empties_limit: 17,
         eval_ordering_limit: 16,
-        res_cache_limit: 16,
+        res_cache_limit: 11,
         ffs_ordering_limit: 7,
     };
     let evaluator = Arc::new(Evaluator::new("subboard.txt"));
