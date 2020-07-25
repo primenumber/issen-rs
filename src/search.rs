@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::cmp::{min, max};
 use std::mem::MaybeUninit;
+use bitintr::Tzcnt;
 use futures::executor;
 use futures::executor::ThreadPool;
 use futures::channel::mpsc;
@@ -73,7 +74,7 @@ impl SolveObj {
 
 fn near_leaf(board: Board) -> (i8, SolveStat) {
     let bit = board.empty();
-    let pos = popcnt(bit - 1) as usize;
+    let pos = bit.tzcnt() as usize;
     match board.play(pos) {
         Ok(next) => (
             -next.score(),
@@ -97,9 +98,8 @@ fn naive(
     let mut res = -64;
     let mut stat = SolveStat::one();
     while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
+        let pos = empties.tzcnt() as usize;
         empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
                 pass = false;
@@ -137,9 +137,8 @@ fn fastest_first(
     let mut count = 0;
     let mut empties = board.empty();
     while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
+        let pos = empties.tzcnt() as usize;
         empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
                 nexts[count] = (weighted_mobility(& next), next);
@@ -197,9 +196,8 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
     let mut nexts = vec![(0i16, 0u8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
+        let pos = empties.tzcnt() as usize;
         empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
                 nexts.push((0, pos as u8, next));
