@@ -301,7 +301,7 @@ async fn move_ordering_by_eval(
             }
         } else {
             let (tx, mut rx) = mpsc::unbounded();
-            let handle = {
+            let _handle = {
                 let tx = tx.clone();
                 let mut child_obj = solve_obj.clone();
                 let mut stat = SolveStat::zero();
@@ -503,9 +503,9 @@ fn solve_inner(
         if rem < solve_obj.params.res_cache_limit {
             fastest_first(solve_obj, board, alpha, beta, passed, depth)
         } else {
-            let (lower, upper, old_best) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
+            let (lower, upper) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
                 CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
-                CacheLookupResult::NoCut(l, u, b) => (l, u, b)
+                CacheLookupResult::NoCut(l, u, _) => (l, u)
             };
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed, depth);
             update_table(solve_obj, board, res, PASS as u8, alpha, beta, lower, upper);
