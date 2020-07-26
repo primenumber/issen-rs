@@ -93,7 +93,7 @@ fn to_si(x: usize) -> String {
     }
 }
 
-fn solve_ffo(name: &str, begin_index: usize,
+fn solve_ffo(name: &str, index: &mut usize,
              search_params: &SearchParams, evaluator: Arc<Evaluator>,
              res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable,
              pool: &ThreadPool) -> () {
@@ -101,7 +101,7 @@ fn solve_ffo(name: &str, begin_index: usize,
     let reader = BufReader::new(file);
     println!("|No.|empties|result|answer|nodes|time|NPS|");
     println!("|----|----|----|----|----|----|----|");
-    for (i, line) in reader.lines().enumerate() {
+    for line in reader.lines() {
         let line_str = line.unwrap();
         let desired = line_str[71..].split(';').next().unwrap();
         match Board::from_str(&line_str) {
@@ -116,13 +116,14 @@ fn solve_ffo(name: &str, begin_index: usize,
                 let milli_seconds = end.as_millis() + 1;  // ceil up, avoid zero-division
                 let nodes_per_sec = (stat.node_count * 1000) as u128 / milli_seconds;
                 println!("|{:2}|{:2}|{:+3}|{:>3}|{:>5}|{:4}.{:03}s|{}M/s|",
-                         i+begin_index, rem, res, desired,
+                         index, rem, res, desired,
                          to_si(stat.node_count),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000,
                          nodes_per_sec / 1_000_000);
                 eval_cache.inc_gen();
                 res_cache.inc_gen();
+                *index += 1;
             },
             Err(_) => println!("Parse error")
         }
@@ -146,8 +147,10 @@ fn main() {
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    solve_ffo("problem/fforum-1-19.obf",   1, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
-    solve_ffo("problem/fforum-20-39.obf", 20, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
-    solve_ffo("problem/fforum-40-59.obf", 40, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
-    solve_ffo("problem/fforum-60-79.obf", 60, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    let mut index: usize = 1;
+    //solve_ffo("problem/hard-30.obf",   index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-1-19.obf",  &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-20-39.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-40-59.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    solve_ffo("problem/fforum-60-79.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
 }
