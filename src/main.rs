@@ -141,7 +141,8 @@ fn main() {
         eval_ordering_limit: 16,
         res_cache_limit: 11,
         stability_cut_limit: 12,
-        ffs_ordering_limit: 7,
+        ffs_ordering_limit: 6,
+        static_ordering_limit: 3
     };
     let evaluator = Arc::new(Evaluator::new("subboard.txt"));
     let mut res_cache = ResCacheTable::new(256, 65536);

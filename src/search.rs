@@ -24,6 +24,7 @@ pub struct SearchParams {
     pub res_cache_limit: i8,
     pub stability_cut_limit: i8,
     pub ffs_ordering_limit: i8,
+    pub static_ordering_limit: i8,
 }
 
 #[derive(Clone)]
@@ -115,6 +116,50 @@ fn naive(
                 }
             },
             Err(_) => ()
+        }
+    }
+    if pass {
+        if passed {
+            return (board.score(), stat);
+        } else {
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            stat.merge(child_stat);
+            return (-child_res, stat);
+        }
+    }
+    (res, stat)
+}
+
+fn static_order(
+    solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
+    depth: i8)-> (i8, SolveStat) {
+    let mut pass = true;
+    let mut res = -64;
+    let mut stat = SolveStat::one();
+    const masks: [u64; 3] = [
+        0x8100_0000_0000_0081, // Corner
+        0x3C3C_FFFF_FFFF_3C3C, // Normal
+        0x42C3_0000_0000_C342  // C + X
+    ];
+    for mask in masks.iter() {
+        let mut empties = board.empty() & mask;
+        while empties != 0 {
+            let pos = empties.tzcnt() as usize;
+            empties = empties & (empties - 1);
+            match board.play(pos) {
+                Ok(next) => {
+                    pass = false;
+                    let (child_res, child_stat) = solve_inner(
+                        solve_obj, next, -beta, -alpha, false, depth+1);
+                    res = max(res, -child_res);
+                    stat.merge(child_stat);
+                    alpha = max(alpha, res);
+                    if alpha >= beta {
+                        return (res, stat);
+                    }
+                },
+                Err(_) => ()
+            }
         }
     }
     if pass {
@@ -490,8 +535,10 @@ fn solve_inner(
         (board.score(), SolveStat::zero())
     } else if rem == 1 {
         near_leaf(board)
-    } else if rem < solve_obj.params.ffs_ordering_limit {
+    } else if rem < solve_obj.params.static_ordering_limit {
         naive(solve_obj, board, alpha, beta, passed, depth)
+    } else if rem < solve_obj.params.ffs_ordering_limit {
+        static_order(solve_obj, board, alpha, beta, passed, depth)
     } else {
         if rem >= solve_obj.params.stability_cut_limit {
             match stability_cut(board.clone(), &mut alpha, &mut beta) {
