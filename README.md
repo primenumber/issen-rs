@@ -7,7 +7,7 @@ GPLv3
 
 ## prerequirements
 
-AVX2 and BMI2 enabled x86\_64 CPU (Intel: Haswell or lator, AMD: Excavator or lator)
+AVX2 and BMI2 enabled x86\_64 CPU (Intel: Haswell or later, AMD: Excavator or later)
 
 ## Setup
 
