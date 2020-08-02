@@ -100,7 +100,7 @@ fn solve_ffo(name: &str, index: &mut usize,
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     println!("|No.|empties|result|answer|nodes|time|NPS|");
-    println!("|----|----|----|----|----|----|----|");
+    println!("|---:|---:|---:|---:|---:|---:|---:|");
     for line in reader.lines() {
         let line_str = line.unwrap();
         let desired = line_str[71..].split(';').next().unwrap();
