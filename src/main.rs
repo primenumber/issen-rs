@@ -149,7 +149,7 @@ fn main() {
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
     let mut index: usize = 1;
-    //solve_ffo("problem/hard-30.obf",   index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
+    //solve_ffo("problem/hard-25.obf",      &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
     solve_ffo("problem/fforum-1-19.obf",  &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
     solve_ffo("problem/fforum-20-39.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
     solve_ffo("problem/fforum-40-59.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool);
