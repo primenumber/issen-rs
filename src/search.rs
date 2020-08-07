@@ -336,55 +336,62 @@ async fn move_ordering_by_eval(
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
-            let (child_res, child_stat) = solve_outer(solve_obj, next, -beta, -alpha, false, depth+1).await;
-            stat.merge(child_stat);
-            res = -child_res;
-            best = pos;
-            alpha = max(alpha, res);
-            if alpha >= beta {
-                return (res, best, stat);
-            }
-        } else {
-            let (tx, mut rx) = mpsc::unbounded();
-            let _handle = {
-                let tx = tx.clone();
-                let mut child_obj = solve_obj.clone();
-                let mut stat = SolveStat::zero();
-                solve_obj.pool.spawn_with_handle(async move {
-                    let next_depth = depth + child_obj.params.ybwc_younger_add;
-                    let child_future = solve_outer(
-                        &mut child_obj, next, -alpha-1, -alpha, false, next_depth);
-                    let (child_res, child_stat) = child_future.await;
-                    stat.merge(child_stat);
-                    let tmp = -child_res;
-                    if tmp >= res {
-                        res = tmp;
-                        best = pos;
-                    }
-                    if res < beta {
-                        if res > alpha {
-                            alpha = res;
-                            let child_future = solve_outer(
-                                &mut child_obj, next, -beta, -alpha, false, next_depth);
-                            let (child_res, child_stat) = child_future.await;
-                            stat.merge(child_stat);
-                            res = max(res, -child_res);
-                        }
-                    }
-                    let res_tuple = (res, best);
-                    let _ = tx.unbounded_send((res_tuple, stat));
-                }).unwrap()
-            };
-            let (res_tuple, child_stat) = rx.next().await.unwrap();
-            stat.merge(child_stat);
-            let (child_res, child_best) = res_tuple;
-            if child_res > res {
+            if popcnt(board.empty()) == solve_obj.params.ybwc_empties_limit {
+                let (tx, mut rx) = mpsc::unbounded();
+                let handle_ = {
+                    let tx = tx.clone();
+                    let mut child_obj = solve_obj.clone();
+                    solve_obj.pool.spawn_with_handle(async move {
+                        let next_depth = depth + child_obj.params.ybwc_elder_add;
+                        let child_future = solve_outer(&mut child_obj, next, -beta, -alpha, false, next_depth);
+                        let (child_res, child_stat) = child_future.await;
+                        let res_tuple = (-child_res, best);
+                        let _ = tx.unbounded_send((res_tuple, child_stat));
+                    }).unwrap()
+                };
+                let (res_tuple, child_stat) = rx.next().await.unwrap();
+                let (child_res, _) = res_tuple;
+                stat.merge(child_stat);
                 res = child_res;
-                best = child_best;
+                best = pos;
                 if res >= beta {
                     return (res, best, stat);
                 }
                 alpha = max(alpha, res);
+            } else {
+                let next_depth = depth + solve_obj.params.ybwc_elder_add;
+                let (child_res, child_stat) = solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await;
+                stat.merge(child_stat);
+                res = -child_res;
+                best = pos;
+                if res >= beta {
+                    return (res, best, stat);
+                }
+                alpha = max(alpha, res);
+            }
+        } else {
+            let next_depth = depth + solve_obj.params.ybwc_younger_add;
+            let (child_res, child_stat) = solve_outer(
+                solve_obj, next, -alpha-1, -alpha, false, next_depth).await;
+            stat.merge(child_stat);
+            let tmp = -child_res;
+            if tmp >= res {
+                res = tmp;
+                best = pos;
+                if res > alpha {
+                    alpha = res;
+                    if alpha >= beta {
+                        return (res, best, stat);
+                    }
+                    let (child_res, child_stat) = solve_outer(
+                        solve_obj, next, -beta, -alpha, false, next_depth).await;
+                    stat.merge(child_stat);
+                    res = max(res, -child_res);
+                    if res >= beta {
+                        return (res, best, stat);
+                    }
+                    alpha = max(alpha, res);
+                }
             }
         }
     }
