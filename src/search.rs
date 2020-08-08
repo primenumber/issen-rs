@@ -336,39 +336,22 @@ async fn move_ordering_by_eval(
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
-            if popcnt(board.empty()) == solve_obj.params.ybwc_empties_limit {
-                let (tx, mut rx) = mpsc::unbounded();
-                let handle_ = {
-                    let tx = tx.clone();
-                    let mut child_obj = solve_obj.clone();
-                    solve_obj.pool.spawn_with_handle(async move {
-                        let next_depth = depth + child_obj.params.ybwc_elder_add;
-                        let child_future = solve_outer(&mut child_obj, next, -beta, -alpha, false, next_depth);
-                        let (child_res, child_stat) = child_future.await;
-                        let res_tuple = (-child_res, best);
-                        let _ = tx.unbounded_send((res_tuple, child_stat));
-                    }).unwrap()
-                };
-                let (res_tuple, child_stat) = rx.next().await.unwrap();
-                let (child_res, _) = res_tuple;
-                stat.merge(child_stat);
-                res = child_res;
-                best = pos;
-                if res >= beta {
-                    return (res, best, stat);
-                }
-                alpha = max(alpha, res);
+            let next_depth = depth + solve_obj.params.ybwc_elder_add;
+            let (child_res, child_stat) = if popcnt(board.empty()) == solve_obj.params.ybwc_empties_limit {
+                let mut child_obj = solve_obj.clone();
+                solve_obj.pool.spawn_with_handle(async move {
+                    solve_outer(&mut child_obj, next, -beta, -alpha, false, next_depth).await
+                }).unwrap().await
             } else {
-                let next_depth = depth + solve_obj.params.ybwc_elder_add;
-                let (child_res, child_stat) = solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await;
-                stat.merge(child_stat);
-                res = -child_res;
-                best = pos;
-                if res >= beta {
-                    return (res, best, stat);
-                }
-                alpha = max(alpha, res);
+                solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await
+            };
+            stat.merge(child_stat);
+            res = -child_res;
+            best = pos;
+            if res >= beta {
+                return (res, best, stat);
             }
+            alpha = max(alpha, res);
         } else {
             let next_depth = depth + solve_obj.params.ybwc_younger_add;
             let (child_res, child_stat) = solve_outer(
