@@ -28,7 +28,7 @@ $ cargo run --release
 
 ## Benchmark result
 
-Date: 2020/08/03
+Date: 2020/08/08
 Hardware: AMD Ryzen 9 3900X, DDR4-3200 64GB
 Environment: Linux 5.4.0-42, Ubuntu 20.04.1, rustc 1.46.0-nightly
 
