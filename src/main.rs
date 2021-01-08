@@ -117,13 +117,13 @@ fn solve_ffo(name: &str, index: &mut usize,
                 let start = Instant::now();
                 let mut obj = SolveObj::new(
                     res_cache.clone(), eval_cache.clone(), evaluator.clone(), search_params.clone(), pool.clone());
-                let (res, stat) = solve(
+                let (res, best, stat) = solve(
                     &mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
                 let milli_seconds = end.as_millis() + 1;  // ceil up, avoid zero-division
                 let nodes_per_sec = (stat.node_count * 1000) as u128 / milli_seconds;
-                println!("|{:2}|{:2}|{:+3}|{:+3}|{:>5}|{:4}.{:03}s|{}M/s|",
-                         index, rem, res, desired,
+                println!("|{:2}|{:2}|{:+3}|{:+3}|{:?}|{:>5}|{:4}.{:03}s|{}M/s|",
+                         index, rem, res, desired, best,
                          to_si(stat.node_count),
                          end.as_secs(),
                          end.subsec_nanos() / 1_000_000,
