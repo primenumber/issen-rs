@@ -357,24 +357,20 @@ async fn move_ordering_by_eval(
             let (child_res, _child_best, child_stat) = solve_outer(
                 solve_obj, next, -alpha-1, -alpha, false, next_depth).await;
             stat.merge(child_stat);
-            let tmp = -child_res;
-            if tmp >= res {
+            let mut tmp = -child_res;
+            if alpha < tmp && tmp < beta {
+                let (child_res, _child_best, child_stat) = solve_outer(
+                    solve_obj, next, -beta, -tmp, false, next_depth).await;
+                stat.merge(child_stat);
+                tmp = -child_res;
+            }
+            if tmp >= beta {
+                return (tmp, pos, stat);
+            }
+            if tmp > res {
                 res = tmp;
                 best = pos;
-                if res > alpha {
-                    alpha = res;
-                    if alpha >= beta {
-                        return (res, best, stat);
-                    }
-                    let (child_res, _child_best, child_stat) = solve_outer(
-                        solve_obj, next, -beta, -alpha, false, next_depth).await;
-                    stat.merge(child_stat);
-                    res = max(res, -child_res);
-                    if res >= beta {
-                        return (res, best, stat);
-                    }
-                    alpha = max(alpha, res);
-                }
+                alpha = max(alpha, res);
             }
         }
     }
@@ -429,20 +425,17 @@ async fn ybwc(
                     &mut child_obj, next, -alpha-1, -alpha, false, next_depth);
                 let (child_res, _child_best, child_stat) = child_future.await;
                 stat.merge(child_stat);
-                let tmp = -child_res;
-                if tmp >= res {
-                    res = tmp;
-                    best = pos;
+                let mut tmp = -child_res;
+                if alpha < tmp && tmp < beta {
+                    let child_future = solve_outer(
+                        &mut child_obj, next, -beta, -tmp, false, next_depth);
+                    let (child_res, _child_best, child_stat) = child_future.await;
+                    stat.merge(child_stat);
+                    tmp = -child_res;
                 }
-                if res < beta {
-                    if res > alpha {
-                        alpha = res;
-                        let child_future = solve_outer(
-                            &mut child_obj, next, -beta, -alpha, false, next_depth);
-                        let (child_res, _child_best, child_stat) = child_future.await;
-                        stat.merge(child_stat);
-                        res = max(res, -child_res);
-                    }
+                if tmp > res {
+                    best = pos;
+                    res = tmp;
                 }
                 let res_tuple = (res, best);
                 let _ = tx.unbounded_send((res_tuple, stat));
