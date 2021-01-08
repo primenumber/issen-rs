@@ -575,7 +575,9 @@ fn solve_outer(
             } else {
                 ybwc(&mut solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await
             };
-            update_table(&mut solve_obj, board, res, best, alpha, beta, lower, upper);
+            if rem >= solve_obj.params.res_cache_limit {
+                update_table(&mut solve_obj, board, res, best, alpha, beta, lower, upper);
+            }
             (res, Some(best), stat)
         }
     }.boxed()
