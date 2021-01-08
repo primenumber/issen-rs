@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::str::FromStr;
 use packed_simd::*;
 use crate::bits::*;
@@ -151,24 +151,25 @@ impl Board {
     }
 
     pub fn print(&self) -> () {
+        let mut writer = BufWriter::new(std::io::stdout());
         for i in 0..64 {
             if ((self.player >> i) & 1) != 0 {
                 if self.is_black {
-                    write!(std::io::stdout(), "X").unwrap();
+                    write!(writer, "X").unwrap();
                 } else {
-                    write!(std::io::stdout(), "O").unwrap();
+                    write!(writer, "O").unwrap();
                 }
             } else if ((self.opponent >> i) & 1) != 0 {
                 if self.is_black {
-                    write!(std::io::stdout(), "O").unwrap();
+                    write!(writer, "O").unwrap();
                 } else {
-                    write!(std::io::stdout(), "X").unwrap();
+                    write!(writer, "X").unwrap();
                 }
             } else {
-                write!(std::io::stdout(), "-").unwrap();
+                write!(writer, "-").unwrap();
             }
             if i % 8 == 7 {
-                write!(std::io::stdout(), "\n").unwrap();
+                write!(writer, "\n").unwrap();
             }
         }
     }
