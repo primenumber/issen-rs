@@ -136,12 +136,12 @@ fn static_order(
     let mut pass = true;
     let mut res = -64;
     let mut stat = SolveStat::one();
-    const masks: [u64; 3] = [
+    const MASKS: [u64; 3] = [
         0x8100_0000_0000_0081, // Corner
         0x3C3C_FFFF_FFFF_3C3C, // Normal
         0x42C3_0000_0000_C342  // C + X
     ];
-    for mask in masks.iter() {
+    for mask in MASKS.iter() {
         let mut empties = board.empty() & mask;
         while empties != 0 {
             let pos = empties.tzcnt() as usize;
