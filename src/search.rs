@@ -478,7 +478,7 @@ fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &m
     *alpha = max(lower, *alpha);
     *beta = min(upper, *beta);
     if *alpha >= *beta {
-        if old_alpha > upper {
+        if old_alpha >= upper {
             CacheLookupResult::Cut(upper)
         } else {
             CacheLookupResult::Cut(lower)
