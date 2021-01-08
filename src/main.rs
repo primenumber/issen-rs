@@ -19,6 +19,7 @@ use crate::search::*;
 
 pub struct HandParseError;
 
+#[allow(dead_code)]
 fn read_hand() -> Option<usize> {
     let mut s = String::new();
     std::io::stdin().read_line(&mut s).unwrap();
@@ -39,6 +40,7 @@ fn read_hand() -> Option<usize> {
     Some((row_code - '1' as usize) * 8 + (column_code - 'a' as usize))
 }
 
+#[allow(dead_code)]
 fn play(mut board: Board) -> Board {
     while !board.is_gameover() {
         board.print();
