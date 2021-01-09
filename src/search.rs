@@ -462,8 +462,8 @@ enum CacheLookupResult {
     NoCut(i8, i8, u8)
 }
 
-fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
-    let (lower, upper, old_best) = match solve_obj.res_cache.get(board) {
+fn make_lookup_result(res_cache: Option<ResCache>, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
+    let (lower, upper, old_best) = match res_cache {
         Some(cache) => (cache.lower, cache.upper, cache.best),
         None => (-64, 64, PASS as u8)
     };
@@ -481,7 +481,14 @@ fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &m
     }
 }
 
-fn update_table(solve_obj: &mut SolveObj, board: Board, res: i8, best: u8, alpha: i8, beta: i8, lower: i8, upper: i8) {
+fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
+    let res_cache = solve_obj.res_cache.get(board);
+    make_lookup_result(res_cache, alpha, beta)
+}
+
+fn make_record(gen: u16, board: Board,
+               res: i8, best: u8, alpha: i8, beta: i8,
+               lower: i8, upper: i8) -> ResCache {
     let range = if res <= alpha {
         (lower, min(upper, res))
     } else if res >= beta {
@@ -489,12 +496,18 @@ fn update_table(solve_obj: &mut SolveObj, board: Board, res: i8, best: u8, alpha
     } else {
         (res, res)
     };
-    solve_obj.res_cache.update(ResCache {
+    ResCache {
         board,
         lower: range.0,
         upper: range.1,
-        gen: solve_obj.res_cache.gen,
-        best });
+        gen: gen,
+        best
+    }
+}
+
+fn update_table(solve_obj: &mut SolveObj, board: Board, res: i8, best: u8, alpha: i8, beta: i8, lower: i8, upper: i8) {
+    let record = make_record(solve_obj.res_cache.gen, board, res, best, alpha, beta, lower, upper);
+    solve_obj.res_cache.update(record);
 }
 
 fn stability_cut(board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
