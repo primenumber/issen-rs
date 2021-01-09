@@ -3,10 +3,14 @@ use std::cmp::max;
 use std::io::{BufRead,BufReader,Read};
 use std::fs::File;
 use std::str::FromStr;
+use std::path::Path;
+use std::ops::RangeInclusive;
 use crate::bits::*;
 use crate::board::*;
+use yaml_rust::yaml;
 
 pub struct Evaluator {
+    stones_range: RangeInclusive<usize>,
     weights: Vec<Vec<i16>>,
     offsets: Vec<usize>,
     patterns: Vec<u64>,
@@ -24,43 +28,41 @@ fn pow3(x: i8) -> usize {
 pub const SCALE: i16 = 128;
 
 impl Evaluator {
-    pub fn new(subboard_filename: &str) -> Evaluator {
-        let subboard_file = File::open(subboard_filename).unwrap();
-        let subboard_reader = BufReader::new(subboard_file);
+    pub fn new(table_dirname: &str) -> Evaluator {
+        let table_path = Path::new(table_dirname);
+        let mut config_file = File::open(table_path.join("config.yaml")).unwrap();
+        let mut config_string = String::new();
+        config_file.read_to_string(&mut config_string).unwrap();
+        let config_objs = yaml::YamlLoader::load_from_str(&config_string).unwrap();
+        let config = &config_objs[0]; // first document of the file
         let mut patterns = Vec::new();
         let mut offsets = Vec::new();
-        let mut pattern_bits = 0;
         let mut length: usize = 0;
         let mut max_bits = 0;
-        for (i, line) in subboard_reader.lines().enumerate() {
-            if i == 0 {
-                let _count = usize::from_str(&line.unwrap()).unwrap();
-            } else if (i % 9) != 0 {
-                let lane = (i % 9) - 1;
-                let bits = u64::from_str_radix(&line.unwrap(), 2).unwrap();
-                pattern_bits |= mirror_under_8(bits) << (lane * 8);
-                if (i % 9) == 8 {
-                    patterns.push(pattern_bits);
-                    offsets.push(length);
-                    length += pow3(popcnt(pattern_bits));
-                    max_bits = max(max_bits, popcnt(pattern_bits));
-                }
-            } else {
-                pattern_bits = 0;
-            }
+        let masks = &config["masks"];
+        for pattern_obj in masks.clone() {
+            let pattern_str = pattern_obj.as_str().unwrap();
+            let bits = flip_vertical(flip_horizontal(u64::from_str_radix(&pattern_str, 2).unwrap()));
+            patterns.push(bits);
+            offsets.push(length);
+            length += pow3(popcnt(bits));
+            max_bits = max(max_bits, popcnt(bits));
         }
         length += 1;
 
-        let files: Vec<String> = (30..61).map(|i| format!("table/value{}", i)).collect();
-        let mut weights = vec![vec![0i16; length]; files.len()];
-        for (cnt, filename) in files.iter().enumerate() {
-            let mut value_file = File::open(filename).unwrap();
+        let from = config["stone_counts"]["from"].as_i64().unwrap() as usize;
+        let to = config["stone_counts"]["to"].as_i64().unwrap() as usize;
+        let stones_range = from..=to;
+        let range_size = to - from + 1;
+        let mut weights = vec![vec![0i16; length]; range_size];
+        for num in stones_range.clone() {
+            let mut value_file = File::open(table_path.join(format!("value{}", num))).unwrap();
             let mut buf = vec![0u8; length * 8];
             value_file.read(&mut buf).unwrap();
             for i in 0usize..length {
                 let mut ary: [u8; 8] = Default::default();
                 ary.copy_from_slice(&buf[(8*i)..(8*(i+1))]);
-                weights[cnt][i] = (SCALE as f64 * unsafe { mem::transmute::<[u8; 8], f64>(ary) }).max(SCALE as f64 * -64.0).min(SCALE as f64 * 64.0).round() as i16;
+                weights[num - from][i] = (SCALE as f64 * unsafe { mem::transmute::<[u8; 8], f64>(ary) }).max(SCALE as f64 * -64.0).min(SCALE as f64 * 64.0).round() as i16;
             }
         }
 
@@ -74,7 +76,7 @@ impl Evaluator {
             }
             base3[i] = sum;
         }
-        Evaluator { weights, offsets, patterns, base3 }
+        Evaluator { stones_range, weights, offsets, patterns, base3 }
     }
 
     fn eval_impl(&self, board: Board, index: usize) -> i32 {
@@ -92,7 +94,8 @@ impl Evaluator {
     pub fn eval(&self, mut board: Board) -> i16 {
         let mut score = 0i32;
         let rem: usize = popcnt(board.empty()) as usize;
-        let index = (34 - rem).max(0).min(30);
+        let stones = (64 - rem).max(*self.stones_range.start()).min(*self.stones_range.end());
+        let index = stones - self.stones_range.start();
         for _i in 0..4 {
             score += self.eval_impl(board.clone(), index);
             score += self.eval_impl(board.flip_diag(), index);

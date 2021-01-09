@@ -31,6 +31,13 @@ pub fn flip_vertical(mut x: u64) -> u64 {
     x
 }
 
+pub fn flip_horizontal(mut x: u64) -> u64 {
+    x = ((x >> 4) & 0x0F0F0F0F0F0F0F0Fu64) | ((x << 4) & 0xF0F0F0F0F0F0F0F0u64);
+    x = ((x >> 2) & 0x3333333333333333u64) | ((x << 2) & 0xCCCCCCCCCCCCCCCCu64);
+    x = ((x >> 1) & 0x5555555555555555u64) | ((x << 1) & 0xAAAAAAAAAAAAAAAAu64);
+    x
+}
+
 pub fn delta_swap(x: u64, mask: u64, delta: isize) -> u64 {
     let tmp = mask & (x ^ (x << delta));
     x ^ tmp ^ (tmp >> delta)

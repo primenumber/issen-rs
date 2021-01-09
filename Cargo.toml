@@ -11,3 +11,4 @@ lazy_static = "1.4.0"
 rand = "0.7"
 rand_xoshiro = "0.3.0"
 futures = { version = "0.3", features = ["thread-pool"] }
+yaml-rust = "0.4"
