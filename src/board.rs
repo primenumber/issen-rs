@@ -211,12 +211,13 @@ impl Board {
             MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT
         ];
         let mut res = 0;
-        for mask in &MASKS {
-            let me = pext(self.player, *mask) as usize;
-            let op = pext(self.opponent, *mask) as usize;
-            let base3 = BASE3[me] + 2 * BASE3[op];
-            res |= pdep(STABLE[base3], *mask);
-        }
+        // FIXME: edge stability is buggy
+        //for mask in &MASKS {
+        //    let me = pext(self.player, *mask) as usize;
+        //    let op = pext(self.opponent, *mask) as usize;
+        //    let base3 = BASE3[me] + 2 * BASE3[op];
+        //    res |= pdep(STABLE[base3], *mask);
+        //}
         for r in 0..8 {
             let mask_h = MASK_TOP << (r * 8);
             for c in 0..8 {
