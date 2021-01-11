@@ -1,5 +1,7 @@
 use std::sync::Arc;
 use std::cmp::{min, max};
+use std::fs::File;
+use std::io::{BufRead,BufReader,Read};
 use std::mem::MaybeUninit;
 use bitintr::Tzcnt;
 use futures::executor;
@@ -664,6 +666,46 @@ fn solve_inner(
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed, depth);
             update_table(solve_obj, board, res, PASS as u8, alpha, beta, lower, upper);
             (res, stat)
+        }
+    }
+}
+
+#[test]
+fn test_solve_inner() {
+    let name = "problem/stress_test_54_1k.b81r";
+    let file = File::open(name).unwrap();
+    let reader = BufReader::new(file);
+    let evaluator = Arc::new(Evaluator::new("table"));
+    let mut res_cache = ResCacheTable::new(256, 256);
+    let mut eval_cache = EvalCacheTable::new(256, 256);
+    let pool = ThreadPool::new().unwrap();
+    let search_params = SearchParams {
+        reduce: false,
+        ybwc_depth_limit: 0,
+        ybwc_elder_add: 1,
+        ybwc_younger_add: 2,
+        ybwc_empties_limit: 64,
+        eval_ordering_limit: 64,
+        res_cache_limit: 9,
+        stability_cut_limit: 7,
+        ffs_ordering_limit: 6,
+        static_ordering_limit: 3
+    };
+    for (idx, line) in reader.lines().enumerate() {
+        let line_str = line.unwrap();
+        let desired: i8 = line_str[17..].parse().unwrap();
+        match Board::from_base81(&line_str[..16]) {
+            Ok(board) => {
+                let mut obj = SolveObj::new(
+                    res_cache.clone(), eval_cache.clone(), evaluator.clone(), search_params.clone(), pool.clone());
+                let (res, stat) = solve_inner(
+                    &mut obj, board, -64, 64, false, 0);
+                if res != desired {
+                    board.print();
+                }
+                assert_eq!(res, desired);
+            },
+            Err(_) => { assert!(false); }
         }
     }
 }
