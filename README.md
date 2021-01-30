@@ -1,4 +1,5 @@
-# rust-reversi
+# issen-rs
+
 Reversi solver on Rust
 
 ## License
