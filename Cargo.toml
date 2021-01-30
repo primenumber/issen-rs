@@ -1,6 +1,6 @@
 [package]
 edition = '2018'
-name = "reversi"
+name = "issen-rs"
 version = "0.1.0"
 authors = ["prime <prime@kmc.gr.jp>"]
 
