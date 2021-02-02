@@ -1,7 +1,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::str::FromStr;
+use spin::Mutex;
 use crate::bits::*;
 use crate::board::*;
 
@@ -175,7 +176,7 @@ impl<T: CacheElement> CacheTable<T> {
         let hash = hasher.finish();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
-        self.arrays[bucket_id].lock().unwrap().get(board, bucket_hash)
+        self.arrays[bucket_id].lock().get(board, bucket_hash)
     }
 
     pub fn update(&mut self, cache: T) {
@@ -184,7 +185,7 @@ impl<T: CacheElement> CacheTable<T> {
         let hash = hasher.finish();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
-        self.arrays[bucket_id].lock().unwrap().update(&cache, bucket_hash, self.gen);
+        self.arrays[bucket_id].lock().update(&cache, bucket_hash, self.gen);
     }
 
     pub fn inc_gen(&mut self) {
