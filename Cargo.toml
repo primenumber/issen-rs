@@ -5,11 +5,11 @@ version = "0.1.0"
 authors = ["prime <prime@kmc.gr.jp>"]
 
 [dependencies]
-packed_simd = "0.3.3"
-bitintr = "0.2.0"
-lazy_static = "1.4.0"
-rand = "0.7"
-rand_xoshiro = "0.3.0"
+packed_simd = { version = "0.3.4", package = "packed_simd_2" }
+bitintr = "0.3"
+lazy_static = "1.4"
+rand = "0.8"
+rand_xoshiro = "0.6"
 futures = { version = "0.3", features = ["thread-pool"] }
 yaml-rust = "0.4"
 spin = "0.7"
