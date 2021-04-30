@@ -185,6 +185,6 @@ fn main() {
     stats.extend(solve_ffo("problem/fforum-1-19.obf",  &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
     stats.extend(solve_ffo("problem/fforum-20-39.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
     stats.extend(solve_ffo("problem/fforum-40-59.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
-    //stats.extend(solve_ffo("problem/fforum-60-79.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
+    stats.extend(solve_ffo("problem/fforum-60-79.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
     report_stats(&stats);
 }
