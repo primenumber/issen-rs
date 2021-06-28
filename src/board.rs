@@ -48,7 +48,7 @@ impl Board {
         mask = mask2 << pos as u32;
         outflank = mask & ((om | !mask) + 1) & p;
         flipped |= (outflank - nonzero(outflank)) & mask;
-        return flipped;
+        flipped
     }
 
     pub fn flip_unchecked(&self, pos: usize) -> u64 {
