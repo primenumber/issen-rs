@@ -1,21 +1,21 @@
 mod bits;
 mod board;
 mod eval;
-mod table;
 mod search;
+mod table;
 
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::fs::File;
-use std::time::Instant;
-use std::str::FromStr;
-use std::sync::Arc;
-use futures::executor::ThreadPool;
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
-use crate::table::*;
 use crate::search::*;
+use crate::table::*;
+use futures::executor::ThreadPool;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Instant;
 
 pub struct HandParseError;
 
@@ -51,8 +51,8 @@ fn play(mut board: Board) -> Board {
                 Some(h) => {
                     hand = h;
                     break;
-                },
-                None => ()
+                }
+                None => (),
             }
         }
         if hand == 64 {
@@ -60,7 +60,7 @@ fn play(mut board: Board) -> Board {
         } else {
             match board.play(hand) {
                 Ok(next) => board = next,
-                Err(_) => println!("Invalid move")
+                Err(_) => println!("Invalid move"),
             }
         }
     }
@@ -91,20 +91,25 @@ fn to_si(x: usize) -> String {
         0 => format!("{}{}", x3, prefix),
         1 => format!("{}.{:02}{}", x3 / 100, x3 % 100, prefix),
         2 => format!("{}.{}{}", x3 / 10, x3 % 10, prefix),
-        _ => panic!()
+        _ => panic!(),
     }
 }
 
 struct Stat {
     nodes: usize,
     elapsed: f64,
-    correct: bool
+    correct: bool,
 }
 
-fn solve_ffo(name: &str, index: &mut usize,
-             search_params: &SearchParams, evaluator: Arc<Evaluator>,
-             res_cache: &mut ResCacheTable, eval_cache: &mut EvalCacheTable,
-             pool: &ThreadPool) -> Vec<Stat> {
+fn solve_ffo(
+    name: &str,
+    index: &mut usize,
+    search_params: &SearchParams,
+    evaluator: Arc<Evaluator>,
+    res_cache: &mut ResCacheTable,
+    eval_cache: &mut EvalCacheTable,
+    pool: &ThreadPool,
+) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     println!("|No.|empties|result|answer|nodes|time|NPS|");
@@ -118,30 +123,39 @@ fn solve_ffo(name: &str, index: &mut usize,
                 let rem = popcnt(board.empty());
                 let start = Instant::now();
                 let mut obj = SolveObj::new(
-                    res_cache.clone(), eval_cache.clone(), evaluator.clone(), search_params.clone(), pool.clone());
-                let (res, best, stat) = solve(
-                    &mut obj, board, -64, 64, false, 0);
+                    res_cache.clone(),
+                    eval_cache.clone(),
+                    evaluator.clone(),
+                    search_params.clone(),
+                    pool.clone(),
+                );
+                let (res, best, stat) = solve(&mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
-                let milli_seconds = end.as_millis() + 1;  // ceil up, avoid zero-division
+                let milli_seconds = end.as_millis() + 1; // ceil up, avoid zero-division
                 let nodes_per_sec = (stat.node_count * 1000) as u128 / milli_seconds;
-                println!("|{:2}|{:2}|{:+3}|{:+3}|{:?}|{:>5}|{:4}.{:03}s|{}M/s|",
-                         index, rem, res, desired, best,
-                         to_si(stat.node_count),
-                         end.as_secs(),
-                         end.subsec_nanos() / 1_000_000,
-                         nodes_per_sec / 1_000_000);
+                println!(
+                    "|{:2}|{:2}|{:+3}|{:+3}|{:?}|{:>5}|{:4}.{:03}s|{}M/s|",
+                    index,
+                    rem,
+                    res,
+                    desired,
+                    best,
+                    to_si(stat.node_count),
+                    end.as_secs(),
+                    end.subsec_nanos() / 1_000_000,
+                    nodes_per_sec / 1_000_000
+                );
                 eval_cache.inc_gen();
                 res_cache.inc_gen();
                 stats.push(Stat {
                     nodes: stat.node_count,
-                    elapsed: end.as_secs_f64(), 
-                    correct: res == desired
+                    elapsed: end.as_secs_f64(),
+                    correct: res == desired,
                 });
                 *index += 1;
-            },
-            Err(_) => println!("Parse error")
+            }
+            Err(_) => println!("Parse error"),
         }
-
     }
     stats
 }
@@ -158,7 +172,13 @@ fn report_stats(stats: &[Stat]) -> () {
         elapsed_sum += stat.elapsed;
     }
     let nodes_per_sec = (nodes_sum as f64 / elapsed_sum) as usize;
-    println!("Wrongs: {}, Nodes: {}, Elapsed: {:.3}, NPS: {}", wrongs, to_si(nodes_sum), elapsed_sum, to_si(nodes_per_sec));
+    println!(
+        "Wrongs: {}, Nodes: {}, Elapsed: {:.3}, NPS: {}",
+        wrongs,
+        to_si(nodes_sum),
+        elapsed_sum,
+        to_si(nodes_per_sec)
+    );
 }
 
 fn main() {
@@ -172,7 +192,7 @@ fn main() {
         res_cache_limit: 11,
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
-        static_ordering_limit: 3
+        static_ordering_limit: 3,
     };
     let evaluator = Arc::new(Evaluator::new("table"));
     let mut res_cache = ResCacheTable::new(256, 65536);
@@ -182,9 +202,41 @@ fn main() {
     let mut stats = Vec::new();
     //stats.extend(solve_ffo("problem/hard-20.obf",      &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
     //stats.extend(solve_ffo("problem/hard-25.obf",      &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
-    stats.extend(solve_ffo("problem/fforum-1-19.obf",  &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
-    stats.extend(solve_ffo("problem/fforum-20-39.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
-    stats.extend(solve_ffo("problem/fforum-40-59.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
-    stats.extend(solve_ffo("problem/fforum-60-79.obf", &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
+    stats.extend(solve_ffo(
+        "problem/fforum-1-19.obf",
+        &mut index,
+        &search_params,
+        evaluator.clone(),
+        &mut res_cache,
+        &mut eval_cache,
+        &pool,
+    ));
+    stats.extend(solve_ffo(
+        "problem/fforum-20-39.obf",
+        &mut index,
+        &search_params,
+        evaluator.clone(),
+        &mut res_cache,
+        &mut eval_cache,
+        &pool,
+    ));
+    stats.extend(solve_ffo(
+        "problem/fforum-40-59.obf",
+        &mut index,
+        &search_params,
+        evaluator.clone(),
+        &mut res_cache,
+        &mut eval_cache,
+        &pool,
+    ));
+    stats.extend(solve_ffo(
+        "problem/fforum-60-79.obf",
+        &mut index,
+        &search_params,
+        evaluator.clone(),
+        &mut res_cache,
+        &mut eval_cache,
+        &pool,
+    ));
     report_stats(&stats);
 }

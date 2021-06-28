@@ -1,10 +1,10 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::sync::Arc;
-use std::str::FromStr;
-use spin::Mutex;
 use crate::bits::*;
 use crate::board::*;
+use spin::Mutex;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::str::FromStr;
+use std::sync::Arc;
 
 pub trait CacheElement: Clone + Default {
     fn has_key(&self, board: Board) -> bool;
@@ -19,18 +19,21 @@ pub struct EvalCache {
     pub upper: i16,
     pub gen: u16,
     pub best: u8,
-    pub depth: i8
+    pub depth: i8,
 }
 
 impl Default for EvalCache {
     fn default() -> Self {
         Self {
-            board: Board::from_str("---------------------------------------------------------------- X;").unwrap(),
+            board: Board::from_str(
+                "---------------------------------------------------------------- X;",
+            )
+            .unwrap(),
             lower: 0,
             upper: 0,
             gen: 0,
             best: PASS as u8,
-            depth: 0
+            depth: 0,
         }
     }
 }
@@ -75,17 +78,20 @@ pub struct ResCache {
     pub lower: i8,
     pub upper: i8,
     pub gen: u16,
-    pub best: u8
+    pub best: u8,
 }
 
 impl Default for ResCache {
     fn default() -> Self {
         Self {
-            board: Board::from_str("---------------------------------------------------------------- X;").unwrap(),
+            board: Board::from_str(
+                "---------------------------------------------------------------- X;",
+            )
+            .unwrap(),
             lower: 0,
             upper: 0,
             gen: 0,
-            best: PASS as u8
+            best: PASS as u8,
         }
     }
 }
@@ -120,16 +126,15 @@ impl CacheElement for ResCache {
 
 struct CacheArray<T: CacheElement> {
     ary: Vec<T>,
-    cycle: u64
+    cycle: u64,
 }
-
 
 impl<T: CacheElement> CacheArray<T> {
     fn new(size: usize) -> CacheArray<T> {
         let dummy: T = Default::default();
         CacheArray {
             ary: vec![dummy; size],
-            cycle: size as u64
+            cycle: size as u64,
         }
     }
 
@@ -154,7 +159,7 @@ impl<T: CacheElement> CacheArray<T> {
 pub struct CacheTable<T: CacheElement> {
     arrays: Arc<Vec<Mutex<CacheArray<T>>>>,
     buckets: u64,
-    pub gen: u16
+    pub gen: u16,
 }
 
 impl<T: CacheElement> CacheTable<T> {
@@ -166,7 +171,7 @@ impl<T: CacheElement> CacheTable<T> {
         CacheTable::<T> {
             arrays: Arc::new(vec),
             buckets: buckets as u64,
-            gen: 1
+            gen: 1,
         }
     }
 
@@ -185,7 +190,9 @@ impl<T: CacheElement> CacheTable<T> {
         let hash = hasher.finish();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
-        self.arrays[bucket_id].lock().update(&cache, bucket_hash, self.gen);
+        self.arrays[bucket_id]
+            .lock()
+            .update(&cache, bucket_hash, self.gen);
     }
 
     pub fn inc_gen(&mut self) {

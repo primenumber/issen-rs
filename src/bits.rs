@@ -1,12 +1,12 @@
-use packed_simd::*;
+use bitintr::{Pdep, Pext};
 use lazy_static::lazy_static;
-use bitintr::{Pext, Pdep};
+use packed_simd::*;
 
 pub fn upper_bit(mut x: u64x4) -> u64x4 {
-    x = x | (x >>  1);
-    x = x | (x >>  2);
-    x = x | (x >>  4);
-    x = x | (x >>  8);
+    x = x | (x >> 1);
+    x = x | (x >> 2);
+    x = x | (x >> 4);
+    x = x | (x >> 8);
     x = x | (x >> 16);
     x = x | (x >> 32);
     let lowers: u64x4 = x >> 1;
@@ -27,7 +27,7 @@ pub fn popcnt(x: u64) -> i8 {
 pub fn flip_vertical(mut x: u64) -> u64 {
     x = (x >> 32) | (x << 32);
     x = ((x >> 16) & 0x0000FFFF0000FFFFu64) | ((x << 16) & 0xFFFF0000FFFF0000u64);
-    x = ((x >>  8) & 0x00FF00FF00FF00FFu64) | ((x <<  8) & 0xFF00FF00FF00FF00u64);
+    x = ((x >> 8) & 0x00FF00FF00FF00FFu64) | ((x << 8) & 0xFF00FF00FF00FF00u64);
     x
 }
 
@@ -112,11 +112,7 @@ mod tests {
         let mut res = u64x4::splat(0);
         for i in 0..4 {
             let y = x.extract(i);
-            let ans = if y != 0 {
-                1
-            } else {
-                0
-            };
+            let ans = if y != 0 { 1 } else { 0 };
             res = res.replace(i, ans);
         }
         res
@@ -192,13 +188,13 @@ mod tests {
             ary[i] = rng.gen::<u64>();
         }
         // upper_bit
-        for i in 0..=(LENGTH-4) {
-            let a = u64x4::from_slice_unaligned(&ary[i..(i+4)]);
+        for i in 0..=(LENGTH - 4) {
+            let a = u64x4::from_slice_unaligned(&ary[i..(i + 4)]);
             assert_eq!(upper_bit(a), upper_bit_naive(a));
         }
         // nonzero
-        for i in 0..=(LENGTH-4) {
-            let a = u64x4::from_slice_unaligned(&ary[i..(i+4)]);
+        for i in 0..=(LENGTH - 4) {
+            let a = u64x4::from_slice_unaligned(&ary[i..(i + 4)]);
             assert_eq!(nonzero(a), nonzero_naive(a));
         }
         // flip_vertical
@@ -220,7 +216,8 @@ mod tests {
             for (mask, delta) in DELTA_SWAP_MASKS.iter() {
                 assert_eq!(
                     delta_swap(*a, *mask, *delta),
-                    delta_swap_naive(*a, *mask, *delta));
+                    delta_swap_naive(*a, *mask, *delta)
+                );
             }
         }
         // flip_diag

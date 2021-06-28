@@ -1,19 +1,19 @@
-use std::sync::Arc;
-use std::cmp::{min, max};
-use std::fs::File;
-use std::io::{BufRead,BufReader,Read};
-use std::mem::MaybeUninit;
-use bitintr::Tzcnt;
-use futures::executor;
-use futures::executor::ThreadPool;
-use futures::channel::mpsc;
-use futures::StreamExt;
-use futures::task::SpawnExt;
-use futures::future::{BoxFuture, FutureExt};
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
 use crate::table::*;
+use bitintr::Tzcnt;
+use futures::channel::mpsc;
+use futures::executor;
+use futures::executor::ThreadPool;
+use futures::future::{BoxFuture, FutureExt};
+use futures::task::SpawnExt;
+use futures::StreamExt;
+use std::cmp::{max, min};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
+use std::mem::MaybeUninit;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SearchParams {
@@ -35,27 +35,33 @@ pub struct SolveObj {
     pub eval_cache: EvalCacheTable,
     evaluator: Arc<Evaluator>,
     params: SearchParams,
-    pool: ThreadPool
+    pool: ThreadPool,
 }
 
 enum CutType {
     NoCut,
     MoreThanBeta(i8),
-    LessThanAlpha(i8)
+    LessThanAlpha(i8),
 }
 
 #[derive(Clone, Copy)]
 pub struct SolveStat {
     pub node_count: usize,
-    pub st_cut_count: usize
+    pub st_cut_count: usize,
 }
 
 impl SolveStat {
     pub fn one() -> SolveStat {
-        SolveStat { node_count: 1, st_cut_count: 0 }
+        SolveStat {
+            node_count: 1,
+            st_cut_count: 0,
+        }
     }
     pub fn zero() -> SolveStat {
-        SolveStat { node_count: 0, st_cut_count: 0 }
+        SolveStat {
+            node_count: 0,
+            st_cut_count: 0,
+        }
     }
     pub fn merge(&mut self, that: SolveStat) {
         self.node_count += that.node_count;
@@ -64,15 +70,19 @@ impl SolveStat {
 }
 
 impl SolveObj {
-    pub fn new(res_cache: ResCacheTable, eval_cache: EvalCacheTable,
-               evaluator: Arc<Evaluator>, params: SearchParams,
-               pool: ThreadPool) -> SolveObj {
+    pub fn new(
+        res_cache: ResCacheTable,
+        eval_cache: EvalCacheTable,
+        evaluator: Arc<Evaluator>,
+        params: SearchParams,
+        pool: ThreadPool,
+    ) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
             params,
-            pool
+            pool,
         }
     }
 }
@@ -81,23 +91,28 @@ fn near_leaf(board: Board) -> (i8, SolveStat) {
     let bit = board.empty();
     let pos = bit.tzcnt() as usize;
     match board.play(pos) {
-        Ok(next) => (
-            -next.score(),
-            SolveStat::one()
-        ),
+        Ok(next) => (-next.score(), SolveStat::one()),
         Err(_) => (
             match board.pass().play(pos) {
                 Ok(next) => next.score(),
-                Err(_) => board.score()
+                Err(_) => board.score(),
             },
-            SolveStat { node_count: 2, st_cut_count: 0 }
-        )
+            SolveStat {
+                node_count: 2,
+                st_cut_count: 0,
+            },
+        ),
     }
 }
 
 fn naive(
-    solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
-    depth: i8)-> (i8, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    beta: i8,
+    passed: bool,
+    depth: i8,
+) -> (i8, SolveStat) {
     let mut pass = true;
     let mut empties = board.empty();
     let mut res = -64;
@@ -108,23 +123,24 @@ fn naive(
         match board.play(pos) {
             Ok(next) => {
                 pass = false;
-                let (child_res, child_stat) = solve_inner(
-                    solve_obj, next, -beta, -alpha, false, depth+1);
+                let (child_res, child_stat) =
+                    solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
                 res = max(res, -child_res);
                 stat.merge(child_stat);
                 alpha = max(alpha, res);
                 if alpha >= beta {
                     return (res, stat);
                 }
-            },
-            Err(_) => ()
+            }
+            Err(_) => (),
         }
     }
     if pass {
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            let (child_res, child_stat) =
+                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -133,15 +149,20 @@ fn naive(
 }
 
 fn static_order(
-    solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
-    depth: i8)-> (i8, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    beta: i8,
+    passed: bool,
+    depth: i8,
+) -> (i8, SolveStat) {
     let mut pass = true;
     let mut res = -64;
     let mut stat = SolveStat::one();
     const MASKS: [u64; 3] = [
         0x8100_0000_0000_0081, // Corner
         0x3C3C_FFFF_FFFF_3C3C, // Normal
-        0x42C3_0000_0000_C342  // C + X
+        0x42C3_0000_0000_C342, // C + X
     ];
     for mask in MASKS.iter() {
         let mut empties = board.empty() & mask;
@@ -151,16 +172,16 @@ fn static_order(
             match board.play(pos) {
                 Ok(next) => {
                     pass = false;
-                    let (child_res, child_stat) = solve_inner(
-                        solve_obj, next, -beta, -alpha, false, depth+1);
+                    let (child_res, child_stat) =
+                        solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
                     res = max(res, -child_res);
                     stat.merge(child_stat);
                     alpha = max(alpha, res);
                     if alpha >= beta {
                         return (res, stat);
                     }
-                },
-                Err(_) => ()
+                }
+                Err(_) => (),
             }
         }
     }
@@ -168,7 +189,8 @@ fn static_order(
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            let (child_res, child_stat) =
+                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -177,12 +199,15 @@ fn static_order(
 }
 
 fn fastest_first(
-    solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
-    depth: i8) -> (i8, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    beta: i8,
+    passed: bool,
+    depth: i8,
+) -> (i8, SolveStat) {
     const MAX_FFS_NEXT: usize = 20;
-    let mut nexts: [(i8, Board); MAX_FFS_NEXT] = unsafe {
-        MaybeUninit::uninit().assume_init()
-    };
+    let mut nexts: [(i8, Board); MAX_FFS_NEXT] = unsafe { MaybeUninit::uninit().assume_init() };
     let mut count = 0;
     let mut empties = board.empty();
     while empties != 0 {
@@ -190,11 +215,11 @@ fn fastest_first(
         empties = empties & (empties - 1);
         match board.play(pos) {
             Ok(next) => {
-                nexts[count] = (weighted_mobility(& next), next);
+                nexts[count] = (weighted_mobility(&next), next);
                 count += 1;
                 assert!(count <= MAX_FFS_NEXT);
-            },
-            Err(_) => ()
+            }
+            Err(_) => (),
         }
     }
     nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
@@ -202,13 +227,19 @@ fn fastest_first(
     let mut stat = SolveStat::one();
     for (i, &(_, ref next)) in nexts[0..count].iter().enumerate() {
         if i == 0 {
-            let (child_res, child_stat) = solve_inner(
-                solve_obj, next.clone(), -beta, -alpha, false, depth+1);
+            let (child_res, child_stat) =
+                solve_inner(solve_obj, next.clone(), -beta, -alpha, false, depth + 1);
             stat.merge(child_stat);
             res = max(res, -child_res);
         } else {
             let (child_res, child_stat) = solve_inner(
-                solve_obj, next.clone(), -alpha-1, -alpha, false, depth+1);
+                solve_obj,
+                next.clone(),
+                -alpha - 1,
+                -alpha,
+                false,
+                depth + 1,
+            );
             stat.merge(child_stat);
             let mut result = -child_res;
             if result >= beta {
@@ -216,8 +247,8 @@ fn fastest_first(
             }
             if result > alpha {
                 alpha = result;
-                let (child_res, child_stat) = solve_inner(
-                    solve_obj, next.clone(), -beta, -alpha, false, depth+1);
+                let (child_res, child_stat) =
+                    solve_inner(solve_obj, next.clone(), -beta, -alpha, false, depth + 1);
                 stat.merge(child_stat);
                 result = -child_res;
             }
@@ -232,7 +263,8 @@ fn fastest_first(
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_result, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            let (child_result, child_stat) =
+                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
             stat.merge(child_stat);
             return (-child_result, stat);
         }
@@ -240,8 +272,12 @@ fn fastest_first(
     (res, stat)
 }
 
-fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _depth: i8)
-    -> Vec<(u8, Board)> {
+fn move_ordering_impl(
+    solve_obj: &mut SolveObj,
+    board: Board,
+    old_best: u8,
+    _depth: i8,
+) -> Vec<(u8, Board)> {
     let mut nexts = vec![(0i16, 0u8, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -250,8 +286,8 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
         match board.play(pos) {
             Ok(next) => {
                 nexts.push((0, pos as u8, next));
-            },
-            Err(_) => ()
+            }
+            Err(_) => (),
         }
     }
 
@@ -273,38 +309,70 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
         let mut tmp = vec![(0i16, 0u8, board.clone()); 0];
         let mut res = 64 * SCALE;
         for (i, (score, pos, next)) in nexts.iter().enumerate() {
-            let bonus = if *pos == old_best {
-                -16 * SCALE
-            } else {
-                0
-            };
+            let bonus = if *pos == old_best { -16 * SCALE } else { 0 };
             if i == 0 {
-                let window = if think_depth == min_depth {
-                    16
-                } else {
-                    8
-                };
+                let window = if think_depth == min_depth { 16 } else { 8 };
                 let alpha = (score - window * SCALE).max(-64 * SCALE);
                 let beta = (score + window * SCALE).min(64 * SCALE);
-                let new_res = think(next.clone(), alpha, beta, false, solve_obj.evaluator.clone(), &mut solve_obj.eval_cache, think_depth);
+                let new_res = think(
+                    next.clone(),
+                    alpha,
+                    beta,
+                    false,
+                    solve_obj.evaluator.clone(),
+                    &mut solve_obj.eval_cache,
+                    think_depth,
+                );
                 if new_res <= alpha {
                     let new_alpha = -64 * SCALE;
                     let new_beta = new_res;
-                    res = think(next.clone(), new_alpha, new_beta, false, solve_obj.evaluator.clone(), &mut solve_obj.eval_cache, think_depth);
+                    res = think(
+                        next.clone(),
+                        new_alpha,
+                        new_beta,
+                        false,
+                        solve_obj.evaluator.clone(),
+                        &mut solve_obj.eval_cache,
+                        think_depth,
+                    );
                     tmp.push((res + bonus, *pos, next.clone()));
                 } else if new_res >= beta {
                     let new_alpha = new_res;
                     let new_beta = 64 * SCALE;
-                    res = think(next.clone(), new_alpha, new_beta, false, solve_obj.evaluator.clone(), &mut solve_obj.eval_cache, think_depth);
+                    res = think(
+                        next.clone(),
+                        new_alpha,
+                        new_beta,
+                        false,
+                        solve_obj.evaluator.clone(),
+                        &mut solve_obj.eval_cache,
+                        think_depth,
+                    );
                     tmp.push((res + bonus, *pos, next.clone()));
                 } else {
                     res = new_res;
                     tmp.push((res + bonus, *pos, next.clone()));
                 }
             } else {
-                let new_res = think(next.clone(), res, res+1, false, solve_obj.evaluator.clone(), &mut solve_obj.eval_cache, think_depth);
+                let new_res = think(
+                    next.clone(),
+                    res,
+                    res + 1,
+                    false,
+                    solve_obj.evaluator.clone(),
+                    &mut solve_obj.eval_cache,
+                    think_depth,
+                );
                 if new_res < res {
-                    let fixed_res = think(next.clone(), -64 * SCALE, new_res, false, solve_obj.evaluator.clone(), &mut solve_obj.eval_cache, think_depth);
+                    let fixed_res = think(
+                        next.clone(),
+                        -64 * SCALE,
+                        new_res,
+                        false,
+                        solve_obj.evaluator.clone(),
+                        &mut solve_obj.eval_cache,
+                        think_depth,
+                    );
                     tmp.push((fixed_res + bonus, *pos, next.clone()));
                     res = fixed_res;
                 } else {
@@ -313,14 +381,13 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
                 }
             }
         }
-        tmp.sort_by(|a, b| {
-            a.0.cmp(&b.0)
-        });
+        tmp.sort_by(|a, b| a.0.cmp(&b.0));
         nexts = tmp;
     }
     if nexts.len() > 0 && solve_obj.params.reduce {
         let score_min = nexts[0].0;
-        nexts.into_iter()
+        nexts
+            .into_iter()
             .filter(|e| e.0 < score_min + 16 * SCALE)
             .map(|e| (e.1, e.2))
             .collect()
@@ -330,8 +397,14 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, old_best: u8, _dep
 }
 
 async fn move_ordering_by_eval(
-        solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
-        old_best: u8, depth: i8) -> (i8, u8, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    beta: i8,
+    passed: bool,
+    old_best: u8,
+    depth: i8,
+) -> (i8, u8, SolveStat) {
     let v = move_ordering_impl(solve_obj, board.clone(), old_best, depth);
     let mut res = -64;
     let mut best = PASS as u8;
@@ -339,11 +412,17 @@ async fn move_ordering_by_eval(
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
-            let (child_res, _child_best, child_stat) = if popcnt(board.empty()) == solve_obj.params.ybwc_empties_limit {
+            let (child_res, _child_best, child_stat) = if popcnt(board.empty())
+                == solve_obj.params.ybwc_empties_limit
+            {
                 let mut child_obj = solve_obj.clone();
-                solve_obj.pool.spawn_with_handle(async move {
-                    solve_outer(&mut child_obj, next, -beta, -alpha, false, next_depth).await
-                }).unwrap().await
+                solve_obj
+                    .pool
+                    .spawn_with_handle(async move {
+                        solve_outer(&mut child_obj, next, -beta, -alpha, false, next_depth).await
+                    })
+                    .unwrap()
+                    .await
             } else {
                 solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await
             };
@@ -356,13 +435,13 @@ async fn move_ordering_by_eval(
             alpha = max(alpha, res);
         } else {
             let next_depth = depth + solve_obj.params.ybwc_younger_add;
-            let (child_res, _child_best, child_stat) = solve_outer(
-                solve_obj, next, -alpha-1, -alpha, false, next_depth).await;
+            let (child_res, _child_best, child_stat) =
+                solve_outer(solve_obj, next, -alpha - 1, -alpha, false, next_depth).await;
             stat.merge(child_stat);
             let mut tmp = -child_res;
             if alpha < tmp && tmp < beta {
-                let (child_res, _child_best, child_stat) = solve_outer(
-                    solve_obj, next, -beta, -tmp, false, next_depth).await;
+                let (child_res, _child_best, child_stat) =
+                    solve_outer(solve_obj, next, -beta, -tmp, false, next_depth).await;
                 stat.merge(child_stat);
                 tmp = -child_res;
             }
@@ -380,7 +459,8 @@ async fn move_ordering_by_eval(
         if passed {
             return (board.score(), PASS as u8, stat);
         } else {
-            let (child_res, _child_best, child_stat) = solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
+            let (child_res, _child_best, child_stat) =
+                solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
             stat.merge(child_stat);
             return (-child_res, PASS as u8, stat);
         }
@@ -389,15 +469,22 @@ async fn move_ordering_by_eval(
 }
 
 async fn ybwc(
-        solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool,
-        old_best: u8, depth: i8) -> (i8, u8, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    beta: i8,
+    passed: bool,
+    old_best: u8,
+    depth: i8,
+) -> (i8, u8, SolveStat) {
     let v = move_ordering_impl(solve_obj, board.clone(), old_best, depth);
     let mut stat = SolveStat::one();
     if v.is_empty() {
         if passed {
             return (board.score(), PASS as u8, stat);
         } else {
-            let (child_res, _child_best, child_stat) = solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
+            let (child_res, _child_best, child_stat) =
+                solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
             stat.merge(child_stat);
             return (-child_res, PASS as u8, stat);
         }
@@ -409,7 +496,8 @@ async fn ybwc(
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
-            let (child_res, _child_best, child_stat) = solve_outer(solve_obj, next.clone(), -beta, -alpha, false, next_depth).await;
+            let (child_res, _child_best, child_stat) =
+                solve_outer(solve_obj, next.clone(), -beta, -alpha, false, next_depth).await;
             stat.merge(child_stat);
             res = -child_res;
             best = pos;
@@ -421,27 +509,38 @@ async fn ybwc(
             let tx = tx.clone();
             let mut child_obj = solve_obj.clone();
             let mut stat = SolveStat::zero();
-            handles.push(solve_obj.pool.spawn_with_handle(async move {
-                let next_depth = depth + child_obj.params.ybwc_younger_add;
-                let child_future = solve_outer(
-                    &mut child_obj, next, -alpha-1, -alpha, false, next_depth);
-                let (child_res, _child_best, child_stat) = child_future.await;
-                stat.merge(child_stat);
-                let mut tmp = -child_res;
-                if alpha < tmp && tmp < beta {
-                    let child_future = solve_outer(
-                        &mut child_obj, next, -beta, -tmp, false, next_depth);
-                    let (child_res, _child_best, child_stat) = child_future.await;
-                    stat.merge(child_stat);
-                    tmp = -child_res;
-                }
-                if tmp > res {
-                    best = pos;
-                    res = tmp;
-                }
-                let res_tuple = (res, best);
-                let _ = tx.unbounded_send((res_tuple, stat));
-            }).unwrap());
+            handles.push(
+                solve_obj
+                    .pool
+                    .spawn_with_handle(async move {
+                        let next_depth = depth + child_obj.params.ybwc_younger_add;
+                        let child_future = solve_outer(
+                            &mut child_obj,
+                            next,
+                            -alpha - 1,
+                            -alpha,
+                            false,
+                            next_depth,
+                        );
+                        let (child_res, _child_best, child_stat) = child_future.await;
+                        stat.merge(child_stat);
+                        let mut tmp = -child_res;
+                        if alpha < tmp && tmp < beta {
+                            let child_future =
+                                solve_outer(&mut child_obj, next, -beta, -tmp, false, next_depth);
+                            let (child_res, _child_best, child_stat) = child_future.await;
+                            stat.merge(child_stat);
+                            tmp = -child_res;
+                        }
+                        if tmp > res {
+                            best = pos;
+                            res = tmp;
+                        }
+                        let res_tuple = (res, best);
+                        let _ = tx.unbounded_send((res_tuple, stat));
+                    })
+                    .unwrap(),
+            );
         }
     }
     drop(tx);
@@ -462,13 +561,17 @@ async fn ybwc(
 #[derive(PartialEq, Debug)]
 enum CacheLookupResult {
     Cut(i8),
-    NoCut(i8, i8, u8)
+    NoCut(i8, i8, u8),
 }
 
-fn make_lookup_result(res_cache: Option<ResCache>, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
+fn make_lookup_result(
+    res_cache: Option<ResCache>,
+    alpha: &mut i8,
+    beta: &mut i8,
+) -> CacheLookupResult {
     let (lower, upper, old_best) = match res_cache {
         Some(cache) => (cache.lower, cache.upper, cache.best),
-        None => (-64, 64, PASS as u8)
+        None => (-64, 64, PASS as u8),
     };
     let old_alpha = *alpha;
     *alpha = max(lower, *alpha);
@@ -488,19 +591,22 @@ fn make_lookup_result(res_cache: Option<ResCache>, alpha: &mut i8, beta: &mut i8
 fn test_lookup_result() {
     const TEST_BASE81: &str = "!#jiR;rO[ORNM2MN";
     let board = Board::from_base81(TEST_BASE81).unwrap();
-    let res_cache = ResCache{
+    let res_cache = ResCache {
         board,
         lower: -24,
         upper: 16,
         gen: 3,
-        best: 0
+        best: 0,
     };
     // [alpha, beta] is contained in [lower, upper]
     {
         let mut alpha = -12;
         let mut beta = 4;
         let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
-        assert_eq!(result, CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best));
+        assert_eq!(
+            result,
+            CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+        );
         assert_eq!(alpha, -12);
         assert_eq!(beta, 4);
     }
@@ -509,7 +615,10 @@ fn test_lookup_result() {
         let mut alpha = -30;
         let mut beta = 20;
         let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
-        assert_eq!(result, CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best));
+        assert_eq!(
+            result,
+            CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+        );
         assert_eq!(alpha, res_cache.lower);
         assert_eq!(beta, res_cache.upper);
     }
@@ -518,7 +627,10 @@ fn test_lookup_result() {
         let mut alpha = -32;
         let mut beta = 8;
         let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
-        assert_eq!(result, CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best));
+        assert_eq!(
+            result,
+            CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+        );
         assert_eq!(alpha, res_cache.lower);
         assert_eq!(beta, 8);
     }
@@ -527,7 +639,10 @@ fn test_lookup_result() {
         let mut alpha = -6;
         let mut beta = 26;
         let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
-        assert_eq!(result, CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best));
+        assert_eq!(
+            result,
+            CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+        );
         assert_eq!(alpha, -6);
         assert_eq!(beta, res_cache.upper);
     }
@@ -578,12 +693,12 @@ fn test_lookup_result() {
     }
     // alpha < lower = upper < beta
     {
-        let res_cache = ResCache{
+        let res_cache = ResCache {
             board,
             lower: 16,
             upper: 16,
             gen: 3,
-            best: 0
+            best: 0,
         };
         let mut alpha = -38;
         let mut beta = 30;
@@ -594,14 +709,26 @@ fn test_lookup_result() {
     }
 }
 
-fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
+fn lookup_table(
+    solve_obj: &mut SolveObj,
+    board: Board,
+    alpha: &mut i8,
+    beta: &mut i8,
+) -> CacheLookupResult {
     let res_cache = solve_obj.res_cache.get(board);
     make_lookup_result(res_cache, alpha, beta)
 }
 
-fn make_record(gen: u16, board: Board,
-               res: i8, best: u8, alpha: i8, beta: i8,
-               lower: i8, upper: i8) -> ResCache {
+fn make_record(
+    gen: u16,
+    board: Board,
+    res: i8,
+    best: u8,
+    alpha: i8,
+    beta: i8,
+    lower: i8,
+    upper: i8,
+) -> ResCache {
     let range = if res <= alpha {
         (lower, min(upper, res))
     } else if res >= beta {
@@ -614,12 +741,30 @@ fn make_record(gen: u16, board: Board,
         lower: range.0,
         upper: range.1,
         gen: gen,
-        best
+        best,
     }
 }
 
-fn update_table(solve_obj: &mut SolveObj, board: Board, res: i8, best: u8, alpha: i8, beta: i8, lower: i8, upper: i8) {
-    let record = make_record(solve_obj.res_cache.gen, board, res, best, alpha, beta, lower, upper);
+fn update_table(
+    solve_obj: &mut SolveObj,
+    board: Board,
+    res: i8,
+    best: u8,
+    alpha: i8,
+    beta: i8,
+    lower: i8,
+    upper: i8,
+) {
+    let record = make_record(
+        solve_obj.res_cache.gen,
+        board,
+        res,
+        best,
+        alpha,
+        beta,
+        lower,
+        upper,
+    );
     solve_obj.res_cache.update(record);
 }
 
@@ -637,8 +782,13 @@ fn stability_cut(board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
 }
 
 fn solve_inner(
-        solve_obj: &mut SolveObj, board: Board, mut alpha: i8, mut beta: i8, passed: bool,
-        depth: i8) -> (i8, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    mut beta: i8,
+    passed: bool,
+    depth: i8,
+) -> (i8, SolveStat) {
     let rem = popcnt(board.empty());
     if rem == 0 {
         (board.score(), SolveStat::zero())
@@ -652,8 +802,24 @@ fn solve_inner(
         if rem >= solve_obj.params.stability_cut_limit {
             match stability_cut(board.clone(), &mut alpha, &mut beta) {
                 CutType::NoCut => (),
-                CutType::MoreThanBeta(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 }),
-                CutType::LessThanAlpha(v) => return (v, SolveStat { node_count: 1, st_cut_count: 1 })
+                CutType::MoreThanBeta(v) => {
+                    return (
+                        v,
+                        SolveStat {
+                            node_count: 1,
+                            st_cut_count: 1,
+                        },
+                    )
+                }
+                CutType::LessThanAlpha(v) => {
+                    return (
+                        v,
+                        SolveStat {
+                            node_count: 1,
+                            st_cut_count: 1,
+                        },
+                    )
+                }
             }
         }
         if rem < solve_obj.params.res_cache_limit {
@@ -661,7 +827,7 @@ fn solve_inner(
         } else {
             let (lower, upper) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
                 CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
-                CacheLookupResult::NoCut(l, u, _) => (l, u)
+                CacheLookupResult::NoCut(l, u, _) => (l, u),
             };
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed, depth);
             update_table(solve_obj, board, res, PASS as u8, alpha, beta, lower, upper);
@@ -689,7 +855,7 @@ fn test_solve_inner() {
         res_cache_limit: 9,
         stability_cut_limit: 7,
         ffs_ordering_limit: 6,
-        static_ordering_limit: 3
+        static_ordering_limit: 3,
     };
     for (idx, line) in reader.lines().enumerate() {
         let line_str = line.unwrap();
@@ -697,22 +863,33 @@ fn test_solve_inner() {
         match Board::from_base81(&line_str[..16]) {
             Ok(board) => {
                 let mut obj = SolveObj::new(
-                    res_cache.clone(), eval_cache.clone(), evaluator.clone(), search_params.clone(), pool.clone());
-                let (res, stat) = solve_inner(
-                    &mut obj, board, -64, 64, false, 0);
+                    res_cache.clone(),
+                    eval_cache.clone(),
+                    evaluator.clone(),
+                    search_params.clone(),
+                    pool.clone(),
+                );
+                let (res, stat) = solve_inner(&mut obj, board, -64, 64, false, 0);
                 if res != desired {
                     board.print();
                 }
                 assert_eq!(res, desired);
-            },
-            Err(_) => { assert!(false); }
+            }
+            Err(_) => {
+                assert!(false);
+            }
         }
     }
 }
 
 fn solve_outer(
-    solve_obj: &mut SolveObj, board: Board, mut alpha: i8, mut beta: i8, passed: bool,
-    depth: i8) -> BoxFuture<'static, (i8, Option<u8>, SolveStat)> {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    mut alpha: i8,
+    mut beta: i8,
+    passed: bool,
+    depth: i8,
+) -> BoxFuture<'static, (i8, Option<u8>, SolveStat)> {
     let mut solve_obj = solve_obj.clone();
     async move {
         let rem = popcnt(board.empty());
@@ -722,41 +899,92 @@ fn solve_outer(
         } else {
             match stability_cut(board.clone(), &mut alpha, &mut beta) {
                 CutType::NoCut => (),
-                CutType::MoreThanBeta(v) => return (v, None, SolveStat { node_count: 1, st_cut_count: 1 }),
-                CutType::LessThanAlpha(v) => return (v, None, SolveStat { node_count: 1, st_cut_count: 1 })
+                CutType::MoreThanBeta(v) => {
+                    return (
+                        v,
+                        None,
+                        SolveStat {
+                            node_count: 1,
+                            st_cut_count: 1,
+                        },
+                    )
+                }
+                CutType::LessThanAlpha(v) => {
+                    return (
+                        v,
+                        None,
+                        SolveStat {
+                            node_count: 1,
+                            st_cut_count: 1,
+                        },
+                    )
+                }
             }
-            let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
-                CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
-                CacheLookupResult::NoCut(l, u, b) => (l, u, b)
-            };
-            let (res, best, stat) = if depth >= solve_obj.params.ybwc_depth_limit || rem < solve_obj.params.ybwc_empties_limit {
-                move_ordering_by_eval(&mut solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await
+            let (lower, upper, old_best) =
+                match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
+                    CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
+                    CacheLookupResult::NoCut(l, u, b) => (l, u, b),
+                };
+            let (res, best, stat) = if depth >= solve_obj.params.ybwc_depth_limit
+                || rem < solve_obj.params.ybwc_empties_limit
+            {
+                move_ordering_by_eval(
+                    &mut solve_obj,
+                    board.clone(),
+                    alpha,
+                    beta,
+                    passed,
+                    old_best,
+                    depth,
+                )
+                .await
             } else {
-                ybwc(&mut solve_obj, board.clone(), alpha, beta, passed, old_best, depth).await
+                ybwc(
+                    &mut solve_obj,
+                    board.clone(),
+                    alpha,
+                    beta,
+                    passed,
+                    old_best,
+                    depth,
+                )
+                .await
             };
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(&mut solve_obj, board, res, best, alpha, beta, lower, upper);
             }
             (res, Some(best), stat)
         }
-    }.boxed()
+    }
+    .boxed()
 }
 
 pub fn solve(
-        solve_obj: &mut SolveObj, board: Board, alpha: i8, beta: i8, passed: bool,
-        depth: i8) -> (i8, Option<u8>, SolveStat) {
+    solve_obj: &mut SolveObj,
+    board: Board,
+    alpha: i8,
+    beta: i8,
+    passed: bool,
+    depth: i8,
+) -> (i8, Option<u8>, SolveStat) {
     executor::block_on(solve_outer(solve_obj, board, alpha, beta, passed, depth))
 }
 
-fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
-         evaluator: Arc<Evaluator>,
-         cache: &mut EvalCacheTable,
-         old_best: u8, depth: i8) -> (i16, usize) {
+fn think_impl(
+    board: Board,
+    mut alpha: i16,
+    beta: i16,
+    passed: bool,
+    evaluator: Arc<Evaluator>,
+    cache: &mut EvalCacheTable,
+    old_best: u8,
+    depth: i8,
+) -> (i16, usize) {
     let mut v = vec![(0i16, 0i16, 0i8, 0usize, board.clone()); 0];
     let mut w = vec![(0i8, 0usize, board.clone()); 0];
     let mut empties = board.empty();
     while empties != 0 {
-        let bit = empties  & empties.wrapping_neg();
+        let bit = empties & empties.wrapping_neg();
         empties = empties & (empties - 1);
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
@@ -767,8 +995,8 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
                     0
                 };
                 v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
-            },
-            Err(_) => ()
+            }
+            Err(_) => (),
         }
     }
     v.sort_by(|a, b| {
@@ -795,8 +1023,14 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
     for (i, (pos, next)) in nexts.iter().enumerate() {
         if i == 0 {
             res = -think(
-                    next.clone(), -beta, -alpha, false, evaluator.clone(),
-                    cache, depth-1);
+                next.clone(),
+                -beta,
+                -alpha,
+                false,
+                evaluator.clone(),
+                cache,
+                depth - 1,
+            );
             best = *pos;
         } else {
             let reduce = if -evaluator.eval(next.clone()) < alpha - 16 * SCALE {
@@ -805,8 +1039,14 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
                 1
             };
             let tmp = -think(
-                    next.clone(), -alpha-1, -alpha, false, evaluator.clone(),
-                    cache, depth-reduce);
+                next.clone(),
+                -alpha - 1,
+                -alpha,
+                false,
+                evaluator.clone(),
+                cache,
+                depth - reduce,
+            );
             if tmp > res {
                 res = tmp;
                 best = *pos;
@@ -817,8 +1057,14 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
             if res > alpha {
                 alpha = res;
                 res = res.max(-think(
-                        next.clone(), -beta, -alpha, false, evaluator.clone(),
-                        cache, depth-1));
+                    next.clone(),
+                    -beta,
+                    -alpha,
+                    false,
+                    evaluator.clone(),
+                    cache,
+                    depth - 1,
+                ));
             }
         }
         alpha = alpha.max(res);
@@ -830,18 +1076,24 @@ fn think_impl(board: Board, mut alpha: i16, beta: i16, passed: bool,
         if passed {
             return ((board.score() as i16) * SCALE, PASS);
         } else {
-            return (-think(
-                board.pass(), -beta, -alpha, true, evaluator,
-                cache, depth), PASS);
+            return (
+                -think(board.pass(), -beta, -alpha, true, evaluator, cache, depth),
+                PASS,
+            );
         }
     }
     (res, best)
 }
 
-pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
-         evaluator: Arc<Evaluator>,
-         cache: &mut EvalCacheTable,
-         depth: i8) -> i16 {
+pub fn think(
+    board: Board,
+    alpha: i16,
+    beta: i16,
+    passed: bool,
+    evaluator: Arc<Evaluator>,
+    cache: &mut EvalCacheTable,
+    depth: i8,
+) -> i16 {
     if depth <= 0 {
         let res = evaluator.eval(board.clone());
         res
@@ -853,21 +1105,24 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
                 } else {
                     (-64 * SCALE, 64 * SCALE, entry.best)
                 }
-            },
-            None => (-64 * SCALE, 64 * SCALE, PASS as u8)
+            }
+            None => (-64 * SCALE, 64 * SCALE, PASS as u8),
         };
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
         if new_alpha >= new_beta {
-            return if alpha > upper {
-                upper
-            } else {
-                lower
-            }
+            return if alpha > upper { upper } else { lower };
         }
         let (res, best) = think_impl(
-            board.clone(), new_alpha, new_beta, passed, evaluator,
-            cache, old_best, depth);
+            board.clone(),
+            new_alpha,
+            new_beta,
+            passed,
+            evaluator,
+            cache,
+            old_best,
+            depth,
+        );
         let range = if res <= new_alpha {
             (-64 * SCALE, res)
         } else if res >= new_beta {
@@ -881,7 +1136,7 @@ pub fn think(board: Board, alpha: i16, beta: i16, passed: bool,
             upper: range.1,
             gen: cache.gen,
             best: best as u8,
-            depth
+            depth,
         };
         cache.update(entry);
         res

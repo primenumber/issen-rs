@@ -1,12 +1,12 @@
-use std::mem;
-use std::cmp::max;
-use std::io::{BufRead,BufReader,Read};
-use std::fs::File;
-use std::str::FromStr;
-use std::path::Path;
-use std::ops::RangeInclusive;
 use crate::bits::*;
 use crate::board::*;
+use std::cmp::max;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
+use std::mem;
+use std::ops::RangeInclusive;
+use std::path::Path;
+use std::str::FromStr;
 use yaml_rust::yaml;
 
 pub struct Evaluator {
@@ -14,14 +14,14 @@ pub struct Evaluator {
     weights: Vec<Vec<i16>>,
     offsets: Vec<usize>,
     patterns: Vec<u64>,
-    base3: Vec<usize>
+    base3: Vec<usize>,
 }
 
 fn pow3(x: i8) -> usize {
     if x == 0 {
         1
     } else {
-        3 * pow3(x-1)
+        3 * pow3(x - 1)
     }
 }
 
@@ -42,7 +42,9 @@ impl Evaluator {
         let masks = &config["masks"];
         for pattern_obj in masks.clone() {
             let pattern_str = pattern_obj.as_str().unwrap();
-            let bits = flip_vertical(flip_horizontal(u64::from_str_radix(&pattern_str, 2).unwrap()));
+            let bits = flip_vertical(flip_horizontal(
+                u64::from_str_radix(&pattern_str, 2).unwrap(),
+            ));
             patterns.push(bits);
             offsets.push(length);
             length += pow3(popcnt(bits));
@@ -61,13 +63,17 @@ impl Evaluator {
             value_file.read(&mut buf).unwrap();
             for i in 0usize..length {
                 let mut ary: [u8; 8] = Default::default();
-                ary.copy_from_slice(&buf[(8*i)..(8*(i+1))]);
-                weights[num - from][i] = (SCALE as f64 * unsafe { mem::transmute::<[u8; 8], f64>(ary) }).max(SCALE as f64 * -64.0).min(SCALE as f64 * 64.0).round() as i16;
+                ary.copy_from_slice(&buf[(8 * i)..(8 * (i + 1))]);
+                weights[num - from][i] = (SCALE as f64
+                    * unsafe { mem::transmute::<[u8; 8], f64>(ary) })
+                .max(SCALE as f64 * -64.0)
+                .min(SCALE as f64 * 64.0)
+                .round() as i16;
             }
         }
 
-        let mut base3 = vec![0; 1<<max_bits];
-        for i in 0usize..(1usize<<max_bits) {
+        let mut base3 = vec![0; 1 << max_bits];
+        for i in 0usize..(1usize << max_bits) {
             let mut sum = 0;
             for j in 0..max_bits {
                 if ((i >> j) & 1) != 0 {
@@ -76,7 +82,13 @@ impl Evaluator {
             }
             base3[i] = sum;
         }
-        Evaluator { stones_range, weights, offsets, patterns, base3 }
+        Evaluator {
+            stones_range,
+            weights,
+            offsets,
+            patterns,
+            base3,
+        }
     }
 
     fn eval_impl(&self, board: Board, index: usize) -> i32 {
@@ -84,9 +96,9 @@ impl Evaluator {
         for (i, pattern) in self.patterns.iter().enumerate() {
             let player_pattern = pext(board.player, *pattern) as usize;
             let opponent_pattern = pext(board.opponent, *pattern) as usize;
-            score += self.weights[index][
-                self.offsets[i] + self.base3[player_pattern]
-                + 2*self.base3[opponent_pattern]] as i32;
+            score += self.weights[index]
+                [self.offsets[i] + self.base3[player_pattern] + 2 * self.base3[opponent_pattern]]
+                as i32;
         }
         score
     }
@@ -94,7 +106,9 @@ impl Evaluator {
     pub fn eval(&self, mut board: Board) -> i16 {
         let mut score = 0i32;
         let rem: usize = popcnt(board.empty()) as usize;
-        let stones = (64 - rem).max(*self.stones_range.start()).min(*self.stones_range.end());
+        let stones = (64 - rem)
+            .max(*self.stones_range.start())
+            .min(*self.stones_range.end());
         let index = stones - self.stones_range.start();
         for _i in 0..4 {
             score += self.eval_impl(board.clone(), index);
@@ -112,4 +126,3 @@ impl Evaluator {
         }) as i16
     }
 }
-

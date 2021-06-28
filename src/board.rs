@@ -1,14 +1,14 @@
-use std::io::{BufWriter, Write};
-use std::str::FromStr;
-use packed_simd::*;
 use crate::bits::*;
 use lazy_static::lazy_static;
+use packed_simd::*;
+use std::io::{BufWriter, Write};
+use std::str::FromStr;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Board {
     pub player: u64,
     pub opponent: u64,
-    pub is_black: bool
+    pub is_black: bool,
 }
 
 #[derive(Debug)]
@@ -23,16 +23,18 @@ impl Board {
     fn flip_simd(&self, pos: usize) -> u64x4 {
         let p = u64x4::new(self.player, self.player, self.player, self.player);
         let o = u64x4::new(self.opponent, self.opponent, self.opponent, self.opponent);
-        let omask = u64x4::new(0xFFFFFFFFFFFFFFFFu64,
-                               0x7E7E7E7E7E7E7E7Eu64,
-                               0x7E7E7E7E7E7E7E7Eu64,
-                               0x7E7E7E7E7E7E7E7Eu64);
+        let omask = u64x4::new(
+            0xFFFFFFFFFFFFFFFFu64,
+            0x7E7E7E7E7E7E7E7Eu64,
+            0x7E7E7E7E7E7E7E7Eu64,
+            0x7E7E7E7E7E7E7E7Eu64,
+        );
         let om = o & omask;
         let mask1 = u64x4::new(
             0x0080808080808080u64,
             0x7f00000000000000u64,
             0x0102040810204000u64,
-            0x0040201008040201u64
+            0x0040201008040201u64,
         );
         let mut mask = mask1 >> (63 - pos) as u32;
         let mut outflank = upper_bit(!om & mask) & p;
@@ -41,7 +43,7 @@ impl Board {
             0x0101010101010100u64,
             0x00000000000000feu64,
             0x0002040810204080u64,
-            0x8040201008040200u64
+            0x8040201008040200u64,
         );
         mask = mask2 << pos as u32;
         outflank = mask & ((om | !mask) + 1) & p;
@@ -74,19 +76,19 @@ impl Board {
 
     pub fn play(&self, pos: usize) -> Result<Board, UnmovableError> {
         if pos >= PASS {
-            return Err(UnmovableError{});
+            return Err(UnmovableError {});
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
-            return Err(UnmovableError{});
+            return Err(UnmovableError {});
         }
         let flip_bits = self.flip(pos);
         if flip_bits == 0 {
-            return Err(UnmovableError{});
+            return Err(UnmovableError {});
         }
         Ok(Board {
             player: self.opponent ^ flip_bits,
             opponent: (self.player ^ flip_bits) | (1u64 << pos),
-            is_black: !self.is_black
+            is_black: !self.is_black,
         })
     }
 
@@ -94,7 +96,7 @@ impl Board {
         Board {
             player: self.opponent,
             opponent: self.player,
-            is_black: !self.is_black
+            is_black: !self.is_black,
         }
     }
 
@@ -108,7 +110,7 @@ impl Board {
             0x7e7e7e7e7e7e7e7eu64,
             0x7e7e7e7e7e7e7e7eu64,
             0x7e7e7e7e7e7e7e7eu64,
-            0xffffffffffffffffu64
+            0xffffffffffffffffu64,
         );
         let v_player = u64x4::splat(self.player);
         let masked_op = u64x4::splat(self.opponent) & mask;
@@ -133,7 +135,7 @@ impl Board {
         let mut result = Vec::new();
         let mut empties = self.empty();
         while empties != 0 {
-            let bit = empties  & empties.wrapping_neg();
+            let bit = empties & empties.wrapping_neg();
             empties = empties & (empties - 1);
             let pos = popcnt(bit - 1) as usize;
             if self.is_movable(pos) {
@@ -180,9 +182,9 @@ impl Board {
         if pcnt == ocnt {
             0
         } else if pcnt > ocnt {
-            64 - 2*ocnt
+            64 - 2 * ocnt
         } else {
-            -64 + 2*pcnt
+            -64 + 2 * pcnt
         }
     }
 
@@ -190,7 +192,7 @@ impl Board {
         Board {
             player: flip_diag(self.player),
             opponent: flip_diag(self.opponent),
-            is_black: self.is_black
+            is_black: self.is_black,
         }
     }
 
@@ -198,7 +200,7 @@ impl Board {
         Board {
             player: rot90(self.player),
             opponent: rot90(self.opponent),
-            is_black: self.is_black
+            is_black: self.is_black,
         }
     }
 
@@ -207,9 +209,7 @@ impl Board {
         const MASK_BOTTOM: u64 = 0xFF00_0000_0000_0000;
         const MASK_LEFT: u64 = 0x0101_0101_0101_0101;
         const MASK_RIGHT: u64 = 0x8080_8080_8080_8080;
-        const MASKS: [u64; 4] = [
-            MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT
-        ];
+        const MASKS: [u64; 4] = [MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT];
         let mut res = 0;
         // FIXME: edge stability is buggy
         //for mask in &MASKS {
@@ -248,7 +248,7 @@ impl Board {
 
     pub fn from_base81(s: &str) -> Result<Board, BoardParseError> {
         if s.len() != 16 {
-            return Err(BoardParseError{});
+            return Err(BoardParseError {});
         }
         let mut player = 0;
         let mut opponent = 0;
@@ -265,16 +265,20 @@ impl Board {
                 match t {
                     1 => {
                         player |= 1 << (i * 4 + j);
-                    },
+                    }
                     2 => {
                         opponent |= 1 << (i * 4 + j);
-                    },
+                    }
                     0 => (),
-                    _ => return Err(BoardParseError{})
+                    _ => return Err(BoardParseError {}),
                 }
             }
         }
-        Ok(Board{ player, opponent, is_black: true })
+        Ok(Board {
+            player,
+            opponent,
+            is_black: true,
+        })
     }
 }
 
@@ -283,7 +287,7 @@ impl FromStr for Board {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() <= 66 {
-            return Err(BoardParseError{});
+            return Err(BoardParseError {});
         }
         let mut black = 0u64;
         let mut white = 0u64;
@@ -291,20 +295,28 @@ impl FromStr for Board {
             match c {
                 'X' => black |= 1u64 << i,
                 'O' => white |= 1u64 << i,
-                _ => ()
+                _ => (),
             }
         }
         if s.chars().nth(65) == Some('X') {
-            Ok(Board{ player: black, opponent: white, is_black: true })
+            Ok(Board {
+                player: black,
+                opponent: white,
+                is_black: true,
+            })
         } else if s.chars().nth(65) == Some('O') {
-            Ok(Board{ player: white, opponent: black, is_black: false })
+            Ok(Board {
+                player: white,
+                opponent: black,
+                is_black: false,
+            })
         } else {
-            Err(BoardParseError{})
+            Err(BoardParseError {})
         }
     }
 }
 
-pub fn weighted_mobility(board: & Board) -> i8 {
+pub fn weighted_mobility(board: &Board) -> i8 {
     let b = board.mobility_bits();
     let corner = 0x8100000000000081u64;
     popcnt(b) + popcnt(b & corner)
@@ -314,7 +326,7 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
     let index = BASE3[board.player as usize] + 2 * BASE3[board.opponent as usize];
     match memo[index] {
         Some(res) => return res,
-        None => ()
+        None => (),
     }
     let mut res = 0xFFFF_FFFF_FFFF_FFFF;
     let mut pass = true;
@@ -343,7 +355,7 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
         let next = Board {
             player: board.opponent,
             opponent: board.player | (1 << pos),
-            is_black: !board.is_black
+            is_black: !board.is_black,
         };
         res &= !(1 << pos);
         res &= stable_bits_8(next, false, memo);
@@ -362,16 +374,16 @@ lazy_static! {
             for j in 0..8 {
                 let state = tmp % 3;
                 match state {
-                    1 => {me |= 1 << j},
-                    2 => {op |= 1 << j},
-                    _ => ()
+                    1 => me |= 1 << j,
+                    2 => op |= 1 << j,
+                    _ => (),
                 }
                 tmp /= 3;
             }
-            let board = Board{
+            let board = Board {
                 player: me,
                 opponent: op,
-                is_black: true
+                is_black: true,
             };
             stable_bits_8(board, false, &mut memo);
         }
@@ -391,20 +403,20 @@ mod tests {
     enum State {
         Empty,
         Player,
-        Opponent
+        Opponent,
     }
 
     #[derive(Clone)]
     struct NaiveBoard {
         data: [State; 64],
-        is_black: bool
+        is_black: bool,
     }
 
     impl From<Board> for NaiveBoard {
         fn from(board: Board) -> Self {
             let mut res = NaiveBoard {
                 data: [State::Empty; 64],
-                is_black: board.is_black
+                is_black: board.is_black,
             };
             for i in 0..64 {
                 if ((board.player >> i) & 1) == 1 {
@@ -425,17 +437,17 @@ mod tests {
                 match naive_board.data[i] {
                     State::Player => {
                         player |= 1 << i;
-                    },
+                    }
                     State::Opponent => {
                         opponent |= 1 << i;
-                    },
-                    _ => ()
+                    }
+                    _ => (),
                 }
             }
             Board {
                 player,
                 opponent,
-                is_black: naive_board.is_black
+                is_black: naive_board.is_black,
             }
         }
     }
@@ -450,7 +462,7 @@ mod tests {
                 (-1, 0),
                 (-1, -1),
                 (0, -1),
-                (1, -1)
+                (1, -1),
             ];
             if self.data[pos] != State::Empty {
                 return 0;
@@ -475,11 +487,11 @@ mod tests {
                                 res |= 1 << mi;
                             }
                             break;
-                        },
+                        }
                         State::Empty => {
                             break;
-                        },
-                        State::Opponent => ()
+                        }
+                        State::Opponent => (),
                     }
                 }
             }
@@ -498,18 +510,18 @@ mod tests {
 
         fn play(&self, pos: usize) -> Result<NaiveBoard, UnmovableError> {
             if pos >= PASS {
-                return Err(UnmovableError{});
+                return Err(UnmovableError {});
             }
             if self.data[pos] != State::Empty {
-                return Err(UnmovableError{});
+                return Err(UnmovableError {});
             }
             let flip_bits = self.flip(pos);
             if flip_bits == 0 {
-                return Err(UnmovableError{});
+                return Err(UnmovableError {});
             }
             let mut res = NaiveBoard {
                 data: [State::Empty; 64],
-                is_black: !self.is_black
+                is_black: !self.is_black,
             };
             for i in 0..64 {
                 if ((flip_bits >> i) & 1) == 1 {
@@ -562,19 +574,19 @@ mod tests {
                 match self.data[i] {
                     State::Player => {
                         pcnt += 1;
-                    },
+                    }
                     State::Opponent => {
                         ocnt += 1;
-                    },
-                    _ => ()
+                    }
+                    _ => (),
                 }
             }
             if pcnt == ocnt {
                 0
             } else if pcnt > ocnt {
-                64 - 2*ocnt
+                64 - 2 * ocnt
             } else {
-                -64 + 2*pcnt
+                -64 + 2 * pcnt
             }
         }
     }
@@ -589,7 +601,10 @@ mod tests {
             assert_eq!(board.flip(i), naive_board.flip(i));
             assert_eq!(board.is_movable(i), naive_board.is_movable(i));
             if board.is_movable(i) {
-                assert_eq!(board.play(i).unwrap(), Board::from(naive_board.play(i).unwrap()));
+                assert_eq!(
+                    board.play(i).unwrap(),
+                    Board::from(naive_board.play(i).unwrap())
+                );
             }
         }
         assert_eq!(board.empty(), naive_board.empty());
