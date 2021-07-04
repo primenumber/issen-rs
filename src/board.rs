@@ -46,8 +46,8 @@ impl Board {
             0x8040201008040200u64,
         );
         mask = mask2 << pos as u32;
-        outflank = mask & ((om | !mask) + 1) & p;
-        flipped |= (outflank - nonzero(outflank)) & mask;
+        outflank = !((!om & mask) - 1) & (mask & p);
+        flipped |= !(iszero(outflank) - outflank) & mask;
         flipped
     }
 

@@ -13,11 +13,9 @@ pub fn upper_bit(mut x: u64x4) -> u64x4 {
     x & !lowers
 }
 
-pub fn nonzero(x: u64x4) -> u64x4 {
+pub fn iszero(x: u64x4) -> u64x4 {
     let zero = u64x4::new(0, 0, 0, 0);
-    let mask = x.ne(zero);
-    let one = u64x4::new(1, 1, 1, 1);
-    one & u64x4::from_cast(mask)
+    u64x4::from_cast(x.eq(zero))
 }
 
 pub fn popcnt(x: u64) -> i8 {
@@ -108,11 +106,11 @@ mod tests {
         res
     }
 
-    fn nonzero_naive(x: u64x4) -> u64x4 {
+    fn iszero_naive(x: u64x4) -> u64x4 {
         let mut res = u64x4::splat(0);
         for i in 0..4 {
             let y = x.extract(i);
-            let ans = if y != 0 { 1 } else { 0 };
+            let ans = if y == 0 { 0xffffffffffffffff } else { 0 };
             res = res.replace(i, ans);
         }
         res
@@ -192,10 +190,10 @@ mod tests {
             let a = u64x4::from_slice_unaligned(&ary[i..(i + 4)]);
             assert_eq!(upper_bit(a), upper_bit_naive(a));
         }
-        // nonzero
+        // iszero
         for i in 0..=(LENGTH - 4) {
             let a = u64x4::from_slice_unaligned(&ary[i..(i + 4)]);
-            assert_eq!(nonzero(a), nonzero_naive(a));
+            assert_eq!(iszero(a), iszero_naive(a));
         }
         // flip_vertical
         for a in ary.iter() {
