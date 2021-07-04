@@ -21,8 +21,8 @@ pub const PASS: usize = 64;
 
 impl Board {
     fn flip_simd(&self, pos: usize) -> u64x4 {
-        let p = u64x4::new(self.player, self.player, self.player, self.player);
-        let o = u64x4::new(self.opponent, self.opponent, self.opponent, self.opponent);
+        let p = u64x4::splat(self.player);
+        let o = u64x4::splat(self.opponent);
         let omask = u64x4::new(
             0xFFFFFFFFFFFFFFFFu64,
             0x7E7E7E7E7E7E7E7Eu64,
