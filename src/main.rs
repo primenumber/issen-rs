@@ -9,6 +9,7 @@ use crate::board::*;
 use crate::eval::*;
 use crate::search::*;
 use crate::table::*;
+use clap::{App, Arg, SubCommand};
 use futures::executor::ThreadPool;
 use std::fs::File;
 use std::io::prelude::*;
@@ -181,7 +182,7 @@ fn report_stats(stats: &[Stat]) -> () {
     );
 }
 
-fn main() {
+fn ffo_benchmark() {
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 10,
@@ -239,4 +240,70 @@ fn main() {
         &pool,
     ));
     report_stats(&stats);
+}
+
+fn main() {
+    let matches = App::new("Issen-rs")
+        .subcommand(SubCommand::with_name("ffobench").about("Run FFO benchmark 1-79"))
+        .subcommand(
+            SubCommand::with_name("gen-dataset")
+                .about("Generate training dataset")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("train")
+                .about("Train weights")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("pack")
+                .about("Pack weights file")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .get_matches();
+    match matches.subcommand() {
+        ("ffobench", Some(ffobench_matches)) => {
+            ffo_benchmark();
+        }
+        ("gen-dataset", Some(gen_dataset_matches)) => {}
+        ("train", Some(train_matches)) => {}
+        ("pack", Some(pack_matches)) => {}
+        ("", None) => {
+            eprintln!("Need subcommand");
+        }
+        _ => unreachable!(),
+    }
 }
