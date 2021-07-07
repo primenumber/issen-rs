@@ -882,7 +882,7 @@ fn test_solve_inner() {
     }
 }
 
-fn solve_outer(
+pub fn solve_outer(
     solve_obj: &mut SolveObj,
     board: Board,
     mut alpha: i8,

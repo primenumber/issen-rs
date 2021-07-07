@@ -3,12 +3,14 @@ mod board;
 mod eval;
 mod search;
 mod table;
+mod train;
 
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
 use crate::search::*;
 use crate::table::*;
+use crate::train::*;
 use clap::{App, Arg, SubCommand};
 use futures::executor::ThreadPool;
 use std::fs::File;
@@ -246,6 +248,44 @@ fn main() {
     let matches = App::new("Issen-rs")
         .subcommand(SubCommand::with_name("ffobench").about("Run FFO benchmark 1-79"))
         .subcommand(
+            SubCommand::with_name("clean-record")
+                .about("Cleaning record")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("update-record")
+                .about("Update record by end-game search")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("DEPTH")
+                        .short("d")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("gen-dataset")
                 .about("Generate training dataset")
                 .arg(
@@ -259,7 +299,8 @@ fn main() {
                         .short("o")
                         .required(true)
                         .takes_value(true),
-                ),
+                )
+                .arg(Arg::with_name("MAX_OUT").short("n").takes_value(true)),
         )
         .subcommand(
             SubCommand::with_name("train")
@@ -298,7 +339,15 @@ fn main() {
         ("ffobench", Some(ffobench_matches)) => {
             ffo_benchmark();
         }
-        ("gen-dataset", Some(gen_dataset_matches)) => {}
+        ("clean-record", Some(matches)) => {
+            clean_record(matches);
+        }
+        ("update-record", Some(matches)) => {
+            update_record(matches);
+        }
+        ("gen-dataset", Some(gen_dataset_matches)) => {
+            gen_dataset(gen_dataset_matches);
+        }
         ("train", Some(train_matches)) => {}
         ("pack", Some(pack_matches)) => {}
         ("", None) => {
