@@ -2,11 +2,10 @@ use crate::bits::*;
 use crate::board::*;
 use std::cmp::max;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::Read;
 use std::mem;
 use std::ops::RangeInclusive;
 use std::path::Path;
-use std::str::FromStr;
 use yaml_rust::yaml;
 
 pub struct Evaluator {

@@ -52,6 +52,7 @@ pub fn rot90(x: u64) -> u64 {
     flip_vertical(flip_diag(x))
 }
 
+#[allow(dead_code)]
 pub fn mirror_under_8(mut x: u64) -> u64 {
     x = (x >> 4) | ((x << 4) & 0xF0);
     x = ((x >> 2) & 0x33) | ((x << 2) & 0xCC);
@@ -63,6 +64,7 @@ pub fn pext(x: u64, mask: u64) -> u64 {
     x.pext(mask)
 }
 
+#[allow(dead_code)]
 pub fn pdep(x: u64, mask: u64) -> u64 {
     x.pdep(mask)
 }

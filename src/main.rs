@@ -336,7 +336,7 @@ fn main() {
         )
         .get_matches();
     match matches.subcommand() {
-        ("ffobench", Some(ffobench_matches)) => {
+        ("ffobench", Some(_matches)) => {
             ffo_benchmark();
         }
         ("clean-record", Some(matches)) => {
@@ -345,10 +345,10 @@ fn main() {
         ("update-record", Some(matches)) => {
             update_record(matches);
         }
-        ("gen-dataset", Some(gen_dataset_matches)) => {
-            gen_dataset(gen_dataset_matches);
+        ("gen-dataset", Some(matches)) => {
+            gen_dataset(matches);
         }
-        ("train", Some(train_matches)) => {}
+        ("train", Some(_matches)) => {}
         ("pack", Some(matches)) => {
             pack_weights(matches);
         }

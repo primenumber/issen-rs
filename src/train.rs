@@ -353,7 +353,8 @@ pub fn gen_dataset(matches: &ArgMatches) {
         &mut writer,
         "{}\n",
         min(boards_with_results.len(), max_output)
-    );
+    )
+    .unwrap();
     for (idx, (board, score)) in boards_with_results.iter().enumerate() {
         if idx >= max_output {
             break;
