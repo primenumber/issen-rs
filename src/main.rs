@@ -349,7 +349,9 @@ fn main() {
             gen_dataset(gen_dataset_matches);
         }
         ("train", Some(train_matches)) => {}
-        ("pack", Some(pack_matches)) => {}
+        ("pack", Some(matches)) => {
+            pack_weights(matches);
+        }
         ("", None) => {
             eprintln!("Need subcommand");
         }
