@@ -348,7 +348,9 @@ fn main() {
         ("gen-dataset", Some(matches)) => {
             gen_dataset(matches);
         }
-        ("train", Some(_matches)) => {}
+        ("train", Some(matches)) => {
+            train(matches);
+        }
         ("pack", Some(matches)) => {
             pack_weights(matches);
         }

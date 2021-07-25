@@ -7,6 +7,7 @@ use clap::ArgMatches;
 use futures::executor;
 use futures::executor::ThreadPool;
 use futures::task::SpawnExt;
+use rayon::prelude::*;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -14,6 +15,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
 use std::sync::Arc;
+
+const PACKED_SCALE: i32 = 256;
 
 // parse pos string [A-H][1-8]
 fn parse_pos(s: &[u8]) -> Option<usize> {
@@ -442,7 +445,308 @@ fn compress(data: &[u8]) -> (Vec<u8>, usize) {
     (result, data.len())
 }
 
-const PACKED_SCALE: i32 = 256;
+const PATTERNS: [u64; 10] = [
+    0x0000_0000_0000_00ff,
+    0x0000_0000_0000_ff00,
+    0x0000_0000_00ff_0000,
+    0x0000_0000_ff00_0000,
+    0x0000_0000_0303_0303,
+    0x0000_0000_0102_0408,
+    0x0000_0001_0204_0810,
+    0x0000_0102_0408_1020,
+    0x0001_0204_0810_2040,
+    0x0102_0408_1020_4080,
+];
+
+struct Base3 {
+    table: Vec<usize>,
+}
+
+impl Base3 {
+    fn new(max_bits: usize) -> Base3 {
+        let n = 1 << max_bits;
+        let table: Vec<usize> = (0..n)
+            .map(|i| {
+                let mut v = 0;
+                let mut p3 = 1;
+                for j in 0..max_bits {
+                    if (i >> j) & 1 == 1 {
+                        v += p3;
+                    }
+                    p3 *= 3;
+                }
+                v
+            })
+            .collect();
+        Base3 { table }
+    }
+
+    fn to_base3(&self, bit1: usize, bit2: usize) -> usize {
+        self.table[bit1] + 2 * self.table[bit2]
+    }
+}
+
+struct SparseMat {
+    weight: Vec<f64>,
+    col_size: usize,
+    row_starts: Vec<usize>,
+    cols: Vec<usize>,
+}
+
+impl SparseMat {
+    fn row_size(&self) -> usize {
+        self.row_starts.len() - 1
+    }
+
+    fn transpose(&self) -> SparseMat {
+        let mut weight_t = vec![Vec::new(); self.col_size];
+        let mut cols_t = vec![Vec::new(); self.col_size];
+
+        for row in 0..self.row_size() {
+            let row_start = self.row_starts[row];
+            let row_end = self.row_starts[row + 1];
+            for (&col, &w) in self.cols[row_start..row_end]
+                .iter()
+                .zip(&self.weight[row_start..row_end])
+            {
+                cols_t[col].push(row);
+                weight_t[col].push(w);
+            }
+        }
+        let mut row_starts_t = Vec::new();
+        let mut offset = 0;
+        for col_t in &cols_t {
+            row_starts_t.push(offset);
+            offset += col_t.len();
+        }
+        row_starts_t.push(offset);
+        SparseMat {
+            weight: weight_t.into_iter().flatten().collect(),
+            col_size: self.row_size(),
+            row_starts: row_starts_t,
+            cols: cols_t.into_iter().flatten().collect(),
+        }
+    }
+
+    // y = A*x
+    fn mul_vec(&self, x: &[f64], y: &mut [f64]) {
+        y.par_iter_mut().enumerate().for_each(|(row, elem)| {
+            *elem = unsafe {
+                let row_start = *self.row_starts.get_unchecked(row);
+                let row_end = *self.row_starts.get_unchecked(row + 1);
+                let mut ans = 0.;
+                for (col, w) in self.cols[row_start..row_end]
+                    .iter()
+                    .zip(&self.weight[row_start..row_end])
+                {
+                    ans += w * x.get_unchecked(*col);
+                }
+                ans
+            };
+        });
+    }
+
+    // x = A^t*y
+    // Unparallelized
+    #[allow(dead_code)]
+    fn mul_vec_transposed(&self, x: &mut [f64], y: &[f64]) {
+        for e in x.iter_mut() {
+            *e = 0.;
+        }
+        unsafe {
+            for (row, elem) in y.iter().enumerate() {
+                let row_start = *self.row_starts.get_unchecked(row);
+                let row_end = *self.row_starts.get_unchecked(row + 1);
+                let val = *elem;
+                for (col, w) in self.cols[row_start..row_end]
+                    .iter()
+                    .zip(&self.weight[row_start..row_end])
+                {
+                    *x.get_unchecked_mut(*col) += w * val;
+                }
+            }
+        }
+    }
+}
+
+fn norm(x: &[f64]) -> f64 {
+    let mut ans = 0.;
+    for a in x {
+        ans += a * a;
+    }
+    ans
+}
+
+fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
+    let mut pa = vec![0.; spm.row_size()];
+    spm.mul_vec(&a, &mut pa);
+    let mut r = vec![0.; spm.row_size()];
+    for i in 0..spm.row_size() {
+        r[i] = b[i] - pa[i];
+    }
+    let mut p = vec![0.; spm.col_size];
+    let spm_t = spm.transpose();
+    spm_t.mul_vec(&r, &mut p);
+    let mut s = p.clone();
+    let mut old_s_norm = norm(&s);
+    let mut q = vec![0.; spm.row_size()];
+    let mut d = vec![0.; spm.row_size()];
+    for i in 0..iter_num {
+        spm.mul_vec(&p, &mut q);
+        let alpha = old_s_norm / norm(&q);
+        for idx in 0..spm.col_size {
+            a[idx] += alpha * p[idx];
+        }
+        for idx in 0..spm.row_size() {
+            r[idx] -= alpha * q[idx];
+        }
+        spm_t.mul_vec(&r, &mut s);
+        let new_s_norm = norm(&s);
+        if i % 10 == 0 {
+            spm.mul_vec(&a, &mut pa);
+            for j in 0..spm.row_size() {
+                d[j] = b[j] - pa[j];
+            }
+            eprintln!(
+                "Step: {}, CGLS Diff: {}",
+                i,
+                (norm(&d) / d.len() as f64).sqrt()
+            );
+        }
+        if new_s_norm < 1.0 {
+            break;
+        }
+        let beta = new_s_norm / old_s_norm;
+        for idx in 0..spm.col_size {
+            p[idx] = s[idx] + beta * p[idx];
+        }
+        old_s_norm = new_s_norm;
+    }
+}
+
+struct WeightedPattern {
+    weight: Vec<f64>,
+    pattern_starts: Vec<usize>,
+    base3_converter: Base3,
+}
+
+impl WeightedPattern {
+    fn new() -> WeightedPattern {
+        let max_bits = PATTERNS.iter().map(|x| popcnt(*x)).max().unwrap() as usize;
+        let conv = Base3::new(max_bits);
+        let mut vp3 = Vec::new();
+        let mut p3 = 1;
+        for _ in 0..=max_bits {
+            vp3.push(p3);
+            p3 *= 3;
+        }
+        let mut pattern_starts = Vec::new();
+        pattern_starts.push(0);
+        let mut offset = 0;
+        for pattern in PATTERNS.iter() {
+            offset += vp3[popcnt(*pattern) as usize];
+            pattern_starts.push(offset);
+        }
+        // pcnt, ocnt, const
+        offset += 3;
+        pattern_starts.push(offset);
+        WeightedPattern {
+            weight: vec![0.; offset],
+            pattern_starts,
+            base3_converter: conv,
+        }
+    }
+
+    fn generate_indices_impl(&self, board: &Board) -> Vec<usize> {
+        let mut indices = Vec::new();
+        for (idx, pattern) in PATTERNS.iter().enumerate() {
+            let pbit = pext(board.player, *pattern) as usize;
+            let obit = pext(board.opponent, *pattern) as usize;
+            let pattern_index =
+                self.base3_converter.to_base3(pbit, obit) + self.pattern_starts[idx];
+            indices.push(pattern_index);
+        }
+        indices
+    }
+
+    fn generate_indices(&self, board: &Board) -> Vec<usize> {
+        let mut board_rot = board.clone();
+        let mut indices = Vec::new();
+        for _i in 0..4 {
+            indices.extend(self.generate_indices_impl(&board_rot));
+            let board_rev = board_rot.reverse_vertical();
+            indices.extend(self.generate_indices_impl(&board_rev));
+            board_rot = board_rot.rot90();
+        }
+        indices
+    }
+
+    fn train(&mut self, boards: &[Board], scores: &[f64]) {
+        let mut row_starts = Vec::new();
+        row_starts.push(0);
+        let mut mat_weights = Vec::new();
+        let mut cols = Vec::new();
+        let other_params_offset = self.pattern_starts[PATTERNS.len()];
+        for board in boards {
+            let indices = self.generate_indices(board);
+            cols.extend(indices);
+            mat_weights.resize(cols.len(), 1.0);
+            // pcnt, ocnt, const
+            cols.push(other_params_offset + 0);
+            mat_weights.push(popcnt(board.mobility_bits()) as f64);
+            cols.push(other_params_offset + 1);
+            mat_weights.push(popcnt(board.pass().mobility_bits()) as f64);
+            cols.push(other_params_offset + 2);
+            mat_weights.push(1.0);
+            row_starts.push(cols.len());
+        }
+        let spm = SparseMat {
+            weight: mat_weights,
+            col_size: *self.pattern_starts.last().unwrap(),
+            row_starts,
+            cols,
+        };
+        //gradient_descent(&spm, &mut self.weight, scores, 10000);
+        cgls(&spm, &mut self.weight, scores, 300);
+    }
+}
+
+pub fn train(matches: &ArgMatches) -> Option<()> {
+    let input_path = matches.value_of("INPUT").unwrap();
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let in_f = File::open(input_path).ok()?;
+    let mut reader = BufReader::new(in_f);
+
+    let mut input_line = String::new();
+    reader.read_line(&mut input_line).unwrap();
+    let num_boards = input_line.trim().parse().unwrap();
+    let mut boards = Vec::new();
+    let mut scores = Vec::new();
+    for _i in 0..num_boards {
+        input_line.clear();
+        reader.read_line(&mut input_line).unwrap();
+        let player = u64::from_str_radix(&input_line[0..16], 16).ok()?;
+        let opponent = u64::from_str_radix(&input_line[17..33], 16).ok()?;
+        boards.push(Board {
+            player,
+            opponent,
+            is_black: true, // dummy
+        });
+        scores.push(input_line[34..].trim().parse().unwrap());
+    }
+    let mut wp = WeightedPattern::new();
+    wp.train(&boards, &scores);
+
+    let out_f = File::create(output_path).ok()?;
+    let mut writer = BufWriter::new(out_f);
+
+    write!(&mut writer, "{}\n", wp.weight.len()).ok()?;
+    for w in wp.weight {
+        write!(&mut writer, "{}\n", w).ok()?;
+    }
+    Some(())
+}
 
 pub fn pack_weights(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();

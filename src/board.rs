@@ -20,6 +20,14 @@ pub struct BoardParseError;
 pub const PASS: usize = 64;
 
 impl Board {
+    pub fn reverse_vertical(&self) -> Board {
+        Board {
+            player: flip_vertical(self.player),
+            opponent: flip_vertical(self.opponent),
+            is_black: self.is_black,
+        }
+    }
+
     fn flip_simd(&self, pos: usize) -> u64x4 {
         let p = u64x4::splat(self.player);
         let o = u64x4::splat(self.opponent);
