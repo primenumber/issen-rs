@@ -16,6 +16,7 @@ use futures::executor::ThreadPool;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -98,6 +99,19 @@ fn to_si(x: usize) -> String {
     }
 }
 
+fn hand_to_string(hand: u8) -> String {
+    if hand == PASS as u8 {
+        "ps".to_string()
+    } else {
+        let row = hand / 8;
+        let col = hand % 8;
+        let row_char = 0x30 + row;
+        let col_char = 0x41 + col;
+        let s = [col_char, row_char];
+        str::from_utf8(&s).unwrap().to_string()
+    }
+}
+
 struct Stat {
     nodes: usize,
     elapsed: f64,
@@ -115,8 +129,8 @@ fn solve_ffo(
 ) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
-    println!("|No.|empties|result|answer|nodes|time|NPS|");
-    println!("|---:|---:|---:|---:|---:|---:|---:|");
+    println!("|No.|empties|result|answer|move|nodes|time|NPS|");
+    println!("|---:|---:|---:|---:|---:|---:|:--:|---:|");
     let mut stats = Vec::new();
     for line in reader.lines() {
         let line_str = line.unwrap();
@@ -137,12 +151,12 @@ fn solve_ffo(
                 let milli_seconds = end.as_millis() + 1; // ceil up, avoid zero-division
                 let nodes_per_sec = (stat.node_count * 1000) as u128 / milli_seconds;
                 println!(
-                    "|{:2}|{:2}|{:+3}|{:+3}|{:?}|{:>5}|{:4}.{:03}s|{}M/s|",
+                    "|{:2}|{:2}|{:+3}|{:+3}|{}|{:>5}|{:4}.{:03}s|{}M/s|",
                     index,
                     rem,
                     res,
                     desired,
-                    best,
+                    best.map_or("XX".to_string(), |h| hand_to_string(h)),
                     to_si(stat.node_count),
                     end.as_secs(),
                     end.subsec_nanos() / 1_000_000,
