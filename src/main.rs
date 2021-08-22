@@ -11,7 +11,8 @@ use crate::eval::*;
 use crate::search::*;
 use crate::table::*;
 use crate::train::*;
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg, ArgMatches, SubCommand};
+use futures::executor;
 use futures::executor::ThreadPool;
 use std::fs::File;
 use std::io::prelude::*;
@@ -23,14 +24,13 @@ use std::time::Instant;
 
 pub struct HandParseError;
 
-#[allow(dead_code)]
 fn read_hand() -> Option<usize> {
     let mut s = String::new();
     std::io::stdin().read_line(&mut s).unwrap();
     if s.len() < 2 {
         return None;
     }
-    if s == "ps" {
+    if &s[0..2] == "ps" {
         return Some(64);
     }
     let column_code = s.chars().nth(0).unwrap() as usize;
@@ -44,21 +44,73 @@ fn read_hand() -> Option<usize> {
     Some((row_code - '1' as usize) * 8 + (column_code - 'a' as usize))
 }
 
-#[allow(dead_code)]
-fn play(mut board: Board) -> Board {
+fn play(matches: &ArgMatches) -> Board {
+    let player_turn = matches.value_of("player").unwrap() == "B";
+
+    let search_params = SearchParams {
+        reduce: false,
+        ybwc_depth_limit: 10,
+        ybwc_elder_add: 1,
+        ybwc_younger_add: 2,
+        ybwc_empties_limit: 17,
+        eval_ordering_limit: 16,
+        res_cache_limit: 11,
+        stability_cut_limit: 12,
+        ffs_ordering_limit: 6,
+        static_ordering_limit: 3,
+    };
+    let evaluator = Arc::new(Evaluator::new("table"));
+    let mut res_cache = ResCacheTable::new(256, 65536);
+    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let pool = ThreadPool::new().unwrap();
+
+    let mut board = Board {
+        player: 0x0000000810000000,
+        opponent: 0x0000001008000000,
+        is_black: true,
+    };
     while !board.is_gameover() {
-        board.print();
-        println!("Input move");
-        let hand: usize;
-        loop {
-            match read_hand() {
-                Some(h) => {
-                    hand = h;
-                    break;
+        board.print_with_sides();
+        let hand = if board.is_black == player_turn {
+            let hand: usize;
+            loop {
+                println!("Input move");
+                match read_hand() {
+                    Some(h) => {
+                        hand = h;
+                        break;
+                    }
+                    None => (),
                 }
-                None => (),
             }
-        }
+            hand
+        } else {
+            println!("Thinking...");
+            let best = if popcnt(board.empty()) > 22 {
+                let (score, best) = think_with_move(
+                    board,
+                    -64 * SCALE,
+                    64 * SCALE,
+                    false,
+                    evaluator.clone(),
+                    &mut eval_cache,
+                    12,
+                );
+                best
+            } else {
+                let mut obj = SolveObj::new(
+                    res_cache.clone(),
+                    eval_cache.clone(),
+                    evaluator.clone(),
+                    search_params.clone(),
+                    pool.clone(),
+                );
+                executor::block_on(solve_with_move(board, &mut obj))
+            };
+            eval_cache.inc_gen();
+            res_cache.inc_gen();
+            best
+        };
         if hand == 64 {
             board = board.pass();
         } else {
@@ -262,6 +314,14 @@ fn main() {
     let matches = App::new("Issen-rs")
         .subcommand(SubCommand::with_name("ffobench").about("Run FFO benchmark 1-79"))
         .subcommand(
+            SubCommand::with_name("play").about("Interactive play").arg(
+                Arg::with_name("player")
+                    .short("i")
+                    .required(true)
+                    .takes_value(true),
+            ),
+        )
+        .subcommand(
             SubCommand::with_name("clean-record")
                 .about("Cleaning record")
                 .arg(
@@ -352,6 +412,9 @@ fn main() {
     match matches.subcommand() {
         ("ffobench", Some(_matches)) => {
             ffo_benchmark();
+        }
+        ("play", Some(matches)) => {
+            play(matches);
         }
         ("clean-record", Some(matches)) => {
             clean_record(matches);
