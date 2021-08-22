@@ -320,7 +320,8 @@ fn move_ordering_impl(
                     solve_obj.evaluator.clone(),
                     &mut solve_obj.eval_cache,
                     think_depth,
-                );
+                )
+                .0;
                 if new_res <= alpha {
                     let new_alpha = -64 * SCALE;
                     let new_beta = new_res;
@@ -332,7 +333,8 @@ fn move_ordering_impl(
                         solve_obj.evaluator.clone(),
                         &mut solve_obj.eval_cache,
                         think_depth,
-                    );
+                    )
+                    .0;
                     tmp.push((res + bonus, *pos, next.clone()));
                 } else if new_res >= beta {
                     let new_alpha = new_res;
@@ -345,7 +347,8 @@ fn move_ordering_impl(
                         solve_obj.evaluator.clone(),
                         &mut solve_obj.eval_cache,
                         think_depth,
-                    );
+                    )
+                    .0;
                     tmp.push((res + bonus, *pos, next.clone()));
                 } else {
                     res = new_res;
@@ -360,7 +363,8 @@ fn move_ordering_impl(
                     solve_obj.evaluator.clone(),
                     &mut solve_obj.eval_cache,
                     think_depth,
-                );
+                )
+                .0;
                 if new_res < res {
                     let fixed_res = think(
                         next.clone(),
@@ -370,7 +374,8 @@ fn move_ordering_impl(
                         solve_obj.evaluator.clone(),
                         &mut solve_obj.eval_cache,
                         think_depth,
-                    );
+                    )
+                    .0;
                     tmp.push((fixed_res + bonus, *pos, next.clone()));
                     res = fixed_res;
                 } else {
@@ -1028,7 +1033,8 @@ fn think_impl(
                 evaluator.clone(),
                 cache,
                 depth - 1,
-            );
+            )
+            .0;
             best = *pos;
         } else {
             let reduce = if -evaluator.eval(next.clone()) < alpha - 16 * SCALE {
@@ -1044,7 +1050,8 @@ fn think_impl(
                 evaluator.clone(),
                 cache,
                 depth - reduce,
-            );
+            )
+            .0;
             if tmp > res {
                 res = tmp;
                 best = *pos;
@@ -1054,15 +1061,18 @@ fn think_impl(
             }
             if res > alpha {
                 alpha = res;
-                res = res.max(-think(
-                    next.clone(),
-                    -beta,
-                    -alpha,
-                    false,
-                    evaluator.clone(),
-                    cache,
-                    depth - 1,
-                ));
+                res = res.max(
+                    -think(
+                        next.clone(),
+                        -beta,
+                        -alpha,
+                        false,
+                        evaluator.clone(),
+                        cache,
+                        depth - 1,
+                    )
+                    .0,
+                );
             }
         }
         alpha = alpha.max(res);
@@ -1075,7 +1085,7 @@ fn think_impl(
             return ((board.score() as i16) * SCALE, PASS);
         } else {
             return (
-                -think(board.pass(), -beta, -alpha, true, evaluator, cache, depth),
+                -think(board.pass(), -beta, -alpha, true, evaluator, cache, depth).0,
                 PASS,
             );
         }
@@ -1083,7 +1093,7 @@ fn think_impl(
     (res, best)
 }
 
-pub fn think(
+fn think(
     board: Board,
     alpha: i16,
     beta: i16,
@@ -1091,10 +1101,10 @@ pub fn think(
     evaluator: Arc<Evaluator>,
     cache: &mut EvalCacheTable,
     depth: i8,
-) -> i16 {
+) -> (i16, Option<usize>) {
     if depth <= 0 {
         let res = evaluator.eval(board.clone());
-        res
+        (res, None)
     } else {
         let (lower, upper, old_best) = match cache.get(board.clone()) {
             Some(entry) => {
@@ -1109,7 +1119,11 @@ pub fn think(
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
         if new_alpha >= new_beta {
-            return if alpha > upper { upper } else { lower };
+            return if alpha > upper {
+                (upper, None)
+            } else {
+                (lower, None)
+            };
         }
         let (res, best) = think_impl(
             board.clone(),
@@ -1137,6 +1151,43 @@ pub fn think(
             depth,
         };
         cache.update(entry);
-        res
+        (res, Some(best))
     }
+}
+
+pub fn think_with_move(
+    board: Board,
+    mut alpha: i16,
+    beta: i16,
+    passed: bool,
+    evaluator: Arc<Evaluator>,
+    cache: &mut EvalCacheTable,
+    depth: i8,
+) -> (i16, usize) {
+    let (score, best) = think(board, alpha, beta, passed, evaluator.clone(), cache, depth);
+
+    match best {
+        Some(b) => return (score, b),
+        None => (),
+    }
+
+    let mut empties = board.empty();
+    let mut pass = true;
+    while empties != 0 {
+        let bit = empties & empties.wrapping_neg();
+        empties = empties & (empties - 1);
+        let pos = popcnt(bit - 1) as usize;
+        match board.play(pos) {
+            Ok(next) => {
+                let s = -think(next, -beta, -alpha, false, evaluator.clone(), cache, depth).0;
+                if s == score {
+                    return (score, pos);
+                }
+                alpha = alpha.max(s);
+                pass = false;
+            }
+            Err(_) => (),
+        }
+    }
+    (score, PASS)
 }
