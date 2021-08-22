@@ -184,6 +184,33 @@ impl Board {
         }
     }
 
+    pub fn print_with_sides(&self) -> () {
+        let mut writer = BufWriter::new(std::io::stdout());
+        write!(writer, " |abcdefgh\n-+--------\n").unwrap();
+        for r in 0..8 {
+            write!(writer, "{}|", r + 1).unwrap();
+            for c in 0..8 {
+                let i = r * 8 + c;
+                if ((self.player >> i) & 1) != 0 {
+                    if self.is_black {
+                        write!(writer, "X").unwrap();
+                    } else {
+                        write!(writer, "O").unwrap();
+                    }
+                } else if ((self.opponent >> i) & 1) != 0 {
+                    if self.is_black {
+                        write!(writer, "O").unwrap();
+                    } else {
+                        write!(writer, "X").unwrap();
+                    }
+                } else {
+                    write!(writer, ".").unwrap();
+                }
+            }
+            write!(writer, "\n").unwrap();
+        }
+    }
+
     pub fn score(&self) -> i8 {
         let pcnt = popcnt(self.player);
         let ocnt = popcnt(self.opponent);
