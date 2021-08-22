@@ -176,7 +176,7 @@ impl Board {
                     write!(writer, "X").unwrap();
                 }
             } else {
-                write!(writer, "-").unwrap();
+                write!(writer, ".").unwrap();
             }
             if i % 8 == 7 {
                 write!(writer, "\n").unwrap();
