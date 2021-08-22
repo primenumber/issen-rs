@@ -1324,6 +1324,7 @@ pub fn iterative_think(
     }
 
     for depth in (min_depth + 1).. {
+        cache.inc_gen();
         let t = match think_with_move(
             board,
             alpha,
