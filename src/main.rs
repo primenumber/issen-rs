@@ -87,15 +87,16 @@ fn play(matches: &ArgMatches) -> Board {
         } else {
             println!("Thinking...");
             let best = if popcnt(board.empty()) > 22 {
-                let (score, best) = think_with_move(
+                let (score, best, depth) = iterative_think(
                     board,
                     -64 * SCALE,
                     64 * SCALE,
                     false,
                     evaluator.clone(),
                     &mut eval_cache,
-                    12,
+                    1000,
                 );
+                eprintln!("Estimated result: {}, Depth: {}", score, depth);
                 best
             } else {
                 let mut obj = SolveObj::new(
@@ -120,6 +121,8 @@ fn play(matches: &ArgMatches) -> Board {
             }
         }
     }
+    println!("Game over");
+    board.print_with_sides();
     board
 }
 

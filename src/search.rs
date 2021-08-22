@@ -12,6 +12,7 @@ use futures::StreamExt;
 use std::cmp::{max, min};
 use std::mem::MaybeUninit;
 use std::sync::Arc;
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct SearchParams {
@@ -82,6 +83,18 @@ impl SolveObj {
             params,
             pool,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct Timer {
+    period: Instant,
+    time_limit: u128,
+}
+
+impl Timer {
+    fn is_ok(&self) -> bool {
+        self.period.elapsed().as_millis() <= self.time_limit
     }
 }
 
@@ -319,8 +332,10 @@ fn move_ordering_impl(
                     false,
                     solve_obj.evaluator.clone(),
                     &mut solve_obj.eval_cache,
+                    &None,
                     think_depth,
                 )
+                .unwrap()
                 .0;
                 if new_res <= alpha {
                     let new_alpha = -64 * SCALE;
@@ -332,8 +347,10 @@ fn move_ordering_impl(
                         false,
                         solve_obj.evaluator.clone(),
                         &mut solve_obj.eval_cache,
+                        &None,
                         think_depth,
                     )
+                    .unwrap()
                     .0;
                     tmp.push((res + bonus, *pos, next.clone()));
                 } else if new_res >= beta {
@@ -346,8 +363,10 @@ fn move_ordering_impl(
                         false,
                         solve_obj.evaluator.clone(),
                         &mut solve_obj.eval_cache,
+                        &None,
                         think_depth,
                     )
+                    .unwrap()
                     .0;
                     tmp.push((res + bonus, *pos, next.clone()));
                 } else {
@@ -362,8 +381,10 @@ fn move_ordering_impl(
                     false,
                     solve_obj.evaluator.clone(),
                     &mut solve_obj.eval_cache,
+                    &None,
                     think_depth,
                 )
+                .unwrap()
                 .0;
                 if new_res < res {
                     let fixed_res = think(
@@ -373,8 +394,10 @@ fn move_ordering_impl(
                         false,
                         solve_obj.evaluator.clone(),
                         &mut solve_obj.eval_cache,
+                        &None,
                         think_depth,
                     )
+                    .unwrap()
                     .0;
                     tmp.push((fixed_res + bonus, *pos, next.clone()));
                     res = fixed_res;
@@ -1003,8 +1026,9 @@ fn think_impl(
     evaluator: Arc<Evaluator>,
     cache: &mut EvalCacheTable,
     old_best: u8,
+    timer: &Option<Timer>,
     depth: i8,
-) -> (i16, usize) {
+) -> Option<(i16, usize)> {
     let mut v = vec![(0i16, 0i16, 0i8, 0usize, board.clone()); 0];
     let mut w = vec![(0i8, 0usize, board.clone()); 0];
     let mut empties = board.empty();
@@ -1054,8 +1078,9 @@ fn think_impl(
                 false,
                 evaluator.clone(),
                 cache,
+                timer,
                 depth - 1,
-            )
+            )?
             .0;
             best = *pos;
         } else {
@@ -1071,15 +1096,16 @@ fn think_impl(
                 false,
                 evaluator.clone(),
                 cache,
+                timer,
                 depth - reduce,
-            )
+            )?
             .0;
             if tmp > res {
                 res = tmp;
                 best = *pos;
             }
             if res >= beta {
-                return (res, best);
+                return Some((res, best));
             }
             if res > alpha {
                 alpha = res;
@@ -1091,28 +1117,39 @@ fn think_impl(
                         false,
                         evaluator.clone(),
                         cache,
+                        timer,
                         depth - 1,
-                    )
+                    )?
                     .0,
                 );
             }
         }
         alpha = alpha.max(res);
         if alpha >= beta {
-            return (res, best);
+            return Some((res, best));
         }
     }
     if nexts.is_empty() {
         if passed {
-            return ((board.score() as i16) * SCALE, PASS);
+            return Some(((board.score() as i16) * SCALE, PASS));
         } else {
-            return (
-                -think(board.pass(), -beta, -alpha, true, evaluator, cache, depth).0,
+            return Some((
+                -think(
+                    board.pass(),
+                    -beta,
+                    -alpha,
+                    true,
+                    evaluator,
+                    cache,
+                    timer,
+                    depth,
+                )?
+                .0,
                 PASS,
-            );
+            ));
         }
     }
-    (res, best)
+    Some((res, best))
 }
 
 fn think(
@@ -1122,12 +1159,23 @@ fn think(
     passed: bool,
     evaluator: Arc<Evaluator>,
     cache: &mut EvalCacheTable,
+    timer: &Option<Timer>,
     depth: i8,
-) -> (i16, Option<usize>) {
+) -> Option<(i16, Option<usize>)> {
     if depth <= 0 {
         let res = evaluator.eval(board.clone());
-        (res, None)
+        Some((res, None))
     } else {
+        if depth > 8 {
+            match timer {
+                Some(t) => {
+                    if !t.is_ok() {
+                        return None;
+                    }
+                }
+                _ => (),
+            }
+        }
         let (lower, upper, old_best) = match cache.get(board.clone()) {
             Some(entry) => {
                 if entry.depth >= depth {
@@ -1142,9 +1190,9 @@ fn think(
         let new_beta = beta.min(upper);
         if new_alpha >= new_beta {
             return if alpha > upper {
-                (upper, None)
+                Some((upper, None))
             } else {
-                (lower, None)
+                Some((lower, None))
             };
         }
         let (res, best) = think_impl(
@@ -1155,8 +1203,9 @@ fn think(
             evaluator,
             cache,
             old_best,
+            timer,
             depth,
-        );
+        )?;
         let range = if res <= new_alpha {
             (-64 * SCALE, res)
         } else if res >= new_beta {
@@ -1173,7 +1222,7 @@ fn think(
             depth,
         };
         cache.update(entry);
-        (res, Some(best))
+        Some((res, Some(best)))
     }
 }
 
@@ -1184,32 +1233,113 @@ pub fn think_with_move(
     passed: bool,
     evaluator: Arc<Evaluator>,
     cache: &mut EvalCacheTable,
+    timer: &Option<Timer>,
     depth: i8,
-) -> (i16, usize) {
-    let (score, best) = think(board, alpha, beta, passed, evaluator.clone(), cache, depth);
+) -> Option<(i16, usize)> {
+    let (score, hand) = think(
+        board,
+        alpha,
+        beta,
+        passed,
+        evaluator.clone(),
+        cache,
+        timer,
+        depth,
+    )?;
 
-    match best {
-        Some(b) => return (score, b),
+    match hand {
+        Some(b) => return Some((score, b)),
         None => (),
     }
 
-    let mut empties = board.empty();
+    let mut current_score = -64 * SCALE;
+    let mut current_hand = PASS;
     let mut pass = true;
+    let mut empties = board.empty();
     while empties != 0 {
         let bit = empties & empties.wrapping_neg();
         empties = empties & (empties - 1);
         let pos = popcnt(bit - 1) as usize;
         match board.play(pos) {
             Ok(next) => {
-                let s = -think(next, -beta, -alpha, false, evaluator.clone(), cache, depth).0;
-                if s == score {
-                    return (score, pos);
+                let s = -think(
+                    next,
+                    -beta,
+                    -alpha,
+                    false,
+                    evaluator.clone(),
+                    cache,
+                    timer,
+                    depth - 1,
+                )?
+                .0;
+                if s > current_score {
+                    current_hand = pos;
+                    current_score = s;
+                    alpha = max(alpha, current_score);
                 }
-                alpha = alpha.max(s);
                 pass = false;
             }
             Err(_) => (),
         }
     }
-    (score, PASS)
+    if pass {
+        Some((score, PASS))
+    } else {
+        Some((score, current_hand))
+    }
+}
+
+pub fn iterative_think(
+    board: Board,
+    alpha: i16,
+    beta: i16,
+    passed: bool,
+    evaluator: Arc<Evaluator>,
+    cache: &mut EvalCacheTable,
+    time_limit: u128,
+) -> (i16, usize, i8) {
+    let start = Instant::now();
+    let timer = Timer {
+        period: start,
+        time_limit,
+    };
+    let min_depth = 3;
+    let mut current_depth = min_depth;
+
+    let (mut score, mut hand) = think_with_move(
+        board,
+        alpha,
+        beta,
+        passed,
+        evaluator.clone(),
+        cache,
+        &Some(timer.clone()),
+        min_depth,
+    )
+    .unwrap();
+
+    if !timer.is_ok() {
+        return (score, hand, current_depth);
+    }
+
+    for depth in (min_depth + 1).. {
+        let t = match think_with_move(
+            board,
+            alpha,
+            beta,
+            passed,
+            evaluator.clone(),
+            cache,
+            &Some(timer.clone()),
+            depth,
+        ) {
+            Some(t) => t,
+            _ => return (score, hand, current_depth),
+        };
+        score = t.0;
+        hand = t.1;
+        current_depth = depth;
+    }
+    (score, hand, current_depth)
 }
