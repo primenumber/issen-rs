@@ -973,6 +973,28 @@ pub fn solve(
     executor::block_on(solve_outer(solve_obj, board, alpha, beta, passed, depth))
 }
 
+pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> usize {
+    match solve_outer(solve_obj, board, -64, 64, false, 0).await.1 {
+        Some(best) => best as usize,
+        None => {
+            let mut best_pos = None;
+            let mut result = -65;
+            for pos in board.mobility() {
+                let next = board.play(pos).unwrap();
+                let res = -solve_outer(solve_obj, next, -64, -result, false, 0).await.0;
+                if res > result {
+                    result = res;
+                    best_pos = Some(pos);
+                }
+            }
+            match best_pos {
+                Some(pos) => pos,
+                None => PASS,
+            }
+        }
+    }
+}
+
 fn think_impl(
     board: Board,
     mut alpha: i16,
