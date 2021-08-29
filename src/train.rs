@@ -625,8 +625,8 @@ impl WeightedPattern {
             offset += vp3[popcnt(*pattern) as usize];
             pattern_starts.push(offset);
         }
-        // pcnt, ocnt, const
-        offset += 3;
+        // pcnt, ocnt, parity, const
+        offset += 4;
         pattern_starts.push(offset);
         WeightedPattern {
             weight: vec![0.; offset],
@@ -669,12 +669,14 @@ impl WeightedPattern {
             let indices = self.generate_indices(board);
             cols.extend(indices);
             mat_weights.resize(cols.len(), 1.0);
-            // pcnt, ocnt, const
+            // pcnt, ocnt, parity, const
             cols.push(other_params_offset + 0);
             mat_weights.push(popcnt(board.mobility_bits()) as f64);
             cols.push(other_params_offset + 1);
             mat_weights.push(popcnt(board.pass().mobility_bits()) as f64);
             cols.push(other_params_offset + 2);
+            mat_weights.push((popcnt(board.empty()) % 2) as f64);
+            cols.push(other_params_offset + 3);
             mat_weights.push(1.0);
             row_starts.push(cols.len());
         }
