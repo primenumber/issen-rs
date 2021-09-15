@@ -728,6 +728,52 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
     Some(())
 }
 
+pub fn gen_book(matches: &ArgMatches) -> Option<()> {
+    let input_path = matches.value_of("INPUT").unwrap();
+    let output_path = matches.value_of("OUTPUT").unwrap();
+    let max_count = matches.value_of("MAX_COUNT").unwrap().parse().unwrap();
+
+    let in_f = File::open(input_path).ok()?;
+    let mut reader = BufReader::new(in_f);
+
+    let mut input_line = String::new();
+    reader.read_line(&mut input_line).unwrap();
+    let num_boards = input_line.trim().parse().unwrap();
+    let mut boards = Vec::new();
+    let mut scores = Vec::new();
+    for _i in 0..num_boards {
+        input_line.clear();
+        reader.read_line(&mut input_line).unwrap();
+        let player = u64::from_str_radix(&input_line[0..16], 16).ok()?;
+        let opponent = u64::from_str_radix(&input_line[17..33], 16).ok()?;
+        let board = Board {
+            player,
+            opponent,
+            is_black: true, // dummy
+        };
+        if 64 - popcnt(board.empty()) > max_count {
+            continue;
+        }
+        let score = input_line[34..].trim().parse::<i8>().unwrap();
+        boards.push(board);
+        scores.push(score);
+    }
+
+    let out_f = File::create(output_path).ok()?;
+    let mut writer = BufWriter::new(out_f);
+
+    write!(&mut writer, "{}\n", boards.len()).ok()?;
+    for (board, score) in boards.iter().zip(&scores) {
+        write!(
+            &mut writer,
+            "{:016x} {:016x} {}\n",
+            board.player, board.opponent, score
+        )
+        .ok()?;
+    }
+    Some(())
+}
+
 pub fn pack_weights(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();

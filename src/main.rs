@@ -396,6 +396,28 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("gen-book")
+                .about("Generate book")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("MAX_COUNT")
+                        .short("c")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("pack")
                 .about("Pack weights file")
                 .arg(
@@ -430,6 +452,9 @@ fn main() {
         }
         ("train", Some(matches)) => {
             train(matches);
+        }
+        ("gen-book", Some(matches)) => {
+            gen_book(matches);
         }
         ("pack", Some(matches)) => {
             pack_weights(matches);
