@@ -323,7 +323,7 @@ pub fn gen_dataset(matches: &ArgMatches) {
         }
     }
 
-    boards_with_results.retain(|&k, _| popcnt(k.empty()) >= 8);
+    boards_with_results.retain(|&k, _| popcnt(k.empty()) >= 4);
     eprintln!("Remaining board count = {}", boards_with_results.len());
 
     eprintln!("Writing to file...");
