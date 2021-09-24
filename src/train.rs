@@ -527,7 +527,7 @@ impl SparseMat {
     // x = A^t*y
     // Unparallelized
     #[allow(dead_code)]
-    fn mul_vec_transposed(&self, x: &mut [f64], y: &[f64]) {
+    fn mul_vec_transposed(&self, y: &[f64], x: &mut [f64]) {
         for e in x.iter_mut() {
             *e = 0.;
         }
@@ -563,8 +563,8 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
         r[i] = b[i] - pa[i];
     }
     let mut p = vec![0.; spm.col_size];
-    let spm_t = spm.transpose();
-    spm_t.mul_vec(&r, &mut p);
+    //let spm_t = spm.transpose();
+    spm.mul_vec_transposed(&r, &mut p);
     let mut s = p.clone();
     let mut old_s_norm = norm(&s);
     let mut q = vec![0.; spm.row_size()];
@@ -578,7 +578,7 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
         for idx in 0..spm.row_size() {
             r[idx] -= alpha * q[idx];
         }
-        spm_t.mul_vec(&r, &mut s);
+        spm.mul_vec_transposed(&r, &mut s);
         let new_s_norm = norm(&s);
         if i % 10 == 0 {
             spm.mul_vec(&a, &mut pa);
@@ -649,7 +649,7 @@ impl WeightedPattern {
 
     fn generate_indices(&self, board: &Board) -> Vec<usize> {
         let mut board_rot = board.clone();
-        let mut indices = Vec::new();
+        let mut indices = Vec::with_capacity(PATTERNS.len() * 8 + 4);
         for _i in 0..4 {
             indices.extend(self.generate_indices_impl(&board_rot));
             let board_rev = board_rot.reverse_vertical();
@@ -660,10 +660,11 @@ impl WeightedPattern {
     }
 
     fn train(&mut self, boards: &[Board], scores: &[f64]) {
-        let mut row_starts = Vec::new();
+        let expected_size = boards.len() * (4 + 8 * PATTERNS.len());
+        let mut row_starts = Vec::with_capacity(boards.len());
         row_starts.push(0);
-        let mut mat_weights = Vec::new();
-        let mut cols = Vec::new();
+        let mut mat_weights = Vec::with_capacity(expected_size);
+        let mut cols = Vec::with_capacity(expected_size);
         let other_params_offset = self.pattern_starts[PATTERNS.len()];
         for board in boards {
             let indices = self.generate_indices(board);
