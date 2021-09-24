@@ -15,8 +15,8 @@ AVX2 and BMI2 enabled x86\_64 CPU (Intel: Haswell or later, AMD: Excavator or la
 prepare evaluation table
 
 ```Shell
-$ wget https://poyo.me/reversi/table191027.tar.gz
-$ tar xf table191027.tar.gz
+$ wget https://poyo.me/reversi/table210925.tar.gz
+$ tar xf table210925.tar.gz
 ```
 
 ## Run
