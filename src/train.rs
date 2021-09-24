@@ -304,21 +304,23 @@ pub fn gen_dataset(matches: &ArgMatches) {
                 current = current.pass();
                 mobility = current.mobility();
                 if mobility.is_empty() {
-                    boards_with_results.insert(board, board.score());
+                    boards_with_results.insert(board, (board.score(), PASS));
                     continue;
                 }
             }
             let mut best_score = None;
+            let mut best_pos = None;
             for pos in mobility {
                 let next = current.play(pos).unwrap();
-                if let Some(score) = boards_with_results.get(&next) {
+                if let Some((score, _)) = boards_with_results.get(&next) {
                     best_score = Some(max(-score, best_score.unwrap_or(-64)));
+                    best_pos = Some(pos);
                 }
             }
             if is_pass {
-                boards_with_results.insert(board, -best_score.unwrap());
+                boards_with_results.insert(board, (-best_score.unwrap(), best_pos.unwrap()));
             } else {
-                boards_with_results.insert(current, best_score.unwrap());
+                boards_with_results.insert(current, (best_score.unwrap(), best_pos.unwrap()));
             }
         }
     }
@@ -336,14 +338,14 @@ pub fn gen_dataset(matches: &ArgMatches) {
         min(boards_with_results.len(), max_output)
     )
     .unwrap();
-    for (idx, (board, score)) in boards_with_results.iter().enumerate() {
+    for (idx, (board, (score, pos))) in boards_with_results.iter().enumerate() {
         if idx >= max_output {
             break;
         }
         write!(
             &mut writer,
-            "{:016x} {:016x} {}\n",
-            board.player, board.opponent, score
+            "{:016x} {:016x} {} {}\n",
+            board.player, board.opponent, score, pos,
         )
         .unwrap();
     }
@@ -714,7 +716,8 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
             opponent,
             is_black: true, // dummy
         });
-        scores.push(input_line[34..].trim().parse().unwrap());
+        let mut data = input_line[34..].split(' ');
+        scores.push(data.next().unwrap().parse().unwrap());
     }
     let mut wp = WeightedPattern::new();
     wp.train(&boards, &scores);
