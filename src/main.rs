@@ -2,6 +2,7 @@ mod bits;
 mod board;
 mod eval;
 mod search;
+mod serialize;
 mod table;
 mod train;
 
