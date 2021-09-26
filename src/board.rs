@@ -1,6 +1,9 @@
 use crate::bits::*;
+use crate::serialize::*;
+use clap::ArgMatches;
 use lazy_static::lazy_static;
 use packed_simd::*;
+use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
 
@@ -398,6 +401,70 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
     }
     memo[index] = Some(res);
     return res;
+}
+
+pub fn gen_last_table(matches: &ArgMatches) {
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    let mut v = Vec::new();
+    for pos in 0..8 {
+        for bits in 0..256 {
+            let board = Board {
+                player: bits,
+                opponent: !(bits | (1 << pos)),
+                is_black: true,
+            };
+            let fcnt = popcnt(board.flip(pos));
+            v.push(fcnt);
+        }
+    }
+    for chunk in v.chunks(2) {
+        let val = chunk[0] | (chunk[1] << 3);
+        write!(writer, "{}", encode_base64_impl(val as u8).unwrap() as char).unwrap();
+    }
+    write!(writer, "\n").unwrap();
+}
+
+pub fn gen_last_mask(matches: &ArgMatches) {
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    for pos in 0..64i8 {
+        let mut masks: [u64; 3] = [0, 0, 0];
+        let pr = pos / 8;
+        let pc = pos % 8;
+        for row in 0..8 {
+            for col in 0..8 {
+                let index = row * 8 + col;
+                if col == pc {
+                    masks[0] |= 1u64 << index;
+                }
+                if row + pc == pr + col {
+                    masks[1] |= 1u64 << index;
+                }
+                if row + col == pr + pc {
+                    masks[2] |= 1u64 << index;
+                }
+            }
+        }
+        for mask in masks {
+            for row in 0..8 {
+                let mask_in_the_row = (mask >> (8 * row)) & 0xff;
+                let col = if mask_in_the_row == 0 {
+                    8
+                } else {
+                    mask_in_the_row.trailing_zeros()
+                };
+                write!(writer, "{}", col);
+            }
+        }
+    }
+    write!(writer, "\n").unwrap();
 }
 
 lazy_static! {

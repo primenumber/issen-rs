@@ -434,6 +434,26 @@ fn main() {
                         .takes_value(true),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("last-table")
+                .about("Generate last move flip count table")
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("last-mask")
+                .about("Generate last move flip count mask")
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
         .get_matches();
     match matches.subcommand() {
         ("ffobench", Some(_matches)) => {
@@ -459,6 +479,12 @@ fn main() {
         }
         ("pack", Some(matches)) => {
             pack_weights(matches);
+        }
+        ("last-table", Some(matches)) => {
+            gen_last_table(matches);
+        }
+        ("last-mask", Some(matches)) => {
+            gen_last_mask(matches);
         }
         ("", None) => {
             eprintln!("Need subcommand");
