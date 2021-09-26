@@ -460,7 +460,7 @@ pub fn gen_last_mask(matches: &ArgMatches) {
                 } else {
                     mask_in_the_row.trailing_zeros()
                 };
-                write!(writer, "{}", col);
+                write!(writer, "{}", col).unwrap();
             }
         }
     }
