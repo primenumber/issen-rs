@@ -163,6 +163,7 @@ impl Board {
         self.pass().mobility().is_empty()
     }
 
+    #[allow(dead_code)]
     pub fn print(&self) -> () {
         let mut writer = BufWriter::new(std::io::stdout());
         for i in 0..64 {

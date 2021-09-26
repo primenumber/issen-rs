@@ -404,6 +404,7 @@ impl SparseMat {
         self.row_starts.len() - 1
     }
 
+    #[allow(dead_code)]
     fn transpose(&self) -> SparseMat {
         let mut weight_t = vec![Vec::new(); self.col_size];
         let mut cols_t = vec![Vec::new(); self.col_size];
