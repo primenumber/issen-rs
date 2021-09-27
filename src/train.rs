@@ -636,14 +636,15 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
     for _i in 0..num_boards {
         input_line.clear();
         reader.read_line(&mut input_line).unwrap();
-        let player = u64::from_str_radix(&input_line[0..16], 16).ok()?;
-        let opponent = u64::from_str_radix(&input_line[17..33], 16).ok()?;
+        let data: Vec<&str> = input_line.split(' ').collect();
+        let player = u64::from_str_radix(&data[0], 16).ok()?;
+        let opponent = u64::from_str_radix(&data[1], 16).ok()?;
         boards.push(Board {
             player,
             opponent,
             is_black: true, // dummy
         });
-        scores.push(input_line[34..].trim().parse().unwrap());
+        scores.push(data[2].trim().parse().unwrap());
     }
     let mut wp = WeightedPattern::new();
     wp.train(&boards, &scores);
@@ -669,13 +670,13 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
     let mut input_line = String::new();
     reader.read_line(&mut input_line).unwrap();
     let num_boards = input_line.trim().parse().unwrap();
-    let mut boards = Vec::new();
-    let mut scores = Vec::new();
+    let mut records = Vec::new();
     for _i in 0..num_boards {
         input_line.clear();
         reader.read_line(&mut input_line).unwrap();
-        let player = u64::from_str_radix(&input_line[0..16], 16).ok()?;
-        let opponent = u64::from_str_radix(&input_line[17..33], 16).ok()?;
+        let data: Vec<&str> = input_line.split(' ').collect();
+        let player = u64::from_str_radix(&data[0], 16).ok()?;
+        let opponent = u64::from_str_radix(&data[1], 16).ok()?;
         let board = Board {
             player,
             opponent,
@@ -684,23 +685,26 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
         if 64 - popcnt(board.empty()) > max_count {
             continue;
         }
-        let score = input_line[34..].trim().parse::<i8>().unwrap();
-        boards.push(board);
-        scores.push(score);
+        records.push((
+            board,
+            data[2].trim().parse::<i8>().unwrap(),
+            data[3].trim().parse::<usize>().unwrap(),
+        ));
+    }
+
+    records.sort_unstable_by_key(|k| popcnt(k.0.empty()));
+    let book = HashMap::new();
+
+    for (board, score, pos) in records {
+        let next = match board.play(pos) {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
     }
 
     let out_f = File::create(output_path).ok()?;
     let mut writer = BufWriter::new(out_f);
 
-    write!(&mut writer, "{}\n", boards.len()).ok()?;
-    for (board, score) in boards.iter().zip(&scores) {
-        write!(
-            &mut writer,
-            "{:016x} {:016x} {}\n",
-            board.player, board.opponent, score
-        )
-        .ok()?;
-    }
     Some(())
 }
 
