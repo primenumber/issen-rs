@@ -3,6 +3,7 @@ use crate::serialize::*;
 use clap::ArgMatches;
 use lazy_static::lazy_static;
 use packed_simd::*;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
@@ -356,6 +357,32 @@ impl FromStr for Board {
     }
 }
 
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for i in 0..64 {
+            if ((self.player >> i) & 1) != 0 {
+                if self.is_black {
+                    write!(f, "X")?;
+                } else {
+                    write!(f, "O")?;
+                }
+            } else if ((self.opponent >> i) & 1) != 0 {
+                if self.is_black {
+                    write!(f, "O")?;
+                } else {
+                    write!(f, "X")?;
+                }
+            } else {
+                write!(f, ".")?;
+            }
+            if i % 8 == 7 {
+                write!(f, "\n")?;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn weighted_mobility(board: &Board) -> i8 {
     let b = board.mobility_bits();
     let corner = 0x8100000000000081u64;
@@ -466,6 +493,20 @@ pub fn gen_last_mask(matches: &ArgMatches) {
         }
     }
     write!(writer, "\n").unwrap();
+}
+
+pub fn parse_board(matches: &ArgMatches) {
+    let s = matches.value_of("str").unwrap();
+
+    let data: Vec<&str> = s.split(' ').collect();
+    let player = u64::from_str_radix(data[0], 16).unwrap();
+    let opponent = u64::from_str_radix(data[1], 16).unwrap();
+    let board = Board {
+        player,
+        opponent,
+        is_black: true,
+    };
+    println!("{}", board);
 }
 
 lazy_static! {

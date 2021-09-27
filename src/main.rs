@@ -454,6 +454,16 @@ fn main() {
                         .takes_value(true),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("parse-board")
+                .about("Parse board")
+                .arg(
+                    Arg::with_name("str")
+                        .short("b")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
         .get_matches();
     match matches.subcommand() {
         ("ffobench", Some(_matches)) => {
@@ -485,6 +495,9 @@ fn main() {
         }
         ("last-mask", Some(matches)) => {
             gen_last_mask(matches);
+        }
+        ("parse-board", Some(matches)) => {
+            parse_board(matches);
         }
         ("", None) => {
             eprintln!("Need subcommand");
