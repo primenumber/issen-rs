@@ -125,25 +125,17 @@ fn naive(
     depth: i8,
 ) -> (i8, SolveStat) {
     let mut pass = true;
-    let mut empties = board.empty();
+    //let mut empties = board.empty();
     let mut res = -64;
     let mut stat = SolveStat::one();
-    while empties != 0 {
-        let pos = empties.tzcnt() as usize;
-        empties = empties & (empties - 1);
-        match board.play(pos) {
-            Ok(next) => {
-                pass = false;
-                let (child_res, child_stat) =
-                    solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
-                res = max(res, -child_res);
-                stat.merge(child_stat);
-                alpha = max(alpha, res);
-                if alpha >= beta {
-                    return (res, stat);
-                }
-            }
-            Err(_) => (),
+    for (next, pos) in board.next_iter() {
+        pass = false;
+        let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
+        res = max(res, -child_res);
+        stat.merge(child_stat);
+        alpha = max(alpha, res);
+        if alpha >= beta {
+            return (res, stat);
         }
     }
     if pass {

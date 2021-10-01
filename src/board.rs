@@ -21,6 +21,11 @@ pub struct UnmovableError;
 #[derive(Debug)]
 pub struct BoardParseError;
 
+pub struct PlayIterator {
+    board: Board,
+    remain: u64,
+}
+
 pub const PASS: usize = 64;
 
 impl Board {
@@ -155,6 +160,13 @@ impl Board {
             }
         }
         result
+    }
+
+    pub fn next_iter(&self) -> PlayIterator {
+        PlayIterator {
+            board: self.clone(),
+            remain: self.empty(),
+        }
     }
 
     pub fn is_gameover(&self) -> bool {
@@ -380,6 +392,22 @@ impl fmt::Display for Board {
             }
         }
         Ok(())
+    }
+}
+
+impl Iterator for PlayIterator {
+    type Item = (Board, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.remain != 0 {
+            let pos = self.remain.trailing_zeros() as usize;
+            self.remain &= self.remain - 1;
+            match self.board.play(pos) {
+                Ok(next) => return Some((next, pos)),
+                _ => (),
+            };
+        }
+        None
     }
 }
 
