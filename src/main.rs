@@ -435,6 +435,22 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("pack-book")
+                .about("Pack book file")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("last-table")
                 .about("Generate last move flip count table")
                 .arg(
@@ -489,6 +505,9 @@ fn main() {
         }
         ("pack", Some(matches)) => {
             pack_weights(matches);
+        }
+        ("pack-book", Some(matches)) => {
+            pack_book(matches);
         }
         ("last-table", Some(matches)) => {
             gen_last_table(matches);

@@ -693,7 +693,7 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
     }
 
     records.sort_unstable_by_key(|k| popcnt(k.0.empty()));
-    let book = HashMap::new();
+    //let book = HashMap::new();
 
     for (board, score, pos) in records {
         let next = match board.play(pos) {
@@ -749,4 +749,28 @@ pub fn pack_weights(matches: &ArgMatches) {
         encode_base64(&chunk.try_into().unwrap(), &mut b64bytes).unwrap();
         write!(&mut writer, "{}", str::from_utf8(&b64bytes).unwrap()).unwrap();
     }
+}
+
+pub fn pack_book(matches: &ArgMatches) {
+    let input_path = matches.value_of("INPUT").unwrap();
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let in_f = File::open(input_path).unwrap();
+    let reader = BufReader::new(in_f);
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    for line in reader.lines() {
+        write!(writer, ">").unwrap();
+        for pos_bytes in line.unwrap().trim().as_bytes().chunks(2) {
+            let pos = if pos_bytes[0] < 0x60 {
+                (pos_bytes[0] - 0x41) + (pos_bytes[1] - 0x31) * 8
+            } else {
+                (pos_bytes[0] - 0x61) + (pos_bytes[1] - 0x31) * 8
+            };
+            write!(writer, "{}", encode_base64_impl(pos).unwrap() as char).unwrap();
+        }
+    }
+    write!(writer, "\n").unwrap();
 }
