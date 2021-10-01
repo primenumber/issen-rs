@@ -71,6 +71,23 @@ impl Evaluator {
             }
         }
 
+        let mut smoothed_weights = vec![vec![0i16; length]; range_size];
+        for count_index in 0..range_size {
+            for pattern_index in 0..length {
+                let mut cnt = 0;
+                let mut sum = 0;
+                for diff in -2..=2 {
+                    let ref_count_index = count_index as isize + diff;
+                    if ref_count_index < 0 || ref_count_index >= range_size as isize {
+                        continue;
+                    }
+                    cnt += 1;
+                    sum += weights[ref_count_index as usize][pattern_index];
+                }
+                smoothed_weights[count_index][pattern_index] = sum / cnt;
+            }
+        }
+
         let mut base3 = vec![0; 1 << max_bits];
         for i in 0usize..(1usize << max_bits) {
             let mut sum = 0;
@@ -83,7 +100,7 @@ impl Evaluator {
         }
         Evaluator {
             stones_range,
-            weights,
+            weights: smoothed_weights,
             offsets,
             patterns,
             base3,
