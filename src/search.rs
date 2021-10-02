@@ -128,7 +128,7 @@ fn naive(
     //let mut empties = board.empty();
     let mut res = -64;
     let mut stat = SolveStat::one();
-    for (next, pos) in board.next_iter() {
+    for (next, _pos) in board.next_iter() {
         pass = false;
         let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
         res = max(res, -child_res);
@@ -278,7 +278,7 @@ fn fastest_first(
 fn move_ordering_impl(
     solve_obj: &mut SolveObj,
     board: Board,
-    old_best: u8,
+    _old_best: u8,
     _depth: i8,
 ) -> Vec<(u8, Board)> {
     let mut nexts = vec![(0i16, 0u8, board.clone()); 0];
@@ -313,7 +313,7 @@ fn move_ordering_impl(
         let mut res = 64 * SCALE;
         for (i, (score, pos, next)) in nexts.iter().enumerate() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
-            let mut bonus = if rem < 18 {
+            let bonus = if rem < 18 {
                 mobility_score * SCALE * 1
             } else if rem < 22 {
                 mobility_score * SCALE / 2

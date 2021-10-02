@@ -697,15 +697,15 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
     records.sort_unstable_by_key(|k| popcnt(k.0.empty()));
     //let book = HashMap::new();
 
-    for (board, score, pos) in records {
-        let next = match board.play(pos) {
+    for (board, _score, pos) in records {
+        let _next = match board.play(pos) {
             Ok(n) => n,
             Err(_) => continue,
         };
     }
 
     let out_f = File::create(output_path).ok()?;
-    let mut writer = BufWriter::new(out_f);
+    let mut _writer = BufWriter::new(out_f);
 
     Some(())
 }
