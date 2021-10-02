@@ -257,7 +257,7 @@ fn report_stats(stats: &[Stat]) -> () {
 fn ffo_benchmark() {
     let search_params = SearchParams {
         reduce: false,
-        ybwc_depth_limit: 10,
+        ybwc_depth_limit: 12,
         ybwc_elder_add: 1,
         ybwc_younger_add: 2,
         ybwc_empties_limit: 17,
