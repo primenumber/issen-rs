@@ -146,3 +146,17 @@ impl Evaluator {
         Self::smooth_val(raw_score)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_smooth() {
+        for raw in -10000..=10000 {
+            let smoothed = Evaluator::smooth_val(raw);
+            assert!(smoothed > -64 * SCALE);
+            assert!(smoothed < 64 * SCALE);
+        }
+    }
+}
