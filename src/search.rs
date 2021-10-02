@@ -312,7 +312,14 @@ fn move_ordering_impl(
         let mut tmp = vec![(0i16, 0u8, board.clone()); 0];
         let mut res = 64 * SCALE;
         for (i, (score, pos, next)) in nexts.iter().enumerate() {
-            let bonus = if *pos == old_best { -16 * SCALE } else { 0 };
+            let mobility_score = popcnt(next.mobility_bits()) as i16;
+            let mut bonus = if rem < 18 {
+                mobility_score * SCALE * 1
+            } else if rem < 22 {
+                mobility_score * SCALE / 2
+            } else {
+                mobility_score * SCALE / 4
+            };
             if i == 0 {
                 let window = if think_depth == min_depth { 16 } else { 8 };
                 let alpha = (score - window * SCALE).max(-64 * SCALE);
@@ -393,6 +400,20 @@ fn move_ordering_impl(
                     .0;
                     tmp.push((fixed_res + bonus, *pos, next.clone()));
                     res = fixed_res;
+                } else if new_res >= res {
+                    let fixed_res = think(
+                        next.clone(),
+                        new_res,
+                        64 * SCALE,
+                        false,
+                        solve_obj.evaluator.clone(),
+                        &mut solve_obj.eval_cache,
+                        &None,
+                        think_depth,
+                    )
+                    .unwrap()
+                    .0;
+                    tmp.push((fixed_res + bonus, *pos, next.clone()));
                 } else {
                     let score = new_res;
                     tmp.push((score + bonus, *pos, next.clone()));
