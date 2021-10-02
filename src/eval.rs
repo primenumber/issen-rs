@@ -119,6 +119,17 @@ impl Evaluator {
         score
     }
 
+    fn smooth_val(raw_score: i32) -> i16 {
+        let scale32 = SCALE as i32;
+        (if raw_score > 63 * scale32 {
+            64 * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
+        } else if raw_score < -63 * scale32 {
+            -64 * scale32 - scale32 * scale32 / (raw_score + 62 * scale32)
+        } else {
+            raw_score
+        }) as i16
+    }
+
     pub fn eval(&self, mut board: Board) -> i16 {
         let mut score = 0i32;
         let rem: usize = popcnt(board.empty()) as usize;
@@ -132,13 +143,6 @@ impl Evaluator {
             board = board.rot90();
         }
         let raw_score = score + *self.weights[index].last().unwrap() as i32;
-        let scale32 = SCALE as i32;
-        (if raw_score > 63 * scale32 {
-            64 * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
-        } else if raw_score < -63 * scale32 {
-            -64 * scale32 - scale32 * scale32 / (raw_score + 62 * scale32)
-        } else {
-            raw_score
-        }) as i16
+        Self::smooth_val(raw_score)
     }
 }
