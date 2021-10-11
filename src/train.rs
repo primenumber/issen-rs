@@ -742,6 +742,28 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
     Some(())
 }
 
+pub fn binarize_weights(matches: &ArgMatches) {
+    let input_path = matches.value_of("INPUT").unwrap();
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let in_f = File::open(input_path).unwrap();
+    let mut reader = BufReader::new(in_f);
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    let mut input_line = String::new();
+    reader.read_line(&mut input_line).unwrap();
+    let num_weight = input_line.trim().parse().unwrap();
+
+    for _i in 0..num_weight {
+        input_line.clear();
+        reader.read_line(&mut input_line).unwrap();
+        let weight = input_line.trim().parse::<f64>().unwrap();
+        writer.write(&weight.to_le_bytes()).unwrap();
+    }
+}
+
 pub fn pack_weights(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();

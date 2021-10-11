@@ -419,6 +419,22 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("binarize")
+                .about("Binarize weights file")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("pack")
                 .about("Pack weights file")
                 .arg(
@@ -502,6 +518,9 @@ fn main() {
         }
         ("gen-book", Some(matches)) => {
             gen_book(matches);
+        }
+        ("binarize", Some(matches)) => {
+            binarize_weights(matches);
         }
         ("pack", Some(matches)) => {
             pack_weights(matches);
