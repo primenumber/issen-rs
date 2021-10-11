@@ -63,28 +63,27 @@ impl Evaluator {
             for i in 0usize..length {
                 let mut ary: [u8; 8] = Default::default();
                 ary.copy_from_slice(&buf[(8 * i)..(8 * (i + 1))]);
-                weights[num - from][i] = (SCALE as f64
-                    * unsafe { mem::transmute::<[u8; 8], f64>(ary) })
-                .max(SCALE as f64 * -64.0)
-                .min(SCALE as f64 * 64.0)
-                .round() as i16;
+                let raw_weight = unsafe { mem::transmute::<[u8; 8], f64>(ary) };
+                weights[num - from][i] = (SCALE as f64 * raw_weight)
+                    .max(SCALE as f64 * -64.0)
+                    .min(SCALE as f64 * 64.0)
+                    .round() as i16;
             }
         }
 
         let mut smoothed_weights = vec![vec![0i16; length]; range_size];
         for count_index in 0..range_size {
             for pattern_index in 0..length {
-                let mut cnt = 0;
-                let mut sum = 0;
+                let mut w = Vec::new();
                 for diff in -2..=2 {
                     let ref_count_index = count_index as isize + diff;
                     if ref_count_index < 0 || ref_count_index >= range_size as isize {
                         continue;
                     }
-                    cnt += 1;
-                    sum += weights[ref_count_index as usize][pattern_index];
+                    w.push(weights[ref_count_index as usize][pattern_index]);
                 }
-                smoothed_weights[count_index][pattern_index] = sum / cnt;
+                w.sort_unstable();
+                smoothed_weights[count_index][pattern_index] = w[w.len() / 2];
             }
         }
 
