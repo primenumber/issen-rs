@@ -636,14 +636,22 @@ impl WeightedPattern {
             mat_weights.push(1.0);
             row_starts.push(cols.len());
         }
+        let col_size = *self.pattern_starts.last().unwrap();
+        for col in 0..col_size {
+            cols.push(col);
+            mat_weights.push(1.0);
+            row_starts.push(cols.len());
+        }
+        let mut scores_vec: Vec<_> = scores.iter().copied().collect();
+        scores_vec.resize(scores_vec.len() + col_size, 0.0);
         let spm = SparseMat {
             weight: mat_weights,
-            col_size: *self.pattern_starts.last().unwrap(),
+            col_size,
             row_starts,
             cols,
         };
         //gradient_descent(&spm, &mut self.weight, scores, 10000);
-        cgls(&spm, &mut self.weight, scores, 300);
+        cgls(&spm, &mut self.weight, &scores_vec, 300);
     }
 }
 
