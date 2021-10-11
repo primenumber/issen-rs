@@ -276,6 +276,8 @@ pub fn gen_dataset(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();
     let max_output = matches.value_of("MAX_OUT").unwrap().parse().unwrap();
+    let min_empty = 25;
+    let max_empty = 60;
 
     eprintln!("Parse input...");
     let boards_list = load_records(input_path);
@@ -326,7 +328,8 @@ pub fn gen_dataset(matches: &ArgMatches) {
         }
     }
 
-    boards_with_results.retain(|&k, _| popcnt(k.empty()) >= 4);
+    boards_with_results
+        .retain(|&k, _| popcnt(k.empty()) >= min_empty && popcnt(k.empty()) <= max_empty);
     eprintln!("Remaining board count = {}", boards_with_results.len());
 
     eprintln!("Writing to file...");
