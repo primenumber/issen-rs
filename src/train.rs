@@ -458,12 +458,13 @@ impl SparseMat {
     // x = A^t*y
     // Unparallelized
     #[allow(dead_code)]
-    fn mul_vec_transposed(&self, y: &[f64], x: &mut [f64]) {
+    fn mul_vec_transposed_naive(&self, y: &[f64], row_offset: usize, x: &mut [f64]) {
         for e in x.iter_mut() {
             *e = 0.;
         }
         unsafe {
-            for (row, elem) in y.iter().enumerate() {
+            for (row_local, elem) in y.iter().enumerate() {
+                let row = row_local + row_offset;
                 let row_start = *self.row_starts.get_unchecked(row);
                 let row_end = *self.row_starts.get_unchecked(row + 1);
                 let val = *elem;
@@ -475,6 +476,26 @@ impl SparseMat {
                 }
             }
         }
+    }
+
+    fn mul_vec_transposed_(&self, y: &[f64], row_offset: usize, x: &mut [f64]) {
+        if y.len() < 16384 {
+            self.mul_vec_transposed_naive(y, row_offset, x);
+        } else {
+            let mid = y.len() / 2;
+            let mut another_x: Vec<_> = x.iter().copied().collect();
+            rayon::join(
+                || self.mul_vec_transposed_(&y[..mid], row_offset, x),
+                || self.mul_vec_transposed_(&y[mid..], row_offset + mid, &mut another_x),
+            );
+            for (elem, another_elem) in x.iter_mut().zip(&another_x) {
+                *elem += another_elem;
+            }
+        }
+    }
+
+    fn mul_vec_transposed(&self, y: &[f64], x: &mut [f64]) {
+        self.mul_vec_transposed_(y, 0, x);
     }
 }
 
