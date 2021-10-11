@@ -771,9 +771,9 @@ pub fn pack_weights(matches: &ArgMatches) {
         compressed.push(0);
     }
     for chunk in compressed.chunks(3) {
-        let mut b64bytes = [0, 0, 0, 0];
-        encode_base64(&chunk.try_into().unwrap(), &mut b64bytes).unwrap();
-        write!(&mut writer, "{}", str::from_utf8(&b64bytes).unwrap()).unwrap();
+        let mut encoded_bytes = [0, 0, 0, 0, 0, 0];
+        encode_base4096(&chunk.try_into().unwrap(), &mut encoded_bytes).unwrap();
+        write!(&mut writer, "{}", str::from_utf8(&encoded_bytes).unwrap()).unwrap();
     }
 }
 

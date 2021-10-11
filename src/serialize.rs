@@ -30,6 +30,34 @@ pub fn encode_base64(input: &[u8; 3], output: &mut [u8; 4]) -> Option<()> {
     Some(())
 }
 
+enum EncodeError {
+    OutOfRange,
+}
+
+fn encode_base4096_impl(input: u32, output: &mut [u8]) -> Result<(), EncodeError> {
+    if input > 0xF7FF {
+        return Err(EncodeError::OutOfRange);
+    }
+    let u32data = input + 0x0800; // 3-byte UTF-8
+    char::from_u32(u32data).unwrap().encode_utf8(output);
+    Ok(())
+}
+
+pub fn encode_base4096(input: &[u8; 3], output: &mut [u8; 6]) -> Option<()> {
+    let mut data = 0;
+    for i in 0..3 {
+        data |= (input[i] as u32) << (16 - i * 8);
+    }
+    for i in 0..2 {
+        encode_base4096_impl(
+            (data >> ((1 - i) * 12)) & 0x000fff,
+            &mut output[(3 * i)..(3 * i + 3)],
+        )
+        .ok()?;
+    }
+    Some(())
+}
+
 fn compress_word(data: u8) -> Vec<bool> {
     match data {
         0x00 => vec![false],
