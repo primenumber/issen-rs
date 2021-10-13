@@ -30,71 +30,72 @@ pub fn encode_base64(input: &[u8; 3], output: &mut [u8; 4]) -> Option<()> {
     Some(())
 }
 
-enum EncodeError {
+#[derive(Debug)]
+pub enum EncodeError {
     OutOfRange,
 }
 
-fn encode_base4096_impl(input: u32, output: &mut [u8]) -> Result<(), EncodeError> {
+pub fn encode_utf16(input: u32) -> Result<char, EncodeError> {
     if input > 0xF7FF {
         return Err(EncodeError::OutOfRange);
     }
     let u32data = input + 0x0800; // 3-byte UTF-8
-    char::from_u32(u32data).unwrap().encode_utf8(output);
-    Ok(())
+    Ok(char::from_u32(u32data).unwrap())
 }
 
-pub fn encode_base4096(input: &[u8; 3], output: &mut [u8; 6]) -> Option<()> {
-    let mut data = 0;
-    for i in 0..3 {
-        data |= (input[i] as u32) << (16 - i * 8);
-    }
-    for i in 0..2 {
-        encode_base4096_impl(
-            (data >> ((1 - i) * 12)) & 0x000fff,
-            &mut output[(3 * i)..(3 * i + 3)],
-        )
-        .ok()?;
-    }
-    Some(())
-}
-
-fn compress_word(data: u8) -> Vec<bool> {
-    match data {
-        0x00 => vec![false],
-        0xff => vec![true, false, false],
-        0x01 => vec![true, false, true, false, false],
-        0xfe => vec![true, false, true, false, true],
-        0x02 => vec![true, false, true, true, false],
-        0xfd => vec![true, false, true, true, true],
-        data => {
-            let mut res = Vec::with_capacity(10);
-            res.push(true);
-            res.push(true);
-            for i in 0..8 {
-                res.push((data >> i) & 1 == 1);
-            }
-            res
-        }
-    }
-}
-
-pub fn compress(data: &[u8]) -> (Vec<u8>, usize) {
-    let mut result_bits = Vec::new();
-    for &byte in data {
-        result_bits.append(&mut compress_word(byte));
-    }
-    while result_bits.len() % 8 != 0 {
-        result_bits.push(true);
-    }
+fn encode_bits(bits: i16, length: usize) -> Vec<bool> {
     let mut result = Vec::new();
-    for octet in result_bits.chunks(8) {
-        let mut data = 0;
-        for (idx, &bit) in octet.iter().enumerate() {
-            if bit {
-                data |= 1 << idx;
-            }
-        }
-        result.push(data);
+    for i in 0..length {
+        let bit = (bits >> (length - 1 - i)) & 1;
+        result.push(bit == 1);
     }
-    (result, data.len())
+    result
+}
+
+fn compress_word(data: i16) -> Vec<bool> {
+    if data == 0 {
+        vec![false, false]
+    } else {
+        let sign = data < 0;
+        let data_abs = data.abs();
+        if data_abs <= 8 {
+            let mut result = vec![false, true, false, sign];
+            let bits = data_abs - 1;
+            result.append(&mut encode_bits(bits, 3));
+            result
+        } else if data_abs <= 24 {
+            let mut result = vec![false, true, true, sign];
+            let bits = data_abs - 9;
+            result.append(&mut encode_bits(bits, 4));
+            result
+        } else if data_abs <= 56 {
+            let mut result = vec![true, false, false, sign];
+            let bits = data_abs - 25;
+            result.append(&mut encode_bits(bits, 5));
+            result
+        } else if data_abs <= 120 {
+            let mut result = vec![true, false, true, sign];
+            let bits = data_abs - 57;
+            result.append(&mut encode_bits(bits, 6));
+            result
+        } else if data_abs <= 248 {
+            let mut result = vec![true, true, false, sign];
+            let bits = data_abs - 121;
+            result.append(&mut encode_bits(bits, 7));
+            result
+        } else {
+            let mut result = vec![true, true, true, sign];
+            let bits = data_abs - 249;
+            result.append(&mut encode_bits(bits, 15));
+            result
+        }
+    }
+}
+
+pub fn compress(data: &[i16]) -> Vec<bool> {
+    let mut result_bits = Vec::new();
+    for &word in data {
+        result_bits.append(&mut compress_word(word));
+    }
+    result_bits
 }

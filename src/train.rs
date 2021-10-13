@@ -11,7 +11,6 @@ use futures::task::SpawnExt;
 use rayon::prelude::*;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
@@ -779,31 +778,32 @@ pub fn pack_weights(matches: &ArgMatches) {
     let num_weight = input_line.trim().parse().unwrap();
     let scale = PACKED_SCALE as f64;
 
-    let mut weight_binary = Vec::new();
+    let mut weights = Vec::new();
     for _i in 0..num_weight {
         input_line.clear();
         reader.read_line(&mut input_line).unwrap();
         let weight = input_line.trim().parse::<f64>().unwrap();
         let weight_scaled = (weight * scale).round() as i16;
-        let bytes = weight_scaled.to_le_bytes();
-        weight_binary.extend(bytes.iter());
-    }
-    let mut count = vec![0; 256];
-    for &b in &weight_binary {
-        count[b as usize] += 1;
+        weights.push(weight_scaled);
     }
 
-    let (mut compressed, orig_len) = compress(&weight_binary);
+    let orig_len = weights.len();
+    let mut compressed = compress(&weights);
 
     write!(&mut writer, "{}\n", orig_len).unwrap();
 
-    while compressed.len() % 3 != 0 {
-        compressed.push(0);
+    while compressed.len() % 15 != 0 {
+        compressed.push(false);
     }
-    for chunk in compressed.chunks(3) {
-        let mut encoded_bytes = [0, 0, 0, 0, 0, 0];
-        encode_base4096(&chunk.try_into().unwrap(), &mut encoded_bytes).unwrap();
-        write!(&mut writer, "{}", str::from_utf8(&encoded_bytes).unwrap()).unwrap();
+    for chunk in compressed.chunks(15) {
+        let mut bits = 0u32;
+        for (idx, &bit) in chunk.iter().enumerate() {
+            if bit {
+                bits |= 1 << idx;
+            }
+        }
+        let c = encode_utf16(bits).unwrap();
+        write!(&mut writer, "{}", c).unwrap();
     }
 }
 
