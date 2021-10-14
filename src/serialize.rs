@@ -19,17 +19,6 @@ pub fn encode_base64_impl(input: u8) -> Option<u8> {
     }
 }
 
-pub fn encode_base64(input: &[u8; 3], output: &mut [u8; 4]) -> Option<()> {
-    let mut data = 0;
-    for i in 0..3 {
-        data |= (input[i] as u32) << (16 - i * 8);
-    }
-    for i in 0..4 {
-        output[i] = encode_base64_impl(((data >> (18 - i * 6)) & 0x3f) as u8)?;
-    }
-    Some(())
-}
-
 #[derive(Debug)]
 pub enum EncodeError {
     OutOfRange,
