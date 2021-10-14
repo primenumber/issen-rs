@@ -24,7 +24,7 @@ fn pow3(x: i8) -> usize {
     }
 }
 
-pub const SCALE: i16 = 128;
+pub const SCALE: i16 = 256;
 
 impl Evaluator {
     pub fn new(table_dirname: &str) -> Evaluator {
@@ -49,7 +49,7 @@ impl Evaluator {
             length += pow3(popcnt(bits));
             max_bits = max(max_bits, popcnt(bits));
         }
-        length += 1;
+        length += 4;
 
         let from = config["stone_counts"]["from"].as_i64().unwrap() as usize;
         let to = config["stone_counts"]["to"].as_i64().unwrap() as usize;
@@ -141,8 +141,16 @@ impl Evaluator {
             score += self.eval_impl(board.flip_diag(), index);
             board = board.rot90();
         }
-        let raw_score = score + *self.weights[index].last().unwrap() as i32;
-        Self::smooth_val(raw_score)
+        let non_patterns_offset = self.offsets.last().unwrap();
+        score += popcnt(board.mobility_bits()) as i32
+            * self.weights[index][non_patterns_offset + 0] as i32;
+        score += popcnt(board.pass().mobility_bits()) as i32
+            * self.weights[index][non_patterns_offset + 1] as i32;
+        if rem % 2 == 1 {
+            score += self.weights[index][non_patterns_offset + 2] as i32;
+        }
+        score += self.weights[index][non_patterns_offset + 3] as i32;
+        Self::smooth_val(score)
     }
 }
 
