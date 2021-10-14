@@ -41,9 +41,8 @@ impl Evaluator {
         let masks = &config["masks"];
         for pattern_obj in masks.clone() {
             let pattern_str = pattern_obj.as_str().unwrap();
-            let bits = flip_vertical(flip_horizontal(
-                u64::from_str_radix(&pattern_str, 2).unwrap(),
-            ));
+            let bits = u64::from_str_radix(&pattern_str, 2).unwrap();
+            eprintln!("{:016x}", bits);
             patterns.push(bits);
             offsets.push(length);
             length += pow3(popcnt(bits));
