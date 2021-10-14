@@ -670,10 +670,9 @@ const PATTERNS_LARGE: [u64; 10] = [
 pub fn train(matches: &ArgMatches) -> Option<()> {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();
-    let stones_min = matches.value_of("from").unwrap().parse().unwrap();
-    let stones_max = matches.value_of("to").unwrap().parse().unwrap();
-
-    assert!(stones_min <= stones_max);
+    let range_min = matches.value_of("from").unwrap().parse::<i8>().unwrap();
+    let range_max = matches.value_of("to").unwrap().parse::<i8>().unwrap();
+    let width = matches.value_of("width").unwrap().parse::<i8>().unwrap();
 
     let in_f = File::open(input_path).ok()?;
     let mut reader = BufReader::new(in_f);
@@ -689,10 +688,6 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         let data: Vec<&str> = input_line.split(' ').collect();
         let player = u64::from_str_radix(&data[0], 16).ok()?;
         let opponent = u64::from_str_radix(&data[1], 16).ok()?;
-        let stones = popcnt(player | opponent);
-        if stones < stones_min || stones > stones_max {
-            continue;
-        }
         boards.push(Board {
             player,
             opponent,
@@ -700,15 +695,30 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         });
         scores.push(data[2].trim().parse().unwrap());
     }
-    let mut wp = WeightedPattern::new(&PATTERNS);
-    wp.train(&boards, &scores);
+    let mut wp = WeightedPattern::new(&PATTERNS_LARGE);
+    for stone_count in range_min..=range_max {
+        eprintln!("Stone count = {}", stone_count);
+        let stones_min = stone_count - width + 1;
+        let stones_max = stone_count + width - 1;
+        let mut using_boards = Vec::new();
+        let mut using_scores = Vec::new();
+        for (&board, &score) in boards.iter().zip(scores.iter()) {
+            let stones = popcnt(board.player | board.opponent);
+            if stones < stones_min || stones > stones_max {
+                continue;
+            }
+            using_boards.push(board);
+            using_scores.push(score);
+        }
+        wp.train(&using_boards, &using_scores);
 
-    let out_f = File::create(output_path).ok()?;
-    let mut writer = BufWriter::new(out_f);
+        let out_f = File::create(format!("{}_{}.txt", output_path, stone_count)).ok()?;
+        let mut writer = BufWriter::new(out_f);
 
-    write!(&mut writer, "{}\n", wp.weight.len()).ok()?;
-    for w in wp.weight {
-        write!(&mut writer, "{}\n", w).ok()?;
+        write!(&mut writer, "{}\n", wp.weight.len()).ok()?;
+        for &w in &wp.weight {
+            write!(&mut writer, "{}\n", w).ok()?;
+        }
     }
     Some(())
 }
