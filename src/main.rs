@@ -394,7 +394,9 @@ fn main() {
                         .short("o")
                         .required(true)
                         .takes_value(true),
-                ),
+                )
+                .arg(Arg::with_name("from").required(true).takes_value(true))
+                .arg(Arg::with_name("to").required(true).takes_value(true)),
         )
         .subcommand(
             SubCommand::with_name("gen-book")

@@ -275,8 +275,6 @@ pub fn gen_dataset(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();
     let max_output = matches.value_of("MAX_OUT").unwrap().parse().unwrap();
-    let min_empty = 25;
-    let max_empty = 60;
 
     eprintln!("Parse input...");
     let boards_list = load_records(input_path);
@@ -327,8 +325,6 @@ pub fn gen_dataset(matches: &ArgMatches) {
         }
     }
 
-    boards_with_results
-        .retain(|&k, _| popcnt(k.empty()) >= min_empty && popcnt(k.empty()) <= max_empty);
     eprintln!("Remaining board count = {}", boards_with_results.len());
 
     eprintln!("Writing to file...");
@@ -354,19 +350,6 @@ pub fn gen_dataset(matches: &ArgMatches) {
     }
     eprintln!("Finished!");
 }
-
-const PATTERNS: [u64; 10] = [
-    0x0000_0000_0000_00ff,
-    0x0000_0000_0000_ff00,
-    0x0000_0000_00ff_0000,
-    0x0000_0000_ff00_0000,
-    0x0000_0000_0303_0303,
-    0x0000_0000_0102_0408,
-    0x0000_0001_0204_0810,
-    0x0000_0102_0408_1020,
-    0x0001_0204_0810_2040,
-    0x0102_0408_1020_4080,
-];
 
 struct Base3 {
     table: Vec<usize>,
@@ -459,7 +442,6 @@ impl SparseMat {
 
     // x = A^t*y
     // Unparallelized
-    #[allow(dead_code)]
     fn mul_vec_transposed_naive(&self, y: &[f64], row_offset: usize, x: &mut [f64]) {
         for e in x.iter_mut() {
             *e = 0.;
@@ -481,11 +463,11 @@ impl SparseMat {
     }
 
     fn mul_vec_transposed_(&self, y: &[f64], row_offset: usize, x: &mut [f64]) {
-        if y.len() < 16384 {
+        if y.len() < 65536 {
             self.mul_vec_transposed_naive(y, row_offset, x);
         } else {
             let mid = y.len() / 2;
-            let mut another_x: Vec<_> = x.iter().copied().collect();
+            let mut another_x = x.to_vec();
             rayon::join(
                 || self.mul_vec_transposed_(&y[..mid], row_offset, x),
                 || self.mul_vec_transposed_(&y[mid..], row_offset + mid, &mut another_x),
@@ -536,13 +518,14 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
         let new_s_norm = norm(&s);
         if i % 10 == 0 {
             spm.mul_vec(&a, &mut pa);
-            for j in 0..spm.row_size() {
+            let except_l2_norm_len = spm.row_size() - spm.col_size;
+            for j in 0..except_l2_norm_len {
                 d[j] = b[j] - pa[j];
             }
             eprintln!(
                 "Step: {}, CGLS Diff: {}",
                 i,
-                (norm(&d) / d.len() as f64).sqrt()
+                (norm(&d[0..except_l2_norm_len]) / except_l2_norm_len as f64).sqrt()
             );
         }
         if new_s_norm < 1.0 {
@@ -557,14 +540,15 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
 }
 
 struct WeightedPattern {
+    patterns: Vec<u64>,
     weight: Vec<f64>,
     pattern_starts: Vec<usize>,
     base3_converter: Base3,
 }
 
 impl WeightedPattern {
-    fn new() -> WeightedPattern {
-        let max_bits = PATTERNS.iter().map(|x| popcnt(*x)).max().unwrap() as usize;
+    fn new(patterns: &[u64]) -> WeightedPattern {
+        let max_bits = patterns.iter().map(|x| popcnt(*x)).max().unwrap() as usize;
         let conv = Base3::new(max_bits);
         let mut vp3 = Vec::new();
         let mut p3 = 1;
@@ -575,7 +559,7 @@ impl WeightedPattern {
         let mut pattern_starts = Vec::new();
         pattern_starts.push(0);
         let mut offset = 0;
-        for pattern in PATTERNS.iter() {
+        for pattern in patterns.iter() {
             offset += vp3[popcnt(*pattern) as usize];
             pattern_starts.push(offset);
         }
@@ -583,6 +567,7 @@ impl WeightedPattern {
         offset += 4;
         pattern_starts.push(offset);
         WeightedPattern {
+            patterns: patterns.to_vec(),
             weight: vec![0.; offset],
             pattern_starts,
             base3_converter: conv,
@@ -591,7 +576,7 @@ impl WeightedPattern {
 
     fn generate_indices_impl(&self, board: &Board) -> Vec<usize> {
         let mut indices = Vec::new();
-        for (idx, pattern) in PATTERNS.iter().enumerate() {
+        for (idx, pattern) in self.patterns.iter().enumerate() {
             let pbit = pext(board.player, *pattern) as usize;
             let obit = pext(board.opponent, *pattern) as usize;
             let pattern_index =
@@ -603,7 +588,7 @@ impl WeightedPattern {
 
     fn generate_indices(&self, board: &Board) -> Vec<usize> {
         let mut board_rot = board.clone();
-        let mut indices = Vec::with_capacity(PATTERNS.len() * 8 + 4);
+        let mut indices = Vec::with_capacity(self.patterns.len() * 8 + 4);
         for _i in 0..4 {
             indices.extend(self.generate_indices_impl(&board_rot));
             let board_rev = board_rot.reverse_vertical();
@@ -614,12 +599,13 @@ impl WeightedPattern {
     }
 
     fn train(&mut self, boards: &[Board], scores: &[f64]) {
-        let expected_size = boards.len() * (4 + 8 * PATTERNS.len());
+        let expected_size = boards.len() * (4 + 8 * self.patterns.len());
         let mut row_starts = Vec::with_capacity(boards.len());
         row_starts.push(0);
         let mut mat_weights = Vec::with_capacity(expected_size);
         let mut cols = Vec::with_capacity(expected_size);
-        let other_params_offset = self.pattern_starts[PATTERNS.len()];
+        let other_params_offset = self.pattern_starts[self.patterns.len()];
+        // construct matrix
         for board in boards {
             let indices = self.generate_indices(board);
             cols.extend(indices);
@@ -635,10 +621,11 @@ impl WeightedPattern {
             mat_weights.push(1.0);
             row_starts.push(cols.len());
         }
+        // L2 normalization
         let col_size = *self.pattern_starts.last().unwrap();
         for col in 0..col_size {
             cols.push(col);
-            mat_weights.push(1.0);
+            mat_weights.push(16.0);
             row_starts.push(cols.len());
         }
         let mut scores_vec: Vec<_> = scores.iter().copied().collect();
@@ -654,9 +641,39 @@ impl WeightedPattern {
     }
 }
 
+const PATTERNS: [u64; 10] = [
+    0x0000_0000_0000_00ff,
+    0x0000_0000_0000_ff00,
+    0x0000_0000_00ff_0000,
+    0x0000_0000_ff00_0000,
+    0x0000_0000_0303_0303,
+    0x0000_0000_0102_0408,
+    0x0000_0001_0204_0810,
+    0x0000_0102_0408_1020,
+    0x0001_0204_0810_2040,
+    0x0102_0408_1020_4080,
+];
+
+const PATTERNS_LARGE: [u64; 10] = [
+    0x0000_0000_0000_42ff,
+    0x0000_0000_0000_ff00,
+    0x0000_0000_00ff_0000,
+    0x0000_0000_ff00_0000,
+    0x0000_0003_0303_0303,
+    0x0000_0000_0103_070f,
+    0x0000_0001_0204_0810,
+    0x0000_0102_0408_1020,
+    0x0001_0204_0810_2040,
+    0x0102_0408_1020_4080,
+];
+
 pub fn train(matches: &ArgMatches) -> Option<()> {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();
+    let stones_min = matches.value_of("from").unwrap().parse().unwrap();
+    let stones_max = matches.value_of("to").unwrap().parse().unwrap();
+
+    assert!(stones_min <= stones_max);
 
     let in_f = File::open(input_path).ok()?;
     let mut reader = BufReader::new(in_f);
@@ -672,6 +689,10 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         let data: Vec<&str> = input_line.split(' ').collect();
         let player = u64::from_str_radix(&data[0], 16).ok()?;
         let opponent = u64::from_str_radix(&data[1], 16).ok()?;
+        let stones = popcnt(player | opponent);
+        if stones < stones_min || stones > stones_max {
+            continue;
+        }
         boards.push(Board {
             player,
             opponent,
@@ -679,7 +700,7 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         });
         scores.push(data[2].trim().parse().unwrap());
     }
-    let mut wp = WeightedPattern::new();
+    let mut wp = WeightedPattern::new(&PATTERNS);
     wp.train(&boards, &scores);
 
     let out_f = File::create(output_path).ok()?;
