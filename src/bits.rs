@@ -29,6 +29,7 @@ pub fn flip_vertical(mut x: u64) -> u64 {
     x
 }
 
+#[allow(dead_code)]
 pub fn flip_horizontal(mut x: u64) -> u64 {
     x = ((x >> 4) & 0x0F0F0F0F0F0F0F0Fu64) | ((x << 4) & 0xF0F0F0F0F0F0F0F0u64);
     x = ((x >> 2) & 0x3333333333333333u64) | ((x << 2) & 0xCCCCCCCCCCCCCCCCu64);
