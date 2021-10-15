@@ -532,7 +532,7 @@ async fn ybwc(
             if alpha >= beta {
                 return (res, best, stat);
             }
-        } else {
+        } else if depth < solve_obj.params.ybwc_depth_limit {
             let tx = tx.clone();
             let mut child_obj = solve_obj.clone();
             let mut stat = SolveStat::zero();
@@ -568,6 +568,24 @@ async fn ybwc(
                     })
                     .unwrap(),
             );
+        } else {
+            let (child_res, _child_best, child_stat) =
+                solve_outer(solve_obj, next, -alpha - 1, -alpha, false, depth).await;
+            stat.merge(child_stat);
+            let mut tmp = -child_res;
+            if alpha < tmp && tmp < beta {
+                let (child_res, _child_best, child_stat) =
+                    solve_outer(solve_obj, next, -beta, -tmp, false, depth).await;
+                stat.merge(child_stat);
+                tmp = -child_res;
+            }
+            if tmp >= beta {
+                return (tmp, pos, stat);
+            }
+            if tmp > res {
+                best = pos;
+                res = tmp;
+            }
         }
     }
     drop(tx);
@@ -792,7 +810,7 @@ pub fn solve_outer(
     let mut solve_obj = solve_obj.clone();
     async move {
         let rem = popcnt(board.empty());
-        if depth >= solve_obj.params.ybwc_depth_limit || rem < solve_obj.params.ybwc_empties_limit {
+        if rem < solve_obj.params.ybwc_empties_limit {
             let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed, depth);
             (res, None, stat)
         } else {
