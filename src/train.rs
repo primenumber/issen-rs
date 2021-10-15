@@ -636,29 +636,29 @@ impl WeightedPattern {
             row_starts,
             cols,
         };
-        cgls(&spm, &mut self.weight, &scores_vec, 200);
+        cgls(&spm, &mut self.weight, &scores_vec, 100);
     }
 }
 
-//const PATTERNS: [u64; 10] = [
-//    0x0000_0000_0000_00ff,
-//    0x0000_0000_0000_ff00,
-//    0x0000_0000_00ff_0000,
-//    0x0000_0000_ff00_0000,
-//    0x0000_0000_0303_0303,
-//    0x0000_0000_0102_0408,
-//    0x0000_0001_0204_0810,
-//    0x0000_0102_0408_1020,
-//    0x0001_0204_0810_2040,
-//    0x0102_0408_1020_4080,
-//];
+const PATTERNS: [u64; 10] = [
+    0x0000_0000_0000_00ff,
+    0x0000_0000_0000_ff00,
+    0x0000_0000_00ff_0000,
+    0x0000_0000_ff00_0000,
+    0x0000_0000_0303_0303,
+    0x0000_0000_0102_0408,
+    0x0000_0001_0204_0810,
+    0x0000_0102_0408_1020,
+    0x0001_0204_0810_2040,
+    0x0102_0408_1020_4080,
+];
 
 const PATTERNS_LARGE: [u64; 10] = [
     0x0000_0000_0000_42ff,
     0x0000_0000_0000_ff00,
     0x0000_0000_00ff_0000,
     0x0000_0000_ff00_0000,
-    0x0000_0001_0303_0303,
+    0x0000_0003_0303_0303,
     0x0000_0000_0102_0408,
     0x0000_0001_0204_0810,
     0x0000_0102_0408_1020,
@@ -694,7 +694,7 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         });
         scores.push(data[2].trim().parse().unwrap());
     }
-    let mut wp = WeightedPattern::new(&PATTERNS_LARGE);
+    let mut wp = WeightedPattern::new(&PATTERNS);
     for stone_count in range_min..=range_max {
         eprintln!("Stone count = {}", stone_count);
         let stones_min = stone_count - width + 1;
