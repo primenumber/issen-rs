@@ -24,7 +24,7 @@ fn pow3(x: i8) -> usize {
     }
 }
 
-pub const SCALE: i16 = 256;
+pub const SCALE: i16 = 128;
 
 impl Evaluator {
     pub fn new(table_dirname: &str) -> Evaluator {
