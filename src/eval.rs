@@ -49,6 +49,7 @@ impl Evaluator {
             length += pow3(popcnt(bits));
             max_bits = max(max_bits, popcnt(bits));
         }
+        offsets.push(length);
         //length += 4;
         length += 1;
 
