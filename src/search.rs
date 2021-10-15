@@ -596,6 +596,7 @@ async fn ybwc(
             res = child_res;
             best = child_best;
             if res >= beta {
+                rx.close();
                 return (res, best, stat);
             }
         }
