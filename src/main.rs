@@ -60,7 +60,7 @@ fn play(matches: &ArgMatches) -> Board {
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
     };
-    let evaluator = Arc::new(Evaluator::new("table-old"));
+    let evaluator = Arc::new(Evaluator::new("table"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
@@ -267,7 +267,7 @@ fn ffo_benchmark() {
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
     };
-    let evaluator = Arc::new(Evaluator::new("table-old"));
+    let evaluator = Arc::new(Evaluator::new("table"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();

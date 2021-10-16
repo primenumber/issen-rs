@@ -24,7 +24,8 @@ fn pow3(x: i8) -> usize {
     }
 }
 
-pub const SCALE: i16 = 128;
+pub const SCALE: i16 = 256;
+//pub const SCALE: i16 = 128;
 
 impl Evaluator {
     pub fn new(table_dirname: &str) -> Evaluator {
@@ -41,17 +42,17 @@ impl Evaluator {
         let masks = &config["masks"];
         for pattern_obj in masks.clone() {
             let pattern_str = pattern_obj.as_str().unwrap();
-            //let bits = u64::from_str_radix(&pattern_str, 2).unwrap();
-            let bits =
-                flip_horizontal(flip_vertical(u64::from_str_radix(&pattern_str, 2).unwrap()));
+            let bits = u64::from_str_radix(&pattern_str, 2).unwrap();
+            //let bits =
+            //    flip_horizontal(flip_vertical(u64::from_str_radix(&pattern_str, 2).unwrap()));
             patterns.push(bits);
             offsets.push(length);
             length += pow3(popcnt(bits));
             max_bits = max(max_bits, popcnt(bits));
         }
         offsets.push(length);
-        //length += 4;
-        length += 1;
+        length += 4;
+        //length += 1;
 
         let from = config["stone_counts"]["from"].as_i64().unwrap() as usize;
         let to = config["stone_counts"]["to"].as_i64().unwrap() as usize;
@@ -101,7 +102,7 @@ impl Evaluator {
         }
         Evaluator {
             stones_range,
-            weights: smoothed_weights,
+            weights,
             offsets,
             patterns,
             base3,
@@ -144,15 +145,15 @@ impl Evaluator {
             board = board.rot90();
         }
         let non_patterns_offset = self.offsets.last().unwrap();
-        //score += popcnt(board.mobility_bits()) as i32
-        //    * self.weights[index][non_patterns_offset + 0] as i32;
-        //score += popcnt(board.pass().mobility_bits()) as i32
-        //    * self.weights[index][non_patterns_offset + 1] as i32;
-        //if rem % 2 == 1 {
-        //    score += self.weights[index][non_patterns_offset + 2] as i32;
-        //}
-        //score += self.weights[index][non_patterns_offset + 3] as i32;
-        score += self.weights[index][non_patterns_offset + 0] as i32;
+        score += popcnt(board.mobility_bits()) as i32
+            * self.weights[index][non_patterns_offset + 0] as i32;
+        score += popcnt(board.pass().mobility_bits()) as i32
+            * self.weights[index][non_patterns_offset + 1] as i32;
+        if rem % 2 == 1 {
+            score += self.weights[index][non_patterns_offset + 2] as i32;
+        }
+        score += self.weights[index][non_patterns_offset + 3] as i32;
+        //score += self.weights[index][non_patterns_offset + 0] as i32;
         Self::smooth_val(score)
     }
 }
