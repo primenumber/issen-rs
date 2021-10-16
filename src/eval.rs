@@ -102,7 +102,7 @@ impl Evaluator {
         }
         Evaluator {
             stones_range,
-            weights,
+            weights: smoothed_weights,
             offsets,
             patterns,
             base3,
