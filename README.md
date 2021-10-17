@@ -24,14 +24,14 @@ $ tar xf table211016.tar.gz
 compile and run
 
 ```Shell
-$ cargo run --release
+$ cargo run --release -- ffobench
 ```
 
 ## Benchmark result
 
-Date: 2021/10/17
-Hardware: AMD Ryzen 9 5950X, DDR4-3200 64GB
-Environment: Linux 5.4.0-88, Ubuntu 20.04.3, rustc 1.57.0-nightly
+- Date: 2021/10/17
+- Hardware: AMD Ryzen 9 5950X, DDR4-3200 64GB
+- Environment: Linux 5.4.0-88, Ubuntu 20.04.3, rustc 1.57.0-nightly
 
 FFO 40-59
 
