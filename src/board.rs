@@ -402,10 +402,9 @@ impl Iterator for PlayIterator {
         while self.remain != 0 {
             let pos = self.remain.trailing_zeros() as usize;
             self.remain &= self.remain - 1;
-            match self.board.play(pos) {
-                Ok(next) => return Some((next, pos)),
-                _ => (),
-            };
+            if let Ok(next) = self.board.play(pos) {
+                return Some((next, pos));
+            }
         }
         None
     }
@@ -419,9 +418,8 @@ pub fn weighted_mobility(board: &Board) -> i8 {
 
 fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
     let index = BASE3[board.player as usize] + 2 * BASE3[board.opponent as usize];
-    match memo[index] {
-        Some(res) => return res,
-        None => (),
+    if let Some(res) = memo[index] {
+        return res;
     }
     let mut res = 0xFFFF_FFFF_FFFF_FFFF;
     let mut pass = true;
@@ -433,11 +431,9 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
         res &= !(1 << next_pos);
         res &= stable_bits_8(next, false, memo);
     }
-    if pass {
-        if !passed {
-            let next = board.pass();
-            res &= stable_bits_8(next, true, memo);
-        }
+    if pass && !passed {
+        let next = board.pass();
+        res &= stable_bits_8(next, true, memo);
     }
     for pos in 0..8 {
         if ((board.empty() >> pos) & 1) != 1 {
@@ -456,7 +452,7 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
         res &= stable_bits_8(next, false, memo);
     }
     memo[index] = Some(res);
-    return res;
+    res
 }
 
 pub fn gen_last_table(matches: &ArgMatches) {
@@ -481,7 +477,7 @@ pub fn gen_last_table(matches: &ArgMatches) {
         let val = chunk[0] | (chunk[1] << 3);
         write!(writer, "{}", encode_base64_impl(val as u8).unwrap() as char).unwrap();
     }
-    write!(writer, "\n").unwrap();
+    writeln!(writer).unwrap();
 }
 
 pub fn gen_last_mask(matches: &ArgMatches) {
@@ -520,7 +516,7 @@ pub fn gen_last_mask(matches: &ArgMatches) {
             }
         }
     }
-    write!(writer, "\n").unwrap();
+    writeln!(writer).unwrap();
 }
 
 pub fn parse_board(matches: &ArgMatches) {
