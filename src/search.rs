@@ -172,19 +172,16 @@ fn static_order(
         while empties != 0 {
             let pos = empties.tzcnt() as usize;
             empties = empties & (empties - 1);
-            match board.play(pos) {
-                Ok(next) => {
-                    pass = false;
-                    let (child_res, child_stat) =
-                        solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
-                    res = max(res, -child_res);
-                    stat.merge(child_stat);
-                    alpha = max(alpha, res);
-                    if alpha >= beta {
-                        return (res, stat);
-                    }
+            if let Ok(next) = board.play(pos) {
+                pass = false;
+                let (child_res, child_stat) =
+                    solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
+                res = max(res, -child_res);
+                stat.merge(child_stat);
+                alpha = max(alpha, res);
+                if alpha >= beta {
+                    return (res, stat);
                 }
-                Err(_) => (),
             }
         }
     }
@@ -216,13 +213,10 @@ fn fastest_first(
     while empties != 0 {
         let pos = empties.tzcnt() as usize;
         empties = empties & (empties - 1);
-        match board.play(pos) {
-            Ok(next) => {
-                nexts[count] = (weighted_mobility(&next), next);
-                count += 1;
-                assert!(count <= MAX_FFS_NEXT);
-            }
-            Err(_) => (),
+        if let Ok(next) = board.play(pos) {
+            nexts[count] = (weighted_mobility(&next), next);
+            count += 1;
+            assert!(count <= MAX_FFS_NEXT);
         }
     }
     nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
@@ -286,11 +280,8 @@ fn move_ordering_impl(
     while empties != 0 {
         let pos = empties.tzcnt() as usize;
         empties = empties & (empties - 1);
-        match board.play(pos) {
-            Ok(next) => {
-                nexts.push((0, pos as u8, next));
-            }
-            Err(_) => (),
+        if let Ok(next) = board.play(pos) {
+            nexts.push((0, pos as u8, next));
         }
     }
 
@@ -913,16 +904,13 @@ fn think_impl(
         let bit = empties & empties.wrapping_neg();
         empties = empties & (empties - 1);
         let pos = popcnt(bit - 1) as usize;
-        match board.play(pos) {
-            Ok(next) => {
-                let bonus = if pos as u8 == old_best {
-                    -16 * SCALE
-                } else {
-                    0
-                };
-                v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
-            }
-            Err(_) => (),
+        if let Ok(next) = board.play(pos) {
+            let bonus = if pos as u8 == old_best {
+                -16 * SCALE
+            } else {
+                0
+            };
+            v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
         }
     }
     v.sort_by(|a, b| {
@@ -1044,13 +1032,10 @@ fn think(
         Some((res, None))
     } else {
         if depth > 8 {
-            match timer {
-                Some(t) => {
-                    if !t.is_ok() {
-                        return None;
-                    }
+            if let Some(t) = timer {
+                if !t.is_ok() {
+                    return None;
                 }
-                _ => (),
             }
         }
         let (lower, upper, old_best) = if depth > 2 {
@@ -1128,9 +1113,8 @@ pub fn think_with_move(
         depth,
     )?;
 
-    match hand {
-        Some(b) => return Some((score, b)),
-        None => (),
+    if let Some(b) = hand {
+        return Some((score, b));
     }
 
     let mut current_score = -64 * SCALE;
@@ -1141,27 +1125,24 @@ pub fn think_with_move(
         let bit = empties & empties.wrapping_neg();
         empties = empties & (empties - 1);
         let pos = popcnt(bit - 1) as usize;
-        match board.play(pos) {
-            Ok(next) => {
-                let s = -think(
-                    next,
-                    -beta,
-                    -alpha,
-                    false,
-                    evaluator.clone(),
-                    cache,
-                    timer,
-                    depth - 1,
-                )?
-                .0;
-                if s > current_score {
-                    current_hand = pos;
-                    current_score = s;
-                    alpha = max(alpha, current_score);
-                }
-                pass = false;
+        if let Ok(next) = board.play(pos) {
+            let s = -think(
+                next,
+                -beta,
+                -alpha,
+                false,
+                evaluator.clone(),
+                cache,
+                timer,
+                depth - 1,
+            )?
+            .0;
+            if s > current_score {
+                current_hand = pos;
+                current_score = s;
+                alpha = max(alpha, current_score);
             }
-            Err(_) => (),
+            pass = false;
         }
     }
     if pass {
