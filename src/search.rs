@@ -309,42 +309,28 @@ fn move_ordering_impl(
                 )
                 .unwrap()
                 .0;
-                if new_res <= alpha {
-                    let new_alpha = -64 * SCALE;
-                    let new_beta = new_res;
-                    res = think(
-                        next,
-                        new_alpha,
-                        new_beta,
-                        false,
-                        solve_obj.evaluator.clone(),
-                        &mut solve_obj.eval_cache,
-                        &None,
-                        think_depth,
-                    )
-                    .unwrap()
-                    .0;
-                    tmp.push((res + bonus, pos, next));
+                let (new_alpha, new_beta) = if new_res <= alpha {
+                    (-64 * SCALE, new_res)
                 } else if new_res >= beta {
-                    let new_alpha = new_res;
-                    let new_beta = 64 * SCALE;
-                    res = think(
-                        next,
-                        new_alpha,
-                        new_beta,
-                        false,
-                        solve_obj.evaluator.clone(),
-                        &mut solve_obj.eval_cache,
-                        &None,
-                        think_depth,
-                    )
-                    .unwrap()
-                    .0;
-                    tmp.push((res + bonus, pos, next));
+                    (new_res, 64 * SCALE)
                 } else {
                     res = new_res;
                     tmp.push((res + bonus, pos, next));
-                }
+                    continue;
+                };
+                res = think(
+                    next,
+                    new_alpha,
+                    new_beta,
+                    false,
+                    solve_obj.evaluator.clone(),
+                    &mut solve_obj.eval_cache,
+                    &None,
+                    think_depth,
+                )
+                .unwrap()
+                .0;
+                tmp.push((res + bonus, pos, next));
             } else {
                 let new_res = think(
                     next,
@@ -358,39 +344,29 @@ fn move_ordering_impl(
                 )
                 .unwrap()
                 .0;
-                if new_res < res {
-                    let fixed_res = think(
-                        next,
-                        -64 * SCALE,
-                        new_res,
-                        false,
-                        solve_obj.evaluator.clone(),
-                        &mut solve_obj.eval_cache,
-                        &None,
-                        think_depth,
-                    )
-                    .unwrap()
-                    .0;
-                    tmp.push((fixed_res + bonus, pos, next));
-                    res = fixed_res;
+                let (new_alpha, new_beta) = if new_res < res {
+                    (-64 * SCALE, new_res)
                 } else if new_res >= res {
-                    let fixed_res = think(
-                        next,
-                        new_res,
-                        64 * SCALE,
-                        false,
-                        solve_obj.evaluator.clone(),
-                        &mut solve_obj.eval_cache,
-                        &None,
-                        think_depth,
-                    )
-                    .unwrap()
-                    .0;
-                    tmp.push((fixed_res + bonus, pos, next));
+                    (new_res, 64 * SCALE)
                 } else {
                     let score = new_res;
                     tmp.push((score + bonus, pos, next));
-                }
+                    continue;
+                };
+                let fixed_res = think(
+                    next,
+                    new_alpha,
+                    new_beta,
+                    false,
+                    solve_obj.evaluator.clone(),
+                    &mut solve_obj.eval_cache,
+                    &None,
+                    think_depth,
+                )
+                .unwrap()
+                .0;
+                tmp.push((fixed_res + bonus, pos, next));
+                res = min(res, fixed_res);
             }
         }
         tmp.sort_by(|a, b| a.0.cmp(&b.0));
