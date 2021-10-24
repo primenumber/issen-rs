@@ -768,8 +768,8 @@ mod tests {
     fn test_ops() {
         const TEST_BASE81: &str = "!#jiR;rO[ORNM2MN";
         let board = Board::from_base81(TEST_BASE81).unwrap();
-        let naive_board = NaiveBoard::from(board.clone());
-        assert_eq!(board.clone(), Board::from(naive_board.clone()));
+        let naive_board = NaiveBoard::from(board);
+        assert_eq!(board, Board::from(naive_board.clone()));
         for i in 0..64 {
             assert_eq!(board.flip(i), naive_board.flip(i));
             assert_eq!(board.is_movable(i), naive_board.is_movable(i));

@@ -587,7 +587,7 @@ impl WeightedPattern {
     }
 
     fn generate_indices(&self, board: &Board) -> Vec<usize> {
-        let mut board_rot = board.clone();
+        let mut board_rot = *board;
         let mut indices = Vec::with_capacity(self.patterns.len() * 8 + 4);
         for _i in 0..4 {
             indices.extend(self.generate_indices_impl(&board_rot));

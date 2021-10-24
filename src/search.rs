@@ -231,13 +231,13 @@ fn fastest_first(
     for (i, &(_, ref next)) in nexts[0..count].iter().enumerate() {
         if i == 0 {
             let (child_res, child_stat) =
-                solve_inner(solve_obj, next.clone(), -beta, -alpha, false, depth + 1);
+                solve_inner(solve_obj, *next, -beta, -alpha, false, depth + 1);
             stat.merge(child_stat);
             res = max(res, -child_res);
         } else {
             let (child_res, child_stat) = solve_inner(
                 solve_obj,
-                next.clone(),
+                *next,
                 -alpha - 1,
                 -alpha,
                 false,
@@ -251,7 +251,7 @@ fn fastest_first(
             if result > alpha {
                 alpha = result;
                 let (child_res, child_stat) =
-                    solve_inner(solve_obj, next.clone(), -beta, -alpha, false, depth + 1);
+                    solve_inner(solve_obj, *next, -beta, -alpha, false, depth + 1);
                 stat.merge(child_stat);
                 result = -child_res;
             }
@@ -281,7 +281,7 @@ fn move_ordering_impl(
     _old_best: u8,
     _depth: i8,
 ) -> Vec<(u8, Board)> {
-    let mut nexts = vec![(0i16, 0u8, board.clone()); 0];
+    let mut nexts = vec![(0i16, 0u8, board); 0];
     let mut empties = board.empty();
     while empties != 0 {
         let pos = empties.tzcnt() as usize;
@@ -309,7 +309,7 @@ fn move_ordering_impl(
     }
     let min_depth = (max_depth - 3).max(0);
     for think_depth in min_depth..=max_depth {
-        let mut tmp = vec![(0i16, 0u8, board.clone()); 0];
+        let mut tmp = vec![(0i16, 0u8, board); 0];
         let mut res = 64 * SCALE;
         for (i, (score, pos, next)) in nexts.iter().enumerate() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
@@ -325,7 +325,7 @@ fn move_ordering_impl(
                 let alpha = (score - window * SCALE).max(-64 * SCALE);
                 let beta = (score + window * SCALE).min(64 * SCALE);
                 let new_res = think(
-                    next.clone(),
+                    *next,
                     alpha,
                     beta,
                     false,
@@ -340,7 +340,7 @@ fn move_ordering_impl(
                     let new_alpha = -64 * SCALE;
                     let new_beta = new_res;
                     res = think(
-                        next.clone(),
+                        *next,
                         new_alpha,
                         new_beta,
                         false,
@@ -351,12 +351,12 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((res + bonus, *pos, next.clone()));
+                    tmp.push((res + bonus, *pos, *next));
                 } else if new_res >= beta {
                     let new_alpha = new_res;
                     let new_beta = 64 * SCALE;
                     res = think(
-                        next.clone(),
+                        *next,
                         new_alpha,
                         new_beta,
                         false,
@@ -367,14 +367,14 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((res + bonus, *pos, next.clone()));
+                    tmp.push((res + bonus, *pos, *next));
                 } else {
                     res = new_res;
-                    tmp.push((res + bonus, *pos, next.clone()));
+                    tmp.push((res + bonus, *pos, *next));
                 }
             } else {
                 let new_res = think(
-                    next.clone(),
+                    *next,
                     res,
                     res + 1,
                     false,
@@ -387,7 +387,7 @@ fn move_ordering_impl(
                 .0;
                 if new_res < res {
                     let fixed_res = think(
-                        next.clone(),
+                        *next,
                         -64 * SCALE,
                         new_res,
                         false,
@@ -402,7 +402,7 @@ fn move_ordering_impl(
                     res = fixed_res;
                 } else if new_res >= res {
                     let fixed_res = think(
-                        next.clone(),
+                        *next,
                         new_res,
                         64 * SCALE,
                         false,
@@ -413,10 +413,10 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((fixed_res + bonus, *pos, next.clone()));
+                    tmp.push((fixed_res + bonus, *pos, *next));
                 } else {
                     let score = new_res;
-                    tmp.push((score + bonus, *pos, next.clone()));
+                    tmp.push((score + bonus, *pos, *next));
                 }
             }
         }
@@ -444,7 +444,7 @@ fn move_ordering_by_eval(
     old_best: u8,
     depth: i8,
 ) -> (i8, u8, SolveStat) {
-    let v = move_ordering_impl(solve_obj, board.clone(), old_best, depth);
+    let v = move_ordering_impl(solve_obj, board, old_best, depth);
     let mut res = -64;
     let mut best = PASS as u8;
     let mut stat = SolveStat::one();
@@ -504,7 +504,7 @@ async fn ybwc(
     old_best: u8,
     depth: i8,
 ) -> (i8, u8, SolveStat) {
-    let v = move_ordering_impl(solve_obj, board.clone(), old_best, depth);
+    let v = move_ordering_impl(solve_obj, board, old_best, depth);
     let mut stat = SolveStat::one();
     if v.is_empty() {
         if passed {
@@ -524,7 +524,7 @@ async fn ybwc(
         if i == 0 {
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
             let (child_res, _child_best, child_stat) =
-                solve_outer(solve_obj, next.clone(), -beta, -alpha, false, next_depth).await;
+                solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await;
             stat.merge(child_stat);
             res = -child_res;
             best = pos;
@@ -724,7 +724,7 @@ fn solve_inner(
         static_order(solve_obj, board, alpha, beta, passed, depth)
     } else {
         if rem >= solve_obj.params.stability_cut_limit {
-            match stability_cut(board.clone(), &mut alpha, &mut beta) {
+            match stability_cut(board, &mut alpha, &mut beta) {
                 CutType::NoCut => (),
                 CutType::MoreThanBeta(v) => {
                     return (
@@ -757,7 +757,7 @@ fn solve_inner(
             update_table(solve_obj, board, res, PASS as u8, alpha, beta, lower, upper);
             (res, stat)
         } else {
-            match stability_cut(board.clone(), &mut alpha, &mut beta) {
+            match stability_cut(board, &mut alpha, &mut beta) {
                 CutType::NoCut => (),
                 CutType::MoreThanBeta(v) => {
                     return (
@@ -785,7 +785,7 @@ fn solve_inner(
                 };
             let (res, best, stat) = move_ordering_by_eval(
                 solve_obj,
-                board.clone(),
+                board,
                 alpha,
                 beta,
                 passed,
@@ -815,7 +815,7 @@ pub fn solve_outer(
             let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed, depth);
             (res, None, stat)
         } else {
-            match stability_cut(board.clone(), &mut alpha, &mut beta) {
+            match stability_cut(board, &mut alpha, &mut beta) {
                 CutType::NoCut => (),
                 CutType::MoreThanBeta(v) => {
                     return (
@@ -845,7 +845,7 @@ pub fn solve_outer(
                 };
             let (res, best, stat) = ybwc(
                 &mut solve_obj,
-                board.clone(),
+                board,
                 alpha,
                 beta,
                 passed,
@@ -906,8 +906,8 @@ fn think_impl(
     timer: &Option<Timer>,
     depth: i8,
 ) -> Option<(i16, usize)> {
-    let mut v = vec![(0i16, 0i16, 0i8, 0usize, board.clone()); 0];
-    let mut w = vec![(0i8, 0usize, board.clone()); 0];
+    let mut v = vec![(0i16, 0i16, 0i8, 0usize, board); 0];
+    let mut w = vec![(0i8, 0usize, board); 0];
     let mut empties = board.empty();
     while empties != 0 {
         let bit = empties & empties.wrapping_neg();
@@ -939,17 +939,17 @@ fn think_impl(
     w.sort_by(|a, b| a.0.cmp(&b.0));
     let mut nexts = Vec::new();
     for (_, _, _, pos, next) in &v {
-        nexts.push((*pos, next.clone()));
+        nexts.push((*pos, *next));
     }
     for (_, pos, next) in &w {
-        nexts.push((*pos, next.clone()));
+        nexts.push((*pos, *next));
     }
     let mut res = -64 * SCALE;
     let mut best = PASS;
     for (i, (pos, next)) in nexts.iter().enumerate() {
         if i == 0 {
             res = -think(
-                next.clone(),
+                *next,
                 -beta,
                 -alpha,
                 false,
@@ -961,13 +961,13 @@ fn think_impl(
             .0;
             best = *pos;
         } else {
-            let reduce = if -evaluator.eval(next.clone()) < alpha - 16 * SCALE {
+            let reduce = if -evaluator.eval(*next) < alpha - 16 * SCALE {
                 2
             } else {
                 1
             };
             let tmp = -think(
-                next.clone(),
+                *next,
                 -alpha - 1,
                 -alpha,
                 false,
@@ -988,7 +988,7 @@ fn think_impl(
                 alpha = res;
                 res = res.max(
                     -think(
-                        next.clone(),
+                        *next,
                         -beta,
                         -alpha,
                         false,
@@ -1040,7 +1040,7 @@ fn think(
     depth: i8,
 ) -> Option<(i16, Option<usize>)> {
     if depth <= 0 {
-        let res = evaluator.eval(board.clone());
+        let res = evaluator.eval(board);
         Some((res, None))
     } else {
         if depth > 8 {
@@ -1054,7 +1054,7 @@ fn think(
             }
         }
         let (lower, upper, old_best) = if depth > 2 {
-            match cache.get(board.clone()) {
+            match cache.get(board) {
                 Some(entry) => {
                     if entry.depth >= depth {
                         (entry.lower, entry.upper, entry.best)
@@ -1077,7 +1077,7 @@ fn think(
             };
         }
         let (res, best) = think_impl(
-            board.clone(),
+            board,
             new_alpha,
             new_beta,
             passed,
@@ -1095,7 +1095,7 @@ fn think(
             (res, res)
         };
         let entry = EvalCache {
-            board: board.clone(),
+            board,
             lower: range.0,
             upper: range.1,
             gen: cache.gen,

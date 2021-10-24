@@ -136,7 +136,7 @@ impl Evaluator {
             .min(*self.stones_range.end());
         let index = stones - self.stones_range.start();
         for _i in 0..4 {
-            score += self.eval_impl(board.clone(), index);
+            score += self.eval_impl(board, index);
             score += self.eval_impl(board.flip_diag(), index);
             board = board.rot90();
         }
