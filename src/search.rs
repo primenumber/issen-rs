@@ -222,16 +222,16 @@ fn fastest_first(
     nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
     let mut res = -64;
     let mut stat = SolveStat::one();
-    for (i, &(_, ref next)) in nexts[0..count].iter().enumerate() {
+    for (i, &(_, next)) in nexts[0..count].iter().enumerate() {
         if i == 0 {
             let (child_res, child_stat) =
-                solve_inner(solve_obj, *next, -beta, -alpha, false, depth + 1);
+                solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
             stat.merge(child_stat);
             res = max(res, -child_res);
         } else {
             let (child_res, child_stat) = solve_inner(
                 solve_obj,
-                *next,
+                next,
                 -alpha - 1,
                 -alpha,
                 false,
@@ -245,7 +245,7 @@ fn fastest_first(
             if result > alpha {
                 alpha = result;
                 let (child_res, child_stat) =
-                    solve_inner(solve_obj, *next, -beta, -alpha, false, depth + 1);
+                    solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
                 stat.merge(child_stat);
                 result = -child_res;
             }
@@ -302,7 +302,7 @@ fn move_ordering_impl(
     for think_depth in min_depth..=max_depth {
         let mut tmp = vec![(0i16, 0u8, board); 0];
         let mut res = 64 * SCALE;
-        for (i, (score, pos, next)) in nexts.iter().enumerate() {
+        for (i, &(score, pos, next)) in nexts.iter().enumerate() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
             let bonus = if rem < 18 {
                 mobility_score * SCALE * 1
@@ -316,7 +316,7 @@ fn move_ordering_impl(
                 let alpha = (score - window * SCALE).max(-64 * SCALE);
                 let beta = (score + window * SCALE).min(64 * SCALE);
                 let new_res = think(
-                    *next,
+                    next,
                     alpha,
                     beta,
                     false,
@@ -331,7 +331,7 @@ fn move_ordering_impl(
                     let new_alpha = -64 * SCALE;
                     let new_beta = new_res;
                     res = think(
-                        *next,
+                        next,
                         new_alpha,
                         new_beta,
                         false,
@@ -342,12 +342,12 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((res + bonus, *pos, *next));
+                    tmp.push((res + bonus, pos, next));
                 } else if new_res >= beta {
                     let new_alpha = new_res;
                     let new_beta = 64 * SCALE;
                     res = think(
-                        *next,
+                        next,
                         new_alpha,
                         new_beta,
                         false,
@@ -358,14 +358,14 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((res + bonus, *pos, *next));
+                    tmp.push((res + bonus, pos, next));
                 } else {
                     res = new_res;
-                    tmp.push((res + bonus, *pos, *next));
+                    tmp.push((res + bonus, pos, next));
                 }
             } else {
                 let new_res = think(
-                    *next,
+                    next,
                     res,
                     res + 1,
                     false,
@@ -378,7 +378,7 @@ fn move_ordering_impl(
                 .0;
                 if new_res < res {
                     let fixed_res = think(
-                        *next,
+                        next,
                         -64 * SCALE,
                         new_res,
                         false,
@@ -389,11 +389,11 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((fixed_res + bonus, *pos, *next));
+                    tmp.push((fixed_res + bonus, pos, next));
                     res = fixed_res;
                 } else if new_res >= res {
                     let fixed_res = think(
-                        *next,
+                        next,
                         new_res,
                         64 * SCALE,
                         false,
@@ -404,10 +404,10 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((fixed_res + bonus, *pos, *next));
+                    tmp.push((fixed_res + bonus, pos, next));
                 } else {
                     let score = new_res;
-                    tmp.push((score + bonus, *pos, *next));
+                    tmp.push((score + bonus, pos, next));
                 }
             }
         }
@@ -926,18 +926,18 @@ fn think_impl(
     });
     w.sort_by(|a, b| a.0.cmp(&b.0));
     let mut nexts = Vec::new();
-    for (_, _, _, pos, next) in &v {
-        nexts.push((*pos, *next));
+    for &(_, _, _, pos, next) in &v {
+        nexts.push((pos, next));
     }
-    for (_, pos, next) in &w {
-        nexts.push((*pos, *next));
+    for &(_, pos, next) in &w {
+        nexts.push((pos, next));
     }
     let mut res = -64 * SCALE;
     let mut best = PASS;
-    for (i, (pos, next)) in nexts.iter().enumerate() {
+    for (i, &(pos, next)) in nexts.iter().enumerate() {
         if i == 0 {
             res = -think(
-                *next,
+                next,
                 -beta,
                 -alpha,
                 false,
@@ -947,15 +947,15 @@ fn think_impl(
                 depth - 1,
             )?
             .0;
-            best = *pos;
+            best = pos;
         } else {
-            let reduce = if -evaluator.eval(*next) < alpha - 16 * SCALE {
+            let reduce = if -evaluator.eval(next) < alpha - 16 * SCALE {
                 2
             } else {
                 1
             };
             let tmp = -think(
-                *next,
+                next,
                 -alpha - 1,
                 -alpha,
                 false,
@@ -967,7 +967,7 @@ fn think_impl(
             .0;
             if tmp > res {
                 res = tmp;
-                best = *pos;
+                best = pos;
             }
             if res >= beta {
                 return Some((res, best));
@@ -976,7 +976,7 @@ fn think_impl(
                 alpha = res;
                 res = res.max(
                     -think(
-                        *next,
+                        next,
                         -beta,
                         -alpha,
                         false,
