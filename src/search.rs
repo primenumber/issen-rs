@@ -112,7 +112,6 @@ fn naive(
     passed: bool,
 ) -> (i8, SolveStat) {
     let mut pass = true;
-    //let mut empties = board.empty();
     let mut res = -64;
     let mut stat = SolveStat::one();
     for (next, _pos) in board.next_iter() {
