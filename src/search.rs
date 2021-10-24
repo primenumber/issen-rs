@@ -1053,15 +1053,19 @@ fn think(
                 _ => (),
             }
         }
-        let (lower, upper, old_best) = match cache.get(board.clone()) {
-            Some(entry) => {
-                if entry.depth >= depth {
-                    (entry.lower, entry.upper, entry.best)
-                } else {
-                    (-64 * SCALE, 64 * SCALE, entry.best)
+        let (lower, upper, old_best) = if depth > 2 {
+            match cache.get(board.clone()) {
+                Some(entry) => {
+                    if entry.depth >= depth {
+                        (entry.lower, entry.upper, entry.best)
+                    } else {
+                        (-64 * SCALE, 64 * SCALE, entry.best)
+                    }
                 }
+                None => (-64 * SCALE, 64 * SCALE, PASS as u8),
             }
-            None => (-64 * SCALE, 64 * SCALE, PASS as u8),
+        } else {
+            (-64 * SCALE, 64 * SCALE, PASS as u8)
         };
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
