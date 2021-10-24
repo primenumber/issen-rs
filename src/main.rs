@@ -273,8 +273,24 @@ fn ffo_benchmark() {
     let pool = ThreadPool::new().unwrap();
     let mut index: usize = 1;
     let mut stats = Vec::new();
-    //stats.extend(solve_ffo("problem/hard-20.obf",      &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
-    //stats.extend(solve_ffo("problem/hard-25.obf",      &mut index, &search_params, evaluator.clone(), &mut res_cache, &mut eval_cache, &pool));
+    //stats.extend(solve_ffo(
+    //    "problem/hard-20.obf",
+    //    &mut index,
+    //    &search_params,
+    //    evaluator.clone(),
+    //    &mut res_cache,
+    //    &mut eval_cache,
+    //    &pool,
+    //));
+    //stats.extend(solve_ffo(
+    //    "problem/hard-25.obf",
+    //    &mut index,
+    //    &search_params,
+    //    evaluator.clone(),
+    //    &mut res_cache,
+    //    &mut eval_cache,
+    //    &pool,
+    //));
     stats.extend(solve_ffo(
         "problem/fforum-1-19.obf",
         &mut index,
