@@ -623,20 +623,19 @@ fn make_record(
     best: u8,
     alpha: i8,
     beta: i8,
-    lower: i8,
-    upper: i8,
+    range: (i8, i8),
 ) -> ResCache {
-    let range = if res <= alpha {
-        (lower, min(upper, res))
+    let updated_range = if res <= alpha {
+        (range.0, min(range.1, res))
     } else if res >= beta {
-        (max(lower, res), upper)
+        (max(range.0, res), range.1)
     } else {
         (res, res)
     };
     ResCache {
         board,
-        lower: range.0,
-        upper: range.1,
+        lower: updated_range.0,
+        upper: updated_range.1,
         gen: gen,
         best,
     }
@@ -649,8 +648,7 @@ fn update_table(
     best: u8,
     alpha: i8,
     beta: i8,
-    lower: i8,
-    upper: i8,
+    range: (i8, i8),
 ) {
     let record = make_record(
         solve_obj.res_cache.gen,
@@ -659,8 +657,7 @@ fn update_table(
         best,
         alpha,
         beta,
-        lower,
-        upper,
+        range,
     );
     solve_obj.res_cache.update(record);
 }
@@ -727,7 +724,15 @@ fn solve_inner(
                 CacheLookupResult::NoCut(l, u, _) => (l, u),
             };
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed, depth);
-            update_table(solve_obj, board, res, PASS as u8, alpha, beta, lower, upper);
+            update_table(
+                solve_obj,
+                board,
+                res,
+                PASS as u8,
+                alpha,
+                beta,
+                (lower, upper),
+            );
             (res, stat)
         } else {
             match stability_cut(board, &mut alpha, &mut beta) {
@@ -759,7 +764,7 @@ fn solve_inner(
             let (res, best, stat) =
                 move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best, depth);
             if rem >= solve_obj.params.res_cache_limit {
-                update_table(solve_obj, board, res, best, alpha, beta, lower, upper);
+                update_table(solve_obj, board, res, best, alpha, beta, (lower, upper));
             }
             (res, stat)
         }
