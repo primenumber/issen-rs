@@ -637,7 +637,7 @@ fn make_record(
         board,
         lower: updated_range.0,
         upper: updated_range.1,
-        gen: gen,
+        gen,
         best,
     }
 }
