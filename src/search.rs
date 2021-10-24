@@ -619,16 +619,17 @@ fn lookup_table(
 fn make_record(
     gen: u16,
     board: Board,
-    res: i8,
+    mut res: i8,
     best: u8,
     alpha: i8,
     beta: i8,
     range: (i8, i8),
 ) -> ResCache {
+    res = res.clamp(range.0, range.1);
     let updated_range = if res <= alpha {
-        (range.0, min(range.1, res))
+        (range.0, res)
     } else if res >= beta {
-        (max(range.0, res), range.1)
+        (res, range.1)
     } else {
         (res, res)
     };
@@ -817,7 +818,15 @@ pub fn solve_outer(
             let (res, best, stat) =
                 ybwc(&mut solve_obj, board, alpha, beta, passed, old_best, depth).await;
             if rem >= solve_obj.params.res_cache_limit {
-                update_table(&mut solve_obj, board, res, best, alpha, beta, lower, upper);
+                update_table(
+                    &mut solve_obj,
+                    board,
+                    res,
+                    best,
+                    alpha,
+                    beta,
+                    (lower, upper),
+                );
             }
             (res, Some(best), stat)
         }
