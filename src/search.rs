@@ -273,8 +273,7 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> 
     let mut tmp = Vec::with_capacity(32);
     for think_depth in min_depth..=max_depth {
         tmp.clear();
-        let mut res = 64 * SCALE;
-        for (i, &(score, pos, next)) in nexts.iter().enumerate() {
+        for &(_score, pos, next) in nexts.iter() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
             let bonus = if rem < 18 {
                 mobility_score * SCALE * 1
@@ -283,18 +282,10 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> 
             } else {
                 mobility_score * SCALE / 4
             };
-            let (alpha, beta) = if i == 0 {
-                let window = if think_depth == min_depth { 16 } else { 8 };
-                let alpha = (score - window * SCALE).max(-64 * SCALE);
-                let beta = (score + window * SCALE).min(64 * SCALE);
-                (alpha, beta)
-            } else {
-                (res, res + 1)
-            };
-            let new_res = think(
+            let score = think(
                 next,
-                alpha,
-                beta,
+                -64 * SCALE,
+                64 * SCALE,
                 false,
                 solve_obj.evaluator.clone(),
                 &mut solve_obj.eval_cache,
@@ -303,29 +294,7 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> 
             )
             .unwrap()
             .0;
-            let (new_alpha, new_beta) = if new_res < res {
-                (-64 * SCALE, new_res)
-            } else if new_res >= res {
-                (new_res, 64 * SCALE)
-            } else {
-                let score = new_res;
-                tmp.push((score + bonus, pos, next));
-                continue;
-            };
-            let fixed_res = think(
-                next,
-                new_alpha,
-                new_beta,
-                false,
-                solve_obj.evaluator.clone(),
-                &mut solve_obj.eval_cache,
-                &None,
-                think_depth,
-            )
-            .unwrap()
-            .0;
-            tmp.push((fixed_res + bonus, pos, next));
-            res = min(res, fixed_res);
+            tmp.push((score + bonus, pos, next));
         }
         tmp.sort_by(|a, b| a.0.cmp(&b.0));
         swap(&mut nexts, &mut tmp);
