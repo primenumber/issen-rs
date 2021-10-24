@@ -181,6 +181,30 @@ fn static_order(
     (res, stat)
 }
 
+fn negascout_impl(
+    solve_obj: &mut SolveObj,
+    next: Board,
+    alpha: i8,
+    beta: i8,
+    is_first: bool,
+) -> (i8, SolveStat) {
+    if is_first {
+        solve_inner(solve_obj, next, -beta, -alpha, false)
+    } else {
+        let (res, mut stat) = solve_inner(solve_obj, next, -alpha - 1, -alpha, false);
+        let mut neg_result = -res;
+        if neg_result >= beta {
+            return (res, stat);
+        }
+        if neg_result > alpha {
+            let (res2, stat2) = solve_inner(solve_obj, next, -beta, -neg_result, false);
+            stat.merge(stat2);
+            neg_result = -res2;
+        }
+        (-neg_result, stat)
+    }
+}
+
 fn fastest_first(
     solve_obj: &mut SolveObj,
     board: Board,
@@ -205,25 +229,9 @@ fn fastest_first(
     let mut res = -64;
     let mut stat = SolveStat::one();
     for (i, &(_, next)) in nexts[0..count].iter().enumerate() {
-        if i == 0 {
-            let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
-            stat.merge(child_stat);
-            res = max(res, -child_res);
-        } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, next, -alpha - 1, -alpha, false);
-            stat.merge(child_stat);
-            let mut result = -child_res;
-            if result >= beta {
-                return (result, stat);
-            }
-            if result > alpha {
-                alpha = result;
-                let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
-                stat.merge(child_stat);
-                result = -child_res;
-            }
-            res = max(res, result);
-        }
+        let (child_res, child_stat) = negascout_impl(solve_obj, next, alpha, beta, i == 0);
+        res = max(res, -child_res);
+        stat.merge(child_stat);
         alpha = max(alpha, res);
         if alpha >= beta {
             return (res, stat);
@@ -351,32 +359,15 @@ fn move_ordering_by_eval(
     let mut best = PASS as u8;
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
-        if i == 0 {
-            let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
-            stat.merge(child_stat);
+        let (child_res, child_stat) = negascout_impl(solve_obj, next, alpha, beta, i == 0);
+        if -child_res > res {
             res = -child_res;
             best = pos;
-            if res >= beta {
-                return (res, best, stat);
-            }
-            alpha = max(alpha, res);
-        } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, next, -alpha - 1, -alpha, false);
-            stat.merge(child_stat);
-            let mut tmp = -child_res;
-            if alpha < tmp && tmp < beta {
-                let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -tmp, false);
-                stat.merge(child_stat);
-                tmp = -child_res;
-            }
-            if tmp >= beta {
-                return (tmp, pos, stat);
-            }
-            if tmp > res {
-                res = tmp;
-                best = pos;
-                alpha = max(alpha, res);
-            }
+        }
+        stat.merge(child_stat);
+        alpha = max(alpha, res);
+        if res >= beta {
+            return (res, best, stat);
         }
     }
     if v.is_empty() {
