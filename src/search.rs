@@ -293,81 +293,49 @@ fn move_ordering_impl(
             } else {
                 mobility_score * SCALE / 4
             };
-            if i == 0 {
+            let (alpha, beta) = if i == 0 {
                 let window = if think_depth == min_depth { 16 } else { 8 };
                 let alpha = (score - window * SCALE).max(-64 * SCALE);
                 let beta = (score + window * SCALE).min(64 * SCALE);
-                let new_res = think(
-                    next,
-                    alpha,
-                    beta,
-                    false,
-                    solve_obj.evaluator.clone(),
-                    &mut solve_obj.eval_cache,
-                    &None,
-                    think_depth,
-                )
-                .unwrap()
-                .0;
-                let (new_alpha, new_beta) = if new_res <= alpha {
-                    (-64 * SCALE, new_res)
-                } else if new_res >= beta {
-                    (new_res, 64 * SCALE)
-                } else {
-                    res = new_res;
-                    tmp.push((res + bonus, pos, next));
-                    continue;
-                };
-                res = think(
-                    next,
-                    new_alpha,
-                    new_beta,
-                    false,
-                    solve_obj.evaluator.clone(),
-                    &mut solve_obj.eval_cache,
-                    &None,
-                    think_depth,
-                )
-                .unwrap()
-                .0;
-                tmp.push((res + bonus, pos, next));
+                (alpha, beta)
             } else {
-                let new_res = think(
-                    next,
-                    res,
-                    res + 1,
-                    false,
-                    solve_obj.evaluator.clone(),
-                    &mut solve_obj.eval_cache,
-                    &None,
-                    think_depth,
-                )
-                .unwrap()
-                .0;
-                let (new_alpha, new_beta) = if new_res < res {
-                    (-64 * SCALE, new_res)
-                } else if new_res >= res {
-                    (new_res, 64 * SCALE)
-                } else {
-                    let score = new_res;
-                    tmp.push((score + bonus, pos, next));
-                    continue;
-                };
-                let fixed_res = think(
-                    next,
-                    new_alpha,
-                    new_beta,
-                    false,
-                    solve_obj.evaluator.clone(),
-                    &mut solve_obj.eval_cache,
-                    &None,
-                    think_depth,
-                )
-                .unwrap()
-                .0;
-                tmp.push((fixed_res + bonus, pos, next));
-                res = min(res, fixed_res);
-            }
+                (res, res + 1)
+            };
+            let new_res = think(
+                next,
+                alpha,
+                beta,
+                false,
+                solve_obj.evaluator.clone(),
+                &mut solve_obj.eval_cache,
+                &None,
+                think_depth,
+            )
+            .unwrap()
+            .0;
+            let (new_alpha, new_beta) = if new_res < res {
+                (-64 * SCALE, new_res)
+            } else if new_res >= res {
+                (new_res, 64 * SCALE)
+            } else {
+                let score = new_res;
+                tmp.push((score + bonus, pos, next));
+                continue;
+            };
+            let fixed_res = think(
+                next,
+                new_alpha,
+                new_beta,
+                false,
+                solve_obj.evaluator.clone(),
+                &mut solve_obj.eval_cache,
+                &None,
+                think_depth,
+            )
+            .unwrap()
+            .0;
+            tmp.push((fixed_res + bonus, pos, next));
+            res = min(res, fixed_res);
         }
         tmp.sort_by(|a, b| a.0.cmp(&b.0));
         nexts = tmp;
