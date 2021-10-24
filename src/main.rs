@@ -36,11 +36,12 @@ fn read_hand() -> Option<usize> {
     if &s[0..2] == "ps" {
         return Some(64);
     }
-    let column_code = s.chars().nth(0).unwrap() as usize;
+    let mut itr = s.chars();
+    let column_code = itr.next().unwrap() as usize;
     if column_code < 'a' as usize || ('h' as usize) < column_code {
         return None;
     }
-    let row_code = s.chars().nth(1).unwrap() as usize;
+    let row_code = itr.next().unwrap() as usize;
     if row_code < '1' as usize || ('8' as usize) < row_code {
         return None;
     }
