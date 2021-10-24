@@ -389,7 +389,7 @@ fn move_ordering_impl(
                     )
                     .unwrap()
                     .0;
-                    tmp.push((fixed_res + bonus, *pos, next.clone()));
+                    tmp.push((fixed_res + bonus, *pos, *next));
                     res = fixed_res;
                 } else if new_res >= res {
                     let fixed_res = think(
