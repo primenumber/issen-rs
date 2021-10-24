@@ -194,15 +194,7 @@ pub fn think(
             };
         }
         let (res, best) = think_impl(
-            board,
-            new_alpha,
-            new_beta,
-            passed,
-            evaluator,
-            cache,
-            old_best,
-            timer,
-            depth,
+            board, new_alpha, new_beta, passed, evaluator, cache, old_best, timer, depth,
         )?;
         let range = if res <= new_alpha {
             (-64 * SCALE, res)
