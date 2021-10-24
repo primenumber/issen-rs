@@ -1,5 +1,6 @@
 mod bits;
 mod board;
+mod book;
 mod eval;
 mod search;
 mod serialize;
@@ -9,6 +10,7 @@ mod train;
 
 use crate::bits::*;
 use crate::board::*;
+use crate::book::*;
 use crate::eval::*;
 use crate::search::*;
 use crate::table::*;
