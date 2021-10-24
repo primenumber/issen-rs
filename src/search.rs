@@ -215,16 +215,12 @@ fn fastest_first(
     const MAX_FFS_NEXT: usize = 20;
     let mut nexts: [(i8, Board); MAX_FFS_NEXT] = unsafe { MaybeUninit::uninit().assume_init() };
     let mut count = 0;
-    let mut empties = board.empty();
-    while empties != 0 {
-        let pos = empties.tzcnt() as usize;
-        empties = empties & (empties - 1);
-        if let Ok(next) = board.play(pos) {
-            nexts[count] = (weighted_mobility(&next), next);
-            count += 1;
-            assert!(count <= MAX_FFS_NEXT);
-        }
+    for (next, _pos) in board.next_iter() {
+        nexts[count] = (weighted_mobility(&next), next);
+        count += 1;
     }
+    assert!(count <= MAX_FFS_NEXT);
+
     nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
     let mut res = -64;
     let mut stat = SolveStat::one();
@@ -252,13 +248,8 @@ fn fastest_first(
 
 fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> Vec<(u8, Board)> {
     let mut nexts = vec![(0i16, 0u8, board); 0];
-    let mut empties = board.empty();
-    while empties != 0 {
-        let pos = empties.tzcnt() as usize;
-        empties = empties & (empties - 1);
-        if let Ok(next) = board.play(pos) {
-            nexts.push((0, pos as u8, next));
-        }
+    for (next, pos) in board.next_iter() {
+        nexts.push((0, pos as u8, next));
     }
 
     let rem = popcnt(board.empty());
