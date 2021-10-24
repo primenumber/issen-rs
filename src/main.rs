@@ -215,7 +215,7 @@ fn solve_ffo(
                     best.map_or("XX".to_string(), |h| hand_to_string(h)),
                     to_si(stat.node_count),
                     end.as_secs(),
-                    end.subsec_nanos() / 1_000_000,
+                    end.subsec_millis(),
                     nodes_per_sec / 1_000_000
                 );
                 eval_cache.inc_gen();
