@@ -892,7 +892,7 @@ mod tests {
                     assert_eq!(res, desired);
                 }
                 Err(_) => {
-                    assert!(false);
+                    panic!();
                 }
             }
         }
