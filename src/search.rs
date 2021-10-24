@@ -542,13 +542,13 @@ fn update_table(
     solve_obj.res_cache.update(record);
 }
 
-fn stability_cut(board: Board, alpha: &mut i8, beta: &mut i8) -> CutType {
+fn stability_cut(board: Board, alpha: i8, beta: i8) -> CutType {
     let (bits_me, bits_op) = board.stable_partial();
     let lower = 2 * popcnt(bits_me) - 64;
     let upper = 64 - 2 * popcnt(bits_op);
-    if upper <= *alpha {
+    if upper <= alpha {
         CutType::LessThanAlpha(upper)
-    } else if lower >= *beta {
+    } else if lower >= beta {
         CutType::MoreThanBeta(lower)
     } else {
         CutType::NoCut
@@ -573,7 +573,7 @@ fn solve_inner(
         static_order(solve_obj, board, alpha, beta, passed)
     } else {
         if rem >= solve_obj.params.stability_cut_limit {
-            match stability_cut(board, &mut alpha, &mut beta) {
+            match stability_cut(board, alpha, beta) {
                 CutType::NoCut => (),
                 CutType::MoreThanBeta(v) => {
                     return (
@@ -614,27 +614,6 @@ fn solve_inner(
             );
             (res, stat)
         } else {
-            match stability_cut(board, &mut alpha, &mut beta) {
-                CutType::NoCut => (),
-                CutType::MoreThanBeta(v) => {
-                    return (
-                        v,
-                        SolveStat {
-                            node_count: 1,
-                            st_cut_count: 1,
-                        },
-                    )
-                }
-                CutType::LessThanAlpha(v) => {
-                    return (
-                        v,
-                        SolveStat {
-                            node_count: 1,
-                            st_cut_count: 1,
-                        },
-                    )
-                }
-            }
             let (lower, upper, old_best) =
                 match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
                     CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
@@ -665,7 +644,7 @@ pub fn solve_outer(
             let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
             (res, None, stat)
         } else {
-            match stability_cut(board, &mut alpha, &mut beta) {
+            match stability_cut(board, alpha, beta) {
                 CutType::NoCut => (),
                 CutType::MoreThanBeta(v) => {
                     return (
