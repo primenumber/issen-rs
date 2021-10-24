@@ -414,7 +414,7 @@ fn move_ordering_impl(
         tmp.sort_by(|a, b| a.0.cmp(&b.0));
         nexts = tmp;
     }
-    if nexts.len() > 0 && solve_obj.params.reduce {
+    if !nexts.is_empty() && solve_obj.params.reduce {
         let score_min = nexts[0].0;
         nexts
             .into_iter()
