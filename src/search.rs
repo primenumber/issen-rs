@@ -11,7 +11,7 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::task::SpawnExt;
 use futures::StreamExt;
 use std::cmp::{max, min};
-use std::mem::MaybeUninit;
+use std::mem::{swap, MaybeUninit};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -245,13 +245,7 @@ fn fastest_first(
     (res, stat)
 }
 
-fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> Vec<(u8, Board)> {
-    let mut nexts = vec![(0i16, 0u8, board); 0];
-    for (next, pos) in board.next_iter() {
-        nexts.push((0, pos as u8, next));
-    }
-
-    let rem = popcnt(board.empty());
+fn calc_max_depth(rem: i8) -> i8 {
     let mut th_depth = 9;
     if rem <= 27 {
         th_depth += (30 - rem) / 3;
@@ -264,9 +258,21 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> 
         }
         max_depth = max_depth.max(0).min(6);
     }
+    max_depth
+}
+
+fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> Vec<(u8, Board)> {
+    let mut nexts = Vec::with_capacity(32);
+    for (next, pos) in board.next_iter() {
+        nexts.push((0, pos as u8, next));
+    }
+
+    let rem = popcnt(board.empty());
+    let max_depth = calc_max_depth(rem);
     let min_depth = (max_depth - 3).max(0);
+    let mut tmp = Vec::with_capacity(32);
     for think_depth in min_depth..=max_depth {
-        let mut tmp = vec![(0i16, 0u8, board); 0];
+        tmp.clear();
         let mut res = 64 * SCALE;
         for (i, &(score, pos, next)) in nexts.iter().enumerate() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
@@ -322,7 +328,7 @@ fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> 
             res = min(res, fixed_res);
         }
         tmp.sort_by(|a, b| a.0.cmp(&b.0));
-        nexts = tmp;
+        swap(&mut nexts, &mut tmp);
     }
     if !nexts.is_empty() && solve_obj.params.reduce {
         let score_min = nexts[0].0;
