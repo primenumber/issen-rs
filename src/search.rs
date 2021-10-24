@@ -110,7 +110,6 @@ fn naive(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    depth: i8,
 ) -> (i8, SolveStat) {
     let mut pass = true;
     //let mut empties = board.empty();
@@ -118,7 +117,7 @@ fn naive(
     let mut stat = SolveStat::one();
     for (next, _pos) in board.next_iter() {
         pass = false;
-        let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
+        let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
         res = max(res, -child_res);
         stat.merge(child_stat);
         alpha = max(alpha, res);
@@ -130,8 +129,7 @@ fn naive(
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -145,7 +143,6 @@ fn static_order(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    depth: i8,
 ) -> (i8, SolveStat) {
     let mut pass = true;
     let mut res = -64;
@@ -162,8 +159,7 @@ fn static_order(
             empties = empties & (empties - 1);
             if let Ok(next) = board.play(pos) {
                 pass = false;
-                let (child_res, child_stat) =
-                    solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
+                let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
                 res = max(res, -child_res);
                 stat.merge(child_stat);
                 alpha = max(alpha, res);
@@ -177,8 +173,7 @@ fn static_order(
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -192,7 +187,6 @@ fn fastest_first(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    depth: i8,
 ) -> (i8, SolveStat) {
     const MAX_FFS_NEXT: usize = 20;
     let mut nexts: [(i8, Board); MAX_FFS_NEXT] = unsafe { MaybeUninit::uninit().assume_init() };
@@ -212,13 +206,11 @@ fn fastest_first(
     let mut stat = SolveStat::one();
     for (i, &(_, next)) in nexts[0..count].iter().enumerate() {
         if i == 0 {
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
+            let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
             stat.merge(child_stat);
             res = max(res, -child_res);
         } else {
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, next, -alpha - 1, -alpha, false, depth + 1);
+            let (child_res, child_stat) = solve_inner(solve_obj, next, -alpha - 1, -alpha, false);
             stat.merge(child_stat);
             let mut result = -child_res;
             if result >= beta {
@@ -226,8 +218,7 @@ fn fastest_first(
             }
             if result > alpha {
                 alpha = result;
-                let (child_res, child_stat) =
-                    solve_inner(solve_obj, next, -beta, -alpha, false, depth + 1);
+                let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
                 stat.merge(child_stat);
                 result = -child_res;
             }
@@ -243,7 +234,7 @@ fn fastest_first(
             return (board.score(), stat);
         } else {
             let (child_result, child_stat) =
-                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+                solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
             stat.merge(child_stat);
             return (-child_result, stat);
         }
@@ -251,12 +242,7 @@ fn fastest_first(
     (res, stat)
 }
 
-fn move_ordering_impl(
-    solve_obj: &mut SolveObj,
-    board: Board,
-    _old_best: u8,
-    _depth: i8,
-) -> Vec<(u8, Board)> {
+fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> Vec<(u8, Board)> {
     let mut nexts = vec![(0i16, 0u8, board); 0];
     let mut empties = board.empty();
     while empties != 0 {
@@ -359,17 +345,14 @@ fn move_ordering_by_eval(
     beta: i8,
     passed: bool,
     old_best: u8,
-    depth: i8,
 ) -> (i8, u8, SolveStat) {
-    let v = move_ordering_impl(solve_obj, board, old_best, depth);
+    let v = move_ordering_impl(solve_obj, board, old_best);
     let mut res = -64;
     let mut best = PASS as u8;
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
-            let next_depth = depth + solve_obj.params.ybwc_elder_add;
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, next, -beta, -alpha, false, next_depth);
+            let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
             stat.merge(child_stat);
             res = -child_res;
             best = pos;
@@ -378,14 +361,11 @@ fn move_ordering_by_eval(
             }
             alpha = max(alpha, res);
         } else {
-            let next_depth = depth + solve_obj.params.ybwc_younger_add;
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, next, -alpha - 1, -alpha, false, next_depth);
+            let (child_res, child_stat) = solve_inner(solve_obj, next, -alpha - 1, -alpha, false);
             stat.merge(child_stat);
             let mut tmp = -child_res;
             if alpha < tmp && tmp < beta {
-                let (child_res, child_stat) =
-                    solve_inner(solve_obj, next, -beta, -tmp, false, next_depth);
+                let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -tmp, false);
                 stat.merge(child_stat);
                 tmp = -child_res;
             }
@@ -403,8 +383,7 @@ fn move_ordering_by_eval(
         if passed {
             return (board.score(), PASS as u8, stat);
         } else {
-            let (child_res, child_stat) =
-                solve_inner(solve_obj, board.pass(), -beta, -alpha, true, depth);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
             stat.merge(child_stat);
             return (-child_res, PASS as u8, stat);
         }
@@ -421,7 +400,7 @@ async fn ybwc(
     old_best: u8,
     depth: i8,
 ) -> (i8, u8, SolveStat) {
-    let v = move_ordering_impl(solve_obj, board, old_best, depth);
+    let v = move_ordering_impl(solve_obj, board, old_best);
     let mut stat = SolveStat::one();
     if v.is_empty() {
         if passed {
@@ -626,7 +605,6 @@ fn solve_inner(
     mut alpha: i8,
     mut beta: i8,
     passed: bool,
-    depth: i8,
 ) -> (i8, SolveStat) {
     let rem = popcnt(board.empty());
     if rem == 0 {
@@ -634,9 +612,9 @@ fn solve_inner(
     } else if rem == 1 {
         near_leaf(board)
     } else if rem < solve_obj.params.static_ordering_limit {
-        naive(solve_obj, board, alpha, beta, passed, depth)
+        naive(solve_obj, board, alpha, beta, passed)
     } else if rem < solve_obj.params.ffs_ordering_limit {
-        static_order(solve_obj, board, alpha, beta, passed, depth)
+        static_order(solve_obj, board, alpha, beta, passed)
     } else {
         if rem >= solve_obj.params.stability_cut_limit {
             match stability_cut(board, &mut alpha, &mut beta) {
@@ -662,13 +640,13 @@ fn solve_inner(
             }
         }
         if rem < solve_obj.params.res_cache_limit {
-            fastest_first(solve_obj, board, alpha, beta, passed, depth)
+            fastest_first(solve_obj, board, alpha, beta, passed)
         } else if rem < solve_obj.params.eval_ordering_limit {
             let (lower, upper) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
                 CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
                 CacheLookupResult::NoCut(l, u, _) => (l, u),
             };
-            let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed, depth);
+            let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed);
             update_table(
                 solve_obj,
                 board,
@@ -707,7 +685,7 @@ fn solve_inner(
                     CacheLookupResult::NoCut(l, u, b) => (l, u, b),
                 };
             let (res, best, stat) =
-                move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best, depth);
+                move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best);
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(solve_obj, board, res, best, alpha, beta, (lower, upper));
             }
@@ -728,7 +706,7 @@ pub fn solve_outer(
     async move {
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
-            let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed, depth);
+            let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
             (res, None, stat)
         } else {
             match stability_cut(board, &mut alpha, &mut beta) {
@@ -972,7 +950,7 @@ mod tests {
                         search_params.clone(),
                         pool.clone(),
                     );
-                    let (res, _stat) = solve_inner(&mut obj, board, -64, 64, false, 0);
+                    let (res, _stat) = solve_inner(&mut obj, board, -64, 64, false);
                     if res != desired {
                         board.print();
                     }
