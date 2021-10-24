@@ -79,12 +79,9 @@ fn play(matches: &ArgMatches) -> Board {
             let hand: usize;
             loop {
                 println!("Input move");
-                match read_hand() {
-                    Some(h) => {
-                        hand = h;
-                        break;
-                    }
-                    None => (),
+                if let Some(h) = read_hand() {
+                    hand = h;
+                    break;
                 }
             }
             hand
@@ -215,7 +212,7 @@ fn solve_ffo(
                     rem,
                     res,
                     desired,
-                    best.map_or("XX".to_string(), |h| hand_to_string(h)),
+                    best.map_or("XX".to_string(), hand_to_string),
                     to_si(stat.node_count),
                     end.as_secs(),
                     end.subsec_millis(),
@@ -236,7 +233,7 @@ fn solve_ffo(
     stats
 }
 
-fn report_stats(stats: &[Stat]) -> () {
+fn report_stats(stats: &[Stat]) {
     let mut wrongs = 0;
     let mut nodes_sum = 0;
     let mut elapsed_sum = 0.0;
