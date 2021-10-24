@@ -2,9 +2,9 @@ mod bits;
 mod board;
 mod eval;
 mod search;
-mod think;
 mod serialize;
 mod table;
+mod think;
 mod train;
 
 use crate::bits::*;

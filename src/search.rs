@@ -217,14 +217,8 @@ fn fastest_first(
             stat.merge(child_stat);
             res = max(res, -child_res);
         } else {
-            let (child_res, child_stat) = solve_inner(
-                solve_obj,
-                next,
-                -alpha - 1,
-                -alpha,
-                false,
-                depth + 1,
-            );
+            let (child_res, child_stat) =
+                solve_inner(solve_obj, next, -alpha - 1, -alpha, false, depth + 1);
             stat.merge(child_stat);
             let mut result = -child_res;
             if result >= beta {
@@ -762,15 +756,8 @@ fn solve_inner(
                     CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
                     CacheLookupResult::NoCut(l, u, b) => (l, u, b),
                 };
-            let (res, best, stat) = move_ordering_by_eval(
-                solve_obj,
-                board,
-                alpha,
-                beta,
-                passed,
-                old_best,
-                depth,
-            );
+            let (res, best, stat) =
+                move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best, depth);
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(solve_obj, board, res, best, alpha, beta, lower, upper);
             }
@@ -822,16 +809,8 @@ pub fn solve_outer(
                     CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
                     CacheLookupResult::NoCut(l, u, b) => (l, u, b),
                 };
-            let (res, best, stat) = ybwc(
-                &mut solve_obj,
-                board,
-                alpha,
-                beta,
-                passed,
-                old_best,
-                depth,
-            )
-            .await;
+            let (res, best, stat) =
+                ybwc(&mut solve_obj, board, alpha, beta, passed, old_best, depth).await;
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(&mut solve_obj, board, res, best, alpha, beta, lower, upper);
             }
