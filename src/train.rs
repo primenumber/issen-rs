@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 const PACKED_SCALE: i32 = 256;
@@ -225,7 +226,8 @@ pub fn update_record(matches: &ArgMatches) {
     let pool = ThreadPool::new().unwrap();
 
     let mut handles = Vec::new();
-    for i in 0..num_records {
+    let finished = Arc::new(AtomicUsize::new(0));
+    for _i in 0..num_records {
         let mut solve_obj = SolveObj::new(
             res_cache.clone(),
             eval_cache.clone(),
@@ -234,22 +236,20 @@ pub fn update_record(matches: &ArgMatches) {
             pool.clone(),
         );
 
+        let finished = finished.clone();
+
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();
 
         handles.push(
             pool.spawn_with_handle(async move {
-                if i % 1000 == 0 {
-                    eprintln!("{}", i);
-                }
                 let record = parse_record(&input_line);
-                if let Some(updated_record) =
-                    update_record_impl(&record, &mut solve_obj, depth).await
-                {
-                    Some(updated_record)
-                } else {
-                    None
+                let updated = update_record_impl(&record, &mut solve_obj, depth).await;
+                let count = finished.fetch_add(1, Ordering::SeqCst);
+                if count % 1000 == 0 {
+                    eprintln!("{}", count);
                 }
+                updated
             })
             .unwrap(),
         );
