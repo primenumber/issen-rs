@@ -1,4 +1,3 @@
-use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
 use crate::table::*;
@@ -233,30 +232,24 @@ pub fn think_with_move(
     let mut current_score = -64 * SCALE;
     let mut current_hand = None;
     let mut pass = true;
-    let mut empties = board.empty();
-    while empties != 0 {
-        let bit = empties & empties.wrapping_neg();
-        empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
-        if let Ok(next) = board.play(pos) {
-            let s = -think(
-                next,
-                -beta,
-                -alpha,
-                false,
-                evaluator.clone(),
-                cache,
-                timer,
-                depth - 1,
-            )?
-            .0;
-            if s > current_score {
-                current_hand = Some(Hand::Play(pos));
-                current_score = s;
-                alpha = max(alpha, current_score);
-            }
-            pass = false;
+    for (next, hand) in board.next_iter() {
+        let s = -think(
+            next,
+            -beta,
+            -alpha,
+            false,
+            evaluator.clone(),
+            cache,
+            timer,
+            depth - 1,
+        )?
+        .0;
+        if s > current_score {
+            current_hand = Some(hand);
+            current_score = s;
+            alpha = max(alpha, current_score);
         }
+        pass = false;
     }
     if pass {
         Some((score, Hand::Pass))
