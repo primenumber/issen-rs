@@ -670,7 +670,7 @@ mod tests {
         }
 
         fn is_movable(&self, pos: usize) -> bool {
-            if pos >= PASS {
+            if pos >= BOARD_SIZE {
                 return false;
             }
             if self.data[pos] != State::Empty {
@@ -680,7 +680,7 @@ mod tests {
         }
 
         fn play(&self, pos: usize) -> Result<NaiveBoard, UnmovableError> {
-            if pos >= PASS {
+            if pos >= BOARD_SIZE {
                 return Err(UnmovableError {});
             }
             if self.data[pos] != State::Empty {
