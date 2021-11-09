@@ -26,6 +26,8 @@ pub struct PlayIterator {
     remain: u64,
 }
 
+pub const BOARD_SIZE: usize = 64;
+
 pub const PASS: usize = 64;
 
 impl Board {
@@ -82,7 +84,7 @@ impl Board {
     }
 
     pub fn is_movable(&self, pos: usize) -> bool {
-        if pos >= PASS {
+        if pos >= BOARD_SIZE {
             return false;
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
@@ -92,7 +94,7 @@ impl Board {
     }
 
     pub fn play(&self, pos: usize) -> Result<Board, UnmovableError> {
-        if pos >= PASS {
+        if pos >= BOARD_SIZE {
             return Err(UnmovableError {});
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
@@ -145,7 +147,7 @@ impl Board {
         let mut res = flip_l << shift1;
         res |= flip_r >> shift1;
         res &= u64x4::splat(self.empty());
-        return res.or();
+        res.or()
     }
 
     pub fn mobility(&self) -> Vec<usize> {
@@ -164,7 +166,7 @@ impl Board {
 
     pub fn next_iter(&self) -> PlayIterator {
         PlayIterator {
-            board: self.clone(),
+            board: *self,
             remain: self.empty(),
         }
     }
@@ -177,7 +179,7 @@ impl Board {
     }
 
     #[allow(dead_code)]
-    pub fn print(&self) -> () {
+    pub fn print(&self) {
         let mut writer = BufWriter::new(std::io::stdout());
         for i in 0..64 {
             if ((self.player >> i) & 1) != 0 {
@@ -196,12 +198,12 @@ impl Board {
                 write!(writer, ".").unwrap();
             }
             if i % 8 == 7 {
-                write!(writer, "\n").unwrap();
+                writeln!(writer).unwrap();
             }
         }
     }
 
-    pub fn print_with_sides(&self) -> () {
+    pub fn print_with_sides(&self) {
         let mut writer = BufWriter::new(std::io::stdout());
         write!(writer, " |abcdefgh\n-+--------\n").unwrap();
         for r in 0..8 {
@@ -224,7 +226,7 @@ impl Board {
                     write!(writer, ".").unwrap();
                 }
             }
-            write!(writer, "\n").unwrap();
+            writeln!(writer).unwrap();
         }
     }
 
@@ -388,7 +390,7 @@ impl fmt::Display for Board {
                 write!(f, ".")?;
             }
             if i % 8 == 7 {
-                write!(f, "\n")?;
+                writeln!(f)?;
             }
         }
         Ok(())
