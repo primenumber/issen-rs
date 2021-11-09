@@ -383,7 +383,7 @@ struct SparseMat {
     weight: Vec<f64>,
     col_size: usize,
     row_starts: Vec<usize>,
-    cols: Vec<usize>,
+    cols: Vec<u32>,
 }
 
 impl SparseMat {
@@ -403,8 +403,8 @@ impl SparseMat {
                 .iter()
                 .zip(&self.weight[row_start..row_end])
             {
-                cols_t[col].push(row);
-                weight_t[col].push(w);
+                cols_t[col as usize].push(row as u32);
+                weight_t[col as usize].push(w);
             }
         }
         let mut row_starts_t = Vec::new();
@@ -433,7 +433,7 @@ impl SparseMat {
                     .iter()
                     .zip(&self.weight[row_start..row_end])
                 {
-                    ans += w * x.get_unchecked(*col);
+                    ans += w * x.get_unchecked(*col as usize);
                 }
                 ans
             };
@@ -456,7 +456,7 @@ impl SparseMat {
                     .iter()
                     .zip(&self.weight[row_start..row_end])
                 {
-                    *x.get_unchecked_mut(*col) += w * val;
+                    *x.get_unchecked_mut(*col as usize) += w * val;
                 }
             }
         }
@@ -574,19 +574,19 @@ impl WeightedPattern {
         }
     }
 
-    fn generate_indices_impl(&self, board: &Board) -> Vec<usize> {
+    fn generate_indices_impl(&self, board: &Board) -> Vec<u32> {
         let mut indices = Vec::new();
         for (idx, pattern) in self.patterns.iter().enumerate() {
             let pbit = pext(board.player, *pattern) as usize;
             let obit = pext(board.opponent, *pattern) as usize;
             let pattern_index =
                 self.base3_converter.to_base3(pbit, obit) + self.pattern_starts[idx];
-            indices.push(pattern_index);
+            indices.push(pattern_index as u32);
         }
         indices
     }
 
-    fn generate_indices(&self, board: &Board) -> Vec<usize> {
+    fn generate_indices(&self, board: &Board) -> Vec<u32> {
         let mut board_rot = *board;
         let mut indices = Vec::with_capacity(self.patterns.len() * 8 + 4);
         for _i in 0..4 {
@@ -604,7 +604,7 @@ impl WeightedPattern {
         row_starts.push(0);
         let mut mat_weights = Vec::with_capacity(expected_size);
         let mut cols = Vec::with_capacity(expected_size);
-        let other_params_offset = self.pattern_starts[self.patterns.len()];
+        let other_params_offset = self.pattern_starts[self.patterns.len()] as u32;
         // construct matrix
         for board in boards {
             let indices = self.generate_indices(board);
@@ -624,8 +624,8 @@ impl WeightedPattern {
         // L2 normalization
         let col_size = *self.pattern_starts.last().unwrap();
         for col in 0..col_size {
-            cols.push(col);
-            mat_weights.push(16.0);
+            cols.push(col as u32);
+            mat_weights.push(8.0);
             row_starts.push(cols.len());
         }
         let mut scores_vec: Vec<_> = scores.iter().copied().collect();
@@ -636,7 +636,7 @@ impl WeightedPattern {
             row_starts,
             cols,
         };
-        cgls(&spm, &mut self.weight, &scores_vec, 100);
+        cgls(&spm, &mut self.weight, &scores_vec, 300);
     }
 }
 
