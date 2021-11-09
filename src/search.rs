@@ -261,7 +261,11 @@ fn calc_max_depth(rem: i8) -> i8 {
     max_depth
 }
 
-fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: u8) -> Vec<(u8, Board)> {
+fn move_ordering_impl(
+    solve_obj: &mut SolveObj,
+    board: Board,
+    _old_best: Option<u8>,
+) -> Vec<(u8, Board)> {
     let mut nexts = Vec::with_capacity(32);
     for (next, pos) in board.next_iter() {
         nexts.push((0, pos as u8, next));
@@ -317,22 +321,22 @@ fn move_ordering_by_eval(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    old_best: u8,
+    old_best: Option<u8>,
 ) -> (i8, u8, SolveStat) {
     let v = move_ordering_impl(solve_obj, board, old_best);
     let mut res = -64;
-    let mut best = PASS as u8;
+    let mut best = None;
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
         let (child_res, child_stat) = negascout_impl(solve_obj, next, alpha, beta, i == 0);
         if -child_res > res {
             res = -child_res;
-            best = pos;
+            best = Some(pos);
         }
         stat.merge(child_stat);
         alpha = max(alpha, res);
         if res >= beta {
-            return (res, best, stat);
+            return (res, best.unwrap(), stat);
         }
     }
     if v.is_empty() {
@@ -344,7 +348,7 @@ fn move_ordering_by_eval(
             return (-child_res, PASS as u8, stat);
         }
     }
-    (res, best, stat)
+    (res, best.unwrap(), stat)
 }
 
 async fn ybwc(
@@ -353,7 +357,7 @@ async fn ybwc(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    old_best: u8,
+    old_best: Option<u8>,
     depth: i8,
 ) -> (i8, u8, SolveStat) {
     let v = move_ordering_impl(solve_obj, board, old_best);
@@ -369,7 +373,7 @@ async fn ybwc(
         }
     }
     let mut res = -64;
-    let mut best = PASS as u8;
+    let mut best = None;
     let (tx, mut rx) = mpsc::unbounded();
     let mut handles = Vec::new();
     for (i, &(pos, next)) in v.iter().enumerate() {
@@ -379,10 +383,10 @@ async fn ybwc(
                 solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await;
             stat.merge(child_stat);
             res = -child_res;
-            best = pos;
+            best = Some(pos);
             alpha = max(alpha, res);
             if alpha >= beta {
-                return (res, best, stat);
+                return (res, best.unwrap(), stat);
             }
         } else if depth < solve_obj.params.ybwc_depth_limit {
             let tx = tx.clone();
@@ -412,7 +416,7 @@ async fn ybwc(
                             tmp = -child_res;
                         }
                         if tmp > res {
-                            best = pos;
+                            best = Some(pos);
                             res = tmp;
                         }
                         let res_tuple = (res, best);
@@ -435,7 +439,7 @@ async fn ybwc(
                 return (tmp, pos, stat);
             }
             if tmp > res {
-                best = pos;
+                best = Some(pos);
                 res = tmp;
             }
         }
@@ -449,17 +453,17 @@ async fn ybwc(
             best = child_best;
             if res >= beta {
                 rx.close();
-                return (res, best, stat);
+                return (res, best.unwrap(), stat);
             }
         }
     }
-    (res, best, stat)
+    (res, best.unwrap(), stat)
 }
 
 #[derive(PartialEq, Debug)]
 enum CacheLookupResult {
     Cut(i8),
-    NoCut(i8, i8, u8),
+    NoCut(i8, i8, Option<u8>),
 }
 
 fn make_lookup_result(
@@ -468,8 +472,8 @@ fn make_lookup_result(
     beta: &mut i8,
 ) -> CacheLookupResult {
     let (lower, upper, old_best) = match res_cache {
-        Some(cache) => (cache.lower, cache.upper, cache.best),
-        None => (-64, 64, PASS as u8),
+        Some(cache) => (cache.lower, cache.upper, Some(cache.best)),
+        None => (-64, 64, None),
     };
     let old_alpha = *alpha;
     *alpha = max(lower, *alpha);
@@ -716,10 +720,7 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> usize {
                     best_pos = Some(pos);
                 }
             }
-            match best_pos {
-                Some(pos) => pos,
-                None => PASS,
-            }
+            best_pos.unwrap()
         }
     }
 }
@@ -748,7 +749,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
             );
             assert_eq!(alpha, -12);
             assert_eq!(beta, 4);
@@ -760,7 +761,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
             );
             assert_eq!(alpha, res_cache.lower);
             assert_eq!(beta, res_cache.upper);
@@ -772,7 +773,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
             );
             assert_eq!(alpha, res_cache.lower);
             assert_eq!(beta, 8);
@@ -784,7 +785,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
             );
             assert_eq!(alpha, -6);
             assert_eq!(beta, res_cache.upper);
@@ -812,7 +813,7 @@ mod tests {
             let mut alpha = -6;
             let mut beta = 26;
             let result = make_lookup_result(None, &mut alpha, &mut beta);
-            assert_eq!(result, CacheLookupResult::NoCut(-64, 64, PASS as u8));
+            assert_eq!(result, CacheLookupResult::NoCut(-64, 64, None));
             assert_eq!(alpha, -6);
             assert_eq!(beta, 26);
         }
