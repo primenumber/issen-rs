@@ -21,8 +21,8 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
         input_line.clear();
         reader.read_line(&mut input_line).unwrap();
         let data: Vec<&str> = input_line.split(' ').collect();
-        let player = u64::from_str_radix(&data[0], 16).ok()?;
-        let opponent = u64::from_str_radix(&data[1], 16).ok()?;
+        let player = u64::from_str_radix(data[0], 16).ok()?;
+        let opponent = u64::from_str_radix(data[1], 16).ok()?;
         let board = Board {
             player,
             opponent,
