@@ -18,7 +18,7 @@ pub struct EvalCache {
     pub lower: i16,
     pub upper: i16,
     pub gen: u16,
-    pub best: u8,
+    pub best: Option<Hand>,
     pub depth: i8,
 }
 
@@ -32,7 +32,7 @@ impl Default for EvalCache {
             lower: 0,
             upper: 0,
             gen: 0,
-            best: PASS as u8,
+            best: None,
             depth: 0,
         }
     }
@@ -78,7 +78,7 @@ pub struct ResCache {
     pub lower: i8,
     pub upper: i8,
     pub gen: u16,
-    pub best: u8,
+    pub best: Option<Hand>,
 }
 
 impl Default for ResCache {
@@ -91,7 +91,7 @@ impl Default for ResCache {
             lower: 0,
             upper: 0,
             gen: 0,
-            best: PASS as u8,
+            best: None,
         }
     }
 }

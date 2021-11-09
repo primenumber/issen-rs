@@ -151,7 +151,7 @@ async fn create_record_by_solve(mut board: Board, solve_obj: &mut SolveObj) -> (
     let mut result = String::new();
     while !board.is_gameover() {
         let pos = solve_with_move(board, solve_obj).await;
-        if pos != PASS {
+        if let Hand::Play(pos) = pos {
             result += &pos_to_str(pos);
             board = board.play(pos).unwrap();
         } else {

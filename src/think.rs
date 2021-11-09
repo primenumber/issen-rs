@@ -25,25 +25,18 @@ fn think_impl(
     passed: bool,
     evaluator: Arc<Evaluator>,
     cache: &mut EvalCacheTable,
-    old_best: u8,
+    old_best: Option<Hand>,
     timer: &Option<Timer>,
     depth: i8,
-) -> Option<(i16, usize)> {
-    let mut v = vec![(0i16, 0i16, 0i8, 0usize, board); 0];
-    let mut w = vec![(0i8, 0usize, board); 0];
-    let mut empties = board.empty();
-    while empties != 0 {
-        let bit = empties & empties.wrapping_neg();
-        empties = empties & (empties - 1);
-        let pos = popcnt(bit - 1) as usize;
-        if let Ok(next) = board.play(pos) {
-            let bonus = if pos as u8 == old_best {
-                -16 * SCALE
-            } else {
-                0
-            };
-            v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
-        }
+) -> Option<(i16, Hand)> {
+    let mut v = vec![(0i16, 0i16, 0i8, Hand::Pass, board); 0];
+    for (next, pos) in board.next_iter() {
+        let bonus = if Some(pos) == old_best {
+            -16 * SCALE
+        } else {
+            0
+        };
+        v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
     }
     v.sort_by(|a, b| {
         if a.0 == b.0 {
@@ -56,16 +49,12 @@ fn think_impl(
             a.0.cmp(&b.0)
         }
     });
-    w.sort_by(|a, b| a.0.cmp(&b.0));
     let mut nexts = Vec::new();
     for &(_, _, _, pos, next) in &v {
         nexts.push((pos, next));
     }
-    for &(_, pos, next) in &w {
-        nexts.push((pos, next));
-    }
     let mut res = -64 * SCALE;
-    let mut best = PASS;
+    let mut best = None;
     for (i, &(pos, next)) in nexts.iter().enumerate() {
         if i == 0 {
             res = -think(
@@ -79,7 +68,7 @@ fn think_impl(
                 depth - 1,
             )?
             .0;
-            best = pos;
+            best = Some(pos);
         } else {
             let reduce = if -evaluator.eval(next) < alpha - 16 * SCALE {
                 2
@@ -99,10 +88,10 @@ fn think_impl(
             .0;
             if tmp > res {
                 res = tmp;
-                best = pos;
+                best = Some(pos);
             }
             if res >= beta {
-                return Some((res, best));
+                return Some((res, best.unwrap()));
             }
             if res > alpha {
                 alpha = res;
@@ -123,12 +112,12 @@ fn think_impl(
         }
         alpha = alpha.max(res);
         if alpha >= beta {
-            return Some((res, best));
+            return Some((res, best.unwrap()));
         }
     }
     if nexts.is_empty() {
         if passed {
-            return Some(((board.score() as i16) * SCALE, PASS));
+            return Some(((board.score() as i16) * SCALE, Hand::Pass));
         } else {
             return Some((
                 -think(
@@ -142,11 +131,11 @@ fn think_impl(
                     depth,
                 )?
                 .0,
-                PASS,
+                Hand::Pass,
             ));
         }
     }
-    Some((res, best))
+    Some((res, best.unwrap()))
 }
 
 pub fn think(
@@ -158,7 +147,7 @@ pub fn think(
     cache: &mut EvalCacheTable,
     timer: &Option<Timer>,
     depth: i8,
-) -> Option<(i16, Option<usize>)> {
+) -> Option<(i16, Option<Hand>)> {
     if depth <= 0 {
         let res = evaluator.eval(board);
         Some((res, None))
@@ -179,10 +168,10 @@ pub fn think(
                         (-64 * SCALE, 64 * SCALE, entry.best)
                     }
                 }
-                None => (-64 * SCALE, 64 * SCALE, PASS as u8),
+                None => (-64 * SCALE, 64 * SCALE, None),
             }
         } else {
-            (-64 * SCALE, 64 * SCALE, PASS as u8)
+            (-64 * SCALE, 64 * SCALE, None)
         };
         let new_alpha = alpha.max(lower);
         let new_beta = beta.min(upper);
@@ -208,7 +197,7 @@ pub fn think(
             lower: range.0,
             upper: range.1,
             gen: cache.gen,
-            best: best as u8,
+            best: Some(best),
             depth,
         };
         cache.update(entry);
@@ -225,7 +214,7 @@ pub fn think_with_move(
     cache: &mut EvalCacheTable,
     timer: &Option<Timer>,
     depth: i8,
-) -> Option<(i16, usize)> {
+) -> Option<(i16, Hand)> {
     let (score, hand) = think(
         board,
         alpha,
@@ -242,7 +231,7 @@ pub fn think_with_move(
     }
 
     let mut current_score = -64 * SCALE;
-    let mut current_hand = PASS;
+    let mut current_hand = None;
     let mut pass = true;
     let mut empties = board.empty();
     while empties != 0 {
@@ -262,7 +251,7 @@ pub fn think_with_move(
             )?
             .0;
             if s > current_score {
-                current_hand = pos;
+                current_hand = Some(Hand::Play(pos));
                 current_score = s;
                 alpha = max(alpha, current_score);
             }
@@ -270,9 +259,9 @@ pub fn think_with_move(
         }
     }
     if pass {
-        Some((score, PASS))
+        Some((score, Hand::Pass))
     } else {
-        Some((score, current_hand))
+        Some((score, current_hand.unwrap()))
     }
 }
 
@@ -284,7 +273,7 @@ pub fn iterative_think(
     evaluator: Arc<Evaluator>,
     cache: &mut EvalCacheTable,
     time_limit: u128,
-) -> (i16, usize, i8) {
+) -> (i16, Hand, i8) {
     let start = Instant::now();
     let timer = Timer {
         period: start,

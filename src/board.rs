@@ -26,6 +26,12 @@ pub struct PlayIterator {
     remain: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Hand {
+    Play(usize),
+    Pass,
+}
+
 pub const BOARD_SIZE: usize = 64;
 
 pub const PASS: usize = 64;
@@ -398,14 +404,14 @@ impl fmt::Display for Board {
 }
 
 impl Iterator for PlayIterator {
-    type Item = (Board, usize);
+    type Item = (Board, Hand);
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.remain != 0 {
             let pos = self.remain.trailing_zeros() as usize;
             self.remain &= self.remain - 1;
             if let Ok(next) = self.board.play(pos) {
-                return Some((next, pos));
+                return Some((next, Hand::Play(pos)));
             }
         }
         None

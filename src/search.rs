@@ -264,11 +264,11 @@ fn calc_max_depth(rem: i8) -> i8 {
 fn move_ordering_impl(
     solve_obj: &mut SolveObj,
     board: Board,
-    _old_best: Option<u8>,
-) -> Vec<(u8, Board)> {
+    _old_best: Option<Hand>,
+) -> Vec<(Hand, Board)> {
     let mut nexts = Vec::with_capacity(32);
     for (next, pos) in board.next_iter() {
-        nexts.push((0, pos as u8, next));
+        nexts.push((0, pos, next));
     }
 
     let rem = popcnt(board.empty());
@@ -321,8 +321,8 @@ fn move_ordering_by_eval(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    old_best: Option<u8>,
-) -> (i8, u8, SolveStat) {
+    old_best: Option<Hand>,
+) -> (i8, Option<Hand>, SolveStat) {
     let v = move_ordering_impl(solve_obj, board, old_best);
     let mut res = -64;
     let mut best = None;
@@ -336,19 +336,19 @@ fn move_ordering_by_eval(
         stat.merge(child_stat);
         alpha = max(alpha, res);
         if res >= beta {
-            return (res, best.unwrap(), stat);
+            return (res, best, stat);
         }
     }
     if v.is_empty() {
         if passed {
-            return (board.score(), PASS as u8, stat);
+            return (board.score(), Some(Hand::Pass), stat);
         } else {
             let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
             stat.merge(child_stat);
-            return (-child_res, PASS as u8, stat);
+            return (-child_res, Some(Hand::Pass), stat);
         }
     }
-    (res, best.unwrap(), stat)
+    (res, best, stat)
 }
 
 async fn ybwc(
@@ -357,19 +357,19 @@ async fn ybwc(
     mut alpha: i8,
     beta: i8,
     passed: bool,
-    old_best: Option<u8>,
+    old_best: Option<Hand>,
     depth: i8,
-) -> (i8, u8, SolveStat) {
+) -> (i8, Option<Hand>, SolveStat) {
     let v = move_ordering_impl(solve_obj, board, old_best);
     let mut stat = SolveStat::one();
     if v.is_empty() {
         if passed {
-            return (board.score(), PASS as u8, stat);
+            return (board.score(), Some(Hand::Pass), stat);
         } else {
             let (child_res, _child_best, child_stat) =
                 solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
             stat.merge(child_stat);
-            return (-child_res, PASS as u8, stat);
+            return (-child_res, Some(Hand::Pass), stat);
         }
     }
     let mut res = -64;
@@ -386,7 +386,7 @@ async fn ybwc(
             best = Some(pos);
             alpha = max(alpha, res);
             if alpha >= beta {
-                return (res, best.unwrap(), stat);
+                return (res, best, stat);
             }
         } else if depth < solve_obj.params.ybwc_depth_limit {
             let tx = tx.clone();
@@ -436,7 +436,7 @@ async fn ybwc(
                 tmp = -child_res;
             }
             if tmp >= beta {
-                return (tmp, pos, stat);
+                return (tmp, Some(pos), stat);
             }
             if tmp > res {
                 best = Some(pos);
@@ -453,17 +453,17 @@ async fn ybwc(
             best = child_best;
             if res >= beta {
                 rx.close();
-                return (res, best.unwrap(), stat);
+                return (res, best, stat);
             }
         }
     }
-    (res, best.unwrap(), stat)
+    (res, best, stat)
 }
 
 #[derive(PartialEq, Debug)]
 enum CacheLookupResult {
     Cut(i8),
-    NoCut(i8, i8, Option<u8>),
+    NoCut(i8, i8, Option<Hand>),
 }
 
 fn make_lookup_result(
@@ -472,7 +472,7 @@ fn make_lookup_result(
     beta: &mut i8,
 ) -> CacheLookupResult {
     let (lower, upper, old_best) = match res_cache {
-        Some(cache) => (cache.lower, cache.upper, Some(cache.best)),
+        Some(cache) => (cache.lower, cache.upper, cache.best),
         None => (-64, 64, None),
     };
     let old_alpha = *alpha;
@@ -503,7 +503,7 @@ fn make_record(
     gen: u16,
     board: Board,
     mut res: i8,
-    best: u8,
+    best: Option<Hand>,
     alpha: i8,
     beta: i8,
     range: (i8, i8),
@@ -529,7 +529,7 @@ fn update_table(
     solve_obj: &mut SolveObj,
     board: Board,
     res: i8,
-    best: u8,
+    best: Option<Hand>,
     alpha: i8,
     beta: i8,
     range: (i8, i8),
@@ -607,15 +607,7 @@ fn solve_inner(
                 CacheLookupResult::NoCut(l, u, _) => (l, u),
             };
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed);
-            update_table(
-                solve_obj,
-                board,
-                res,
-                PASS as u8,
-                alpha,
-                beta,
-                (lower, upper),
-            );
+            update_table(solve_obj, board, res, None, alpha, beta, (lower, upper));
             (res, stat)
         } else {
             let (lower, upper, old_best) =
@@ -640,7 +632,7 @@ pub fn solve_outer(
     mut beta: i8,
     passed: bool,
     depth: i8,
-) -> BoxFuture<'static, (i8, Option<u8>, SolveStat)> {
+) -> BoxFuture<'static, (i8, Option<Hand>, SolveStat)> {
     let mut solve_obj = solve_obj.clone();
     async move {
         let rem = popcnt(board.empty());
@@ -689,7 +681,7 @@ pub fn solve_outer(
                     (lower, upper),
                 );
             }
-            (res, Some(best), stat)
+            (res, best, stat)
         }
     }
     .boxed()
@@ -702,13 +694,13 @@ pub fn solve(
     beta: i8,
     passed: bool,
     depth: i8,
-) -> (i8, Option<u8>, SolveStat) {
+) -> (i8, Option<Hand>, SolveStat) {
     executor::block_on(solve_outer(solve_obj, board, alpha, beta, passed, depth))
 }
 
-pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> usize {
+pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> Hand {
     match solve_outer(solve_obj, board, -64, 64, false, 0).await.1 {
-        Some(best) => best as usize,
+        Some(best) => best,
         None => {
             let mut best_pos = None;
             let mut result = -65;
@@ -720,7 +712,7 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> usize {
                     best_pos = Some(pos);
                 }
             }
-            best_pos.unwrap()
+            Hand::Play(best_pos.unwrap())
         }
     }
 }

@@ -78,11 +78,11 @@ fn play(matches: &ArgMatches) -> Board {
     while !board.is_gameover() {
         board.print_with_sides();
         let hand = if board.is_black == player_turn {
-            let hand: usize;
+            let hand: Hand;
             loop {
                 println!("Input move");
                 if let Some(h) = read_hand() {
-                    hand = h;
+                    hand = Hand::Play(h);
                     break;
                 }
             }
@@ -115,13 +115,12 @@ fn play(matches: &ArgMatches) -> Board {
             res_cache.inc_gen();
             best
         };
-        if hand == 64 {
-            board = board.pass();
-        } else {
-            match board.play(hand) {
+        match hand {
+            Hand::Pass => board = board.pass(),
+            Hand::Play(hand) => match board.play(hand) {
                 Ok(next) => board = next,
                 Err(_) => println!("Invalid move"),
-            }
+            },
         }
     }
     println!("Game over");
@@ -157,16 +156,17 @@ fn to_si(x: usize) -> String {
     }
 }
 
-fn hand_to_string(hand: u8) -> String {
-    if hand == PASS as u8 {
-        "ps".to_string()
-    } else {
-        let row = hand / 8;
-        let col = hand % 8;
-        let row_char = 0x30 + row;
-        let col_char = 0x41 + col;
-        let s = [col_char, row_char];
-        str::from_utf8(&s).unwrap().to_string()
+fn hand_to_string(hand: Hand) -> String {
+    match hand {
+        Hand::Pass => "ps".to_string(),
+        Hand::Play(hand) => {
+            let row = hand as u8 / 8;
+            let col = hand as u8 % 8;
+            let row_char = 0x30 + row;
+            let col_char = 0x41 + col;
+            let s = [col_char, row_char];
+            str::from_utf8(&s).unwrap().to_string()
+        }
     }
 }
 
