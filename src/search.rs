@@ -32,7 +32,7 @@ pub struct SearchParams {
 pub struct SolveObj {
     res_cache: ResCacheTable,
     pub eval_cache: EvalCacheTable,
-    evaluator: Arc<Evaluator>,
+    pub evaluator: Arc<Evaluator>,
     params: SearchParams,
     pool: ThreadPool,
 }
@@ -712,7 +712,11 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> Hand {
                     best_pos = Some(pos);
                 }
             }
-            Hand::Play(best_pos.unwrap())
+            if let Some(pos) = best_pos {
+                Hand::Play(pos)
+            } else {
+                Hand::Pass
+            }
         }
     }
 }

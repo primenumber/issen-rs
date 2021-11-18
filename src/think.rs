@@ -229,7 +229,7 @@ pub fn think_with_move(
         return Some((score, b));
     }
 
-    let mut current_score = -64 * SCALE;
+    let mut current_score = -64 * SCALE - 1;
     let mut current_hand = None;
     let mut pass = true;
     for (next, hand) in board.next_iter() {
