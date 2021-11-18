@@ -1,6 +1,7 @@
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
+use crate::playout::*;
 use crate::search::*;
 use crate::serialize::*;
 use crate::table::*;
@@ -235,21 +236,26 @@ pub fn update_record(matches: &ArgMatches) {
             search_params.clone(),
             pool.clone(),
         );
-
-        let finished = finished.clone();
-
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();
+        let finished = finished.clone();
 
         handles.push(
             pool.spawn_with_handle(async move {
                 let record = parse_record(&input_line);
-                let updated = update_record_impl(&record, &mut solve_obj, depth).await;
-                let count = finished.fetch_add(1, Ordering::SeqCst);
-                if count % 1000 == 0 {
-                    eprintln!("{}", count);
+                let mut updateds = Vec::new();
+                for (idx, _) in record.iter().enumerate() {
+                    let sub_record = record.clone();
+                    let sub_record = &sub_record[0..=idx];
+                    //let updated = update_record_impl(&record, &mut solve_obj, depth).await;
+                    let updated = playout(sub_record, &mut solve_obj, 100, depth).await;
+                    let count = finished.fetch_add(1, Ordering::SeqCst);
+                    if count % 1000 == 0 {
+                        eprintln!("{}", count);
+                    }
+                    updateds.push(updated);
                 }
-                updated
+                updateds
             })
             .unwrap(),
         );
@@ -257,7 +263,8 @@ pub fn update_record(matches: &ArgMatches) {
 
     let mut result = Vec::new();
     for handle in handles {
-        if let Some((line, score)) = executor::block_on(handle) {
+        let results = executor::block_on(handle);
+        for (line, score) in results.iter().flatten() {
             result.push(format!("{} {}\n", line, score));
         }
     }
