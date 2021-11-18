@@ -50,7 +50,7 @@ fn parse_record(line: &str) -> Vec<usize> {
     result
 }
 
-fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
+pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
     match board.play(pos) {
         Ok(next) => Some(next),
         Err(_) => {
@@ -89,7 +89,7 @@ fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     Some(boards)
 }
 
-fn load_records(input_path: &str) -> Vec<Vec<Board>> {
+pub fn load_records(input_path: &str) -> Vec<Vec<Board>> {
     let in_f = File::open(input_path).unwrap();
     let mut reader = BufReader::new(in_f);
 
@@ -137,7 +137,7 @@ pub fn clean_record(matches: &ArgMatches) {
     }
 }
 
-fn pos_to_str(pos: usize) -> String {
+pub fn pos_to_str(pos: usize) -> String {
     let row = pos / 8;
     let col = pos % 8;
     let first = (col as u8) + ('A' as u8);
@@ -148,7 +148,7 @@ fn pos_to_str(pos: usize) -> String {
     result
 }
 
-async fn create_record_by_solve(mut board: Board, solve_obj: &mut SolveObj) -> (String, Board) {
+pub async fn create_record_by_solve(mut board: Board, solve_obj: &mut SolveObj) -> (String, Board) {
     let mut result = String::new();
     while !board.is_gameover() {
         let pos = solve_with_move(board, solve_obj).await;

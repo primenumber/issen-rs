@@ -2,6 +2,7 @@ mod bits;
 mod board;
 mod book;
 mod eval;
+mod playout;
 mod search;
 mod serialize;
 mod table;
@@ -382,6 +383,22 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("minimax-record")
+                .about("Minimax Record")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("gen-dataset")
                 .about("Generate training dataset")
                 .arg(
@@ -530,6 +547,9 @@ fn main() {
         }
         ("update-record", Some(matches)) => {
             update_record(matches);
+        }
+        ("minimax-record", Some(matches)) => {
+            minimax_record(matches);
         }
         ("gen-dataset", Some(matches)) => {
             gen_dataset(matches);
