@@ -32,6 +32,41 @@ pub enum Hand {
     Pass,
 }
 
+impl Hand {
+    fn rot90(&self) -> Hand {
+        match self {
+            Self::Pass => *self,
+            Self::Play(pos) => {
+                let row = pos / 8;
+                let col = pos % 8;
+                Self::Play((7 - col) * 8 + row)
+            }
+        }
+    }
+
+    fn flip_diag(&self) -> Hand {
+        match self {
+            Self::Pass => *self,
+            Self::Play(pos) => {
+                let row = pos / 8;
+                let col = pos % 8;
+                Self::Play(col * 8 + row)
+            }
+        }
+    }
+
+    pub fn transform(&self, rotate: usize, mirror: bool) -> Hand {
+        let mut tmp = *self;
+        for _ in 0..rotate {
+            tmp = tmp.rot90();
+        }
+        if mirror {
+            tmp = tmp.flip_diag();
+        }
+        tmp
+    }
+}
+
 pub const BOARD_SIZE: usize = 64;
 
 pub const PASS: usize = 64;
@@ -340,6 +375,28 @@ impl Board {
             opponent,
             is_black: true,
         })
+    }
+
+    pub fn transform(&self, rotate: usize, mirror: bool) -> Board {
+        let mut tmp = *self;
+        for _ in 0..rotate {
+            tmp = tmp.rot90();
+        }
+        if mirror {
+            tmp = tmp.flip_diag();
+        }
+        tmp
+    }
+
+    pub fn sym_boards(&self) -> Vec<Board> {
+        let mut tmp = *self;
+        let mut boards = Vec::new();
+        for _ in 0..4 {
+            tmp = tmp.rot90();
+            boards.push(tmp);
+            boards.push(tmp.flip_diag());
+        }
+        boards
     }
 }
 
