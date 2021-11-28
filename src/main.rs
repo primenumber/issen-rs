@@ -66,7 +66,7 @@ fn play(matches: &ArgMatches) -> Board {
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
     };
-    let evaluator = Arc::new(Evaluator::new("table"));
+    let evaluator = Arc::new(Evaluator::new("table-211122"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
@@ -270,7 +270,7 @@ fn ffo_benchmark() {
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
     };
-    let evaluator = Arc::new(Evaluator::new("table"));
+    let evaluator = Arc::new(Evaluator::new("table-211122"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
@@ -435,6 +435,22 @@ fn main() {
                 .arg(Arg::with_name("width").required(true).takes_value(true)),
         )
         .subcommand(
+            SubCommand::with_name("update-record-v2")
+                .about("Update record iterative")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("gen-book")
                 .about("Generate book")
                 .arg(
@@ -534,6 +550,16 @@ fn main() {
                         .takes_value(true),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("eval-stats")
+                .about("Compute stats from dataset")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .short("i")
+                        .required(true)
+                        .takes_value(true),
+                ),
+        )
         .get_matches();
     match matches.subcommand() {
         ("ffobench", Some(_matches)) => {
@@ -547,6 +573,9 @@ fn main() {
         }
         ("update-record", Some(matches)) => {
             update_record(matches);
+        }
+        ("update-record-v2", Some(matches)) => {
+            iterative_update_book(matches);
         }
         ("minimax-record", Some(matches)) => {
             minimax_record(matches);
@@ -577,6 +606,9 @@ fn main() {
         }
         ("parse-board", Some(matches)) => {
             parse_board(matches);
+        }
+        ("eval-stats", Some(matches)) => {
+            eval_stats(matches);
         }
         ("", None) => {
             eprintln!("Need subcommand");

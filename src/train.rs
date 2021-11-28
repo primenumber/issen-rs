@@ -5,6 +5,7 @@ use crate::playout::*;
 use crate::search::*;
 use crate::serialize::*;
 use crate::table::*;
+use crate::think::*;
 use clap::ArgMatches;
 use futures::executor;
 use futures::executor::ThreadPool;
@@ -16,7 +17,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const PACKED_SCALE: i32 = 256;
 
@@ -37,7 +38,7 @@ fn parse_pos(s: &[u8]) -> Option<usize> {
     }
 }
 
-fn parse_record(line: &str) -> Vec<usize> {
+pub fn parse_record(line: &str) -> Vec<usize> {
     let mut result = Vec::new();
     for chunk in line.as_bytes().chunks(2) {
         match parse_pos(chunk) {
@@ -66,7 +67,7 @@ pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
     }
 }
 
-fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
+pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     let mut board = Board {
         player: 0x0000_0008_1000_0000,
         opponent: 0x0000_0010_0800_0000,
@@ -303,7 +304,8 @@ pub fn gen_dataset(matches: &ArgMatches) {
     eprintln!("Minimax-ing results...");
     let mut boards_with_results = HashMap::new();
     for boards in &boards_set {
-        for &board in boards {
+        let boards_with_results_next = Arc::new(Mutex::new(HashMap::new()));
+        boards.par_iter().for_each(|&board| {
             let mut current = board;
             let mut mobility = current.mobility();
             let is_pass = mobility.is_empty();
@@ -311,24 +313,38 @@ pub fn gen_dataset(matches: &ArgMatches) {
                 current = current.pass();
                 mobility = current.mobility();
                 if mobility.is_empty() {
-                    boards_with_results.insert(board, (board.score(), PASS));
-                    continue;
+                    boards_with_results_next
+                        .lock()
+                        .unwrap()
+                        .insert(board, (board.score(), PASS));
+                    return;
                 }
             }
             let mut best_score = None;
             let mut best_pos = None;
             for pos in mobility {
                 let next = current.play(pos).unwrap();
-                if let Some((score, _)) = boards_with_results.get(&next) {
-                    best_score = Some(max(-score, best_score.unwrap_or(-64)));
-                    best_pos = Some(pos);
+                for next_sym in next.sym_boards() {
+                    if let Some((score, _)) = boards_with_results.get(&next_sym) {
+                        best_score = Some(max(-score, best_score.unwrap_or(-64)));
+                        best_pos = Some(pos);
+                    }
                 }
             }
             if is_pass {
-                boards_with_results.insert(board, (-best_score.unwrap(), best_pos.unwrap()));
+                boards_with_results_next
+                    .lock()
+                    .unwrap()
+                    .insert(board, (-best_score.unwrap(), best_pos.unwrap()));
             } else {
-                boards_with_results.insert(current, (best_score.unwrap(), best_pos.unwrap()));
+                boards_with_results_next
+                    .lock()
+                    .unwrap()
+                    .insert(current, (best_score.unwrap(), best_pos.unwrap()));
             }
+        });
+        for (&k, v) in boards_with_results_next.lock().unwrap().iter() {
+            boards_with_results.insert(k, v.clone());
         }
     }
 
@@ -794,4 +810,94 @@ pub fn pack_weights(matches: &ArgMatches) {
         let c = encode_utf16(bits).unwrap();
         write!(&mut writer, "{}", c).unwrap();
     }
+}
+
+pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
+    let input_path = matches.value_of("INPUT").unwrap();
+
+    let in_f = File::open(input_path).ok()?;
+    let mut reader = BufReader::new(in_f);
+
+    eprintln!("Loading...");
+    let mut input_line = String::new();
+    reader.read_line(&mut input_line).unwrap();
+    let num_boards = input_line.trim().parse().unwrap();
+    let mut dataset = HashSet::new();
+    for _i in 0..num_boards {
+        input_line.clear();
+        reader.read_line(&mut input_line).unwrap();
+        let data: Vec<&str> = input_line.split(' ').collect();
+        let player = u64::from_str_radix(&data[0], 16).ok()?;
+        let opponent = u64::from_str_radix(&data[1], 16).ok()?;
+        dataset.insert((
+            Board {
+                player,
+                opponent,
+                is_black: true, // dummy
+            },
+            data[2].trim().parse::<i16>().unwrap(),
+        ));
+    }
+
+    let dataset: Vec<_> = dataset.into_iter().take(8192).collect();
+
+    eprintln!("Computing...");
+    let eval_cache = EvalCacheTable::new(256, 65536);
+    let evaluator = Arc::new(Evaluator::new("table-single"));
+    let depth_max = 8;
+    let scores: Vec<_> = dataset
+        .par_iter()
+        .map(|&(board, _)| {
+            let mut scores = Vec::new();
+            let mut eval_cache = eval_cache.clone();
+            for depth in 1..=depth_max {
+                eval_cache.inc_gen();
+                if let Some((evaluated, _)) = think(
+                    board,
+                    -64 * SCALE,
+                    64 * SCALE,
+                    false,
+                    evaluator.clone(),
+                    &mut eval_cache,
+                    &None,
+                    depth as i8,
+                ) {
+                    scores.push(evaluated);
+                } else {
+                    panic!()
+                }
+            }
+            scores
+        })
+        .collect();
+    let mut diff = vec![vec![Vec::new(); depth_max]; depth_max];
+    for vs in scores.iter() {
+        for (i, s1) in vs.iter().enumerate() {
+            for (j, s2) in vs.iter().enumerate() {
+                if i >= j {
+                    continue;
+                }
+                diff[i][j].push((s1 - s2).abs());
+            }
+        }
+    }
+    for (i, sub) in diff.into_iter().enumerate() {
+        for (j, mut vd) in sub.into_iter().enumerate() {
+            if i >= j {
+                continue;
+            }
+            let total = vd.len();
+            if total == 0 {
+                continue;
+            }
+            vd.sort_unstable();
+            println!("{} {}", i, j);
+            for idx in 1..=15 {
+                let ratio = 1.0 - 0.7f32.powi(idx);
+                let index = (total as f32 * ratio) as usize;
+                println!("{} {}", ratio, vd[index] as f32 / SCALE as f32);
+            }
+        }
+    }
+    Some(())
 }
