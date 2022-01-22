@@ -43,17 +43,7 @@ impl Searcher {
             };
             v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
         }
-        v.sort_by(|a, b| {
-            if a.0 == b.0 {
-                if a.1 == b.1 {
-                    a.2.cmp(&b.2)
-                } else {
-                    a.1.cmp(&b.1)
-                }
-            } else {
-                a.0.cmp(&b.0)
-            }
-        });
+        v.sort_by(|a, b| (a.0, a.1, a.2).cmp(&(b.0, b.1, b.2)));
         let mut nexts = Vec::new();
         for &(_, _, _, pos, next) in &v {
             nexts.push((pos, next));
