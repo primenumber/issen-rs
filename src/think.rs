@@ -130,7 +130,7 @@ impl Searcher {
             let new_alpha = alpha.max(lower);
             let new_beta = beta.min(upper);
             if new_alpha >= new_beta {
-                return if alpha > upper {
+                return if alpha >= upper {
                     Some((upper, None))
                 } else {
                     Some((lower, None))
