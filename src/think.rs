@@ -7,8 +7,8 @@ use std::time::Instant;
 
 #[derive(Clone)]
 pub struct Timer {
-    period: Instant,
-    time_limit: u128,
+    pub period: Instant,
+    pub time_limit: u128,
 }
 
 impl Timer {
@@ -21,6 +21,7 @@ pub struct Searcher {
     pub evaluator: Arc<Evaluator>,
     pub cache: EvalCacheTable,
     pub timer: Option<Timer>,
+    pub node_count: usize,
 }
 
 impl Searcher {
@@ -110,6 +111,7 @@ impl Searcher {
         passed: bool,
         depth: i8,
     ) -> Option<(i16, Option<Hand>)> {
+        self.node_count += 1;
         if depth <= 0 {
             let res = self.evaluator.eval(board);
             Some((res, None))
@@ -198,48 +200,35 @@ impl Searcher {
             Some((score, current_hand.unwrap()))
         }
     }
-}
 
-pub fn iterative_think(
-    board: Board,
-    alpha: i16,
-    beta: i16,
-    passed: bool,
-    evaluator: Arc<Evaluator>,
-    cache: &mut EvalCacheTable,
-    time_limit: u128,
-) -> (i16, Hand, i8) {
-    let start = Instant::now();
-    let timer = Timer {
-        period: start,
-        time_limit,
-    };
-    let min_depth = 3;
-    let mut current_depth = min_depth;
+    pub fn iterative_think(
+        &mut self,
+        board: Board,
+        alpha: i16,
+        beta: i16,
+        passed: bool,
+    ) -> (i16, Hand, i8) {
+        let min_depth = 3;
+        let mut current_depth = min_depth;
 
-    let mut searcher = Searcher {
-        evaluator,
-        cache: cache.clone(),
-        timer: Some(timer),
-    };
+        let (mut score, mut hand) = self
+            .think_with_move(board, alpha, beta, passed, min_depth)
+            .unwrap();
 
-    let (mut score, mut hand) = searcher
-        .think_with_move(board, alpha, beta, passed, min_depth)
-        .unwrap();
+        if !self.timer.as_ref().unwrap().is_ok() {
+            return (score, hand, current_depth);
+        }
 
-    if !searcher.timer.as_ref().unwrap().is_ok() {
-        return (score, hand, current_depth);
+        for depth in (min_depth + 1).. {
+            self.cache.inc_gen();
+            let t = match self.think_with_move(board, alpha, beta, passed, depth) {
+                Some(t) => t,
+                _ => return (score, hand, current_depth),
+            };
+            score = t.0;
+            hand = t.1;
+            current_depth = depth;
+        }
+        (score, hand, current_depth)
     }
-
-    for depth in (min_depth + 1).. {
-        cache.inc_gen();
-        let t = match searcher.think_with_move(board, alpha, beta, passed, depth) {
-            Some(t) => t,
-            _ => return (score, hand, current_depth),
-        };
-        score = t.0;
-        hand = t.1;
-        current_depth = depth;
-    }
-    (score, hand, current_depth)
 }

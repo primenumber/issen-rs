@@ -91,15 +91,20 @@ fn play(matches: &ArgMatches) -> Board {
         } else {
             println!("Thinking...");
             let best = if popcnt(board.empty()) > 22 {
-                let (score, best, depth) = iterative_think(
-                    board,
-                    -64 * SCALE,
-                    64 * SCALE,
-                    false,
-                    evaluator.clone(),
-                    &mut eval_cache,
-                    1000,
-                );
+                let time_limit = 1000;
+                let start = Instant::now();
+                let timer = Timer {
+                    period: start,
+                    time_limit,
+                };
+                let mut searcher = Searcher {
+                    evaluator: evaluator.clone(),
+                    cache: eval_cache.clone(),
+                    timer: Some(timer),
+                    node_count: 0,
+                };
+                let (score, best, depth) =
+                    searcher.iterative_think(board, -64 * SCALE, 64 * SCALE, false);
                 eprintln!("Estimated result: {}, Depth: {}", score, depth);
                 best
             } else {

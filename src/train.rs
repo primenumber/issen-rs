@@ -854,6 +854,7 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
                 evaluator: evaluator.clone(),
                 cache: eval_cache.clone(),
                 timer: None,
+                node_count: 0,
             };
             for depth in 1..=depth_max {
                 eval_cache.inc_gen();

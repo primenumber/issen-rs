@@ -290,6 +290,7 @@ fn move_ordering_impl(
                 evaluator: solve_obj.evaluator.clone(),
                 cache: solve_obj.eval_cache.clone(),
                 timer: None,
+                node_count: 0,
             };
             let score = searcher
                 .think(next, -64 * SCALE, 64 * SCALE, false, think_depth)
