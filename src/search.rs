@@ -286,18 +286,15 @@ fn move_ordering_impl(
             } else {
                 mobility_score * SCALE / 4
             };
-            let score = think(
-                next,
-                -64 * SCALE,
-                64 * SCALE,
-                false,
-                solve_obj.evaluator.clone(),
-                &mut solve_obj.eval_cache,
-                &None,
-                think_depth,
-            )
-            .unwrap()
-            .0;
+            let mut searcher = Searcher {
+                evaluator: solve_obj.evaluator.clone(),
+                cache: solve_obj.eval_cache.clone(),
+                timer: None,
+            };
+            let score = searcher
+                .think(next, -64 * SCALE, 64 * SCALE, false, think_depth)
+                .unwrap()
+                .0;
             tmp.push((score + bonus, pos, next));
         }
         tmp.sort_by(|a, b| a.0.cmp(&b.0));
