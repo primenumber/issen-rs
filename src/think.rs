@@ -25,6 +25,42 @@ pub struct Searcher {
 }
 
 impl Searcher {
+    fn think_naive(
+        &mut self,
+        board: Board,
+        mut alpha: i16,
+        beta: i16,
+        passed: bool,
+        depth: i8,
+    ) -> Option<(i16, Hand)> {
+        let mut res = -64 * SCALE - 1;
+        let mut best = None;
+        for (i, (next, pos)) in board.next_iter().enumerate() {
+            let tmp = -self.think(next, -alpha - 1, -alpha, false, depth - 1)?.0;
+            if tmp > res {
+                res = tmp;
+                best = Some(pos);
+            }
+            if res >= beta {
+                return Some((res, best.unwrap()));
+            }
+            if res > alpha {
+                alpha = res;
+                res = res.max(-self.think(next, -beta, -alpha, false, depth - 1)?.0);
+            }
+        }
+        if best == None {
+            if passed {
+                return Some(((board.score() as i16) * SCALE, Hand::Pass));
+            } else {
+                return Some((
+                    -self.think(board.pass(), -beta, -alpha, true, depth)?.0,
+                    Hand::Pass,
+                ));
+            }
+        }
+        Some((res, best.unwrap()))
+    }
     fn think_impl(
         &mut self,
         board: Board,
@@ -34,28 +70,31 @@ impl Searcher {
         old_best: Option<Hand>,
         depth: i8,
     ) -> Option<(i16, Hand)> {
-        let mut v = vec![(0i16, 0i16, 0i8, Hand::Pass, board); 0];
+        let mut v = Vec::with_capacity(16);
         for (next, pos) in board.next_iter() {
             let bonus = if Some(pos) == old_best {
                 -16 * SCALE
             } else {
                 0
             };
-            v.push((bonus + weighted_mobility(&next) as i16, 0, 0, pos, next));
+            let eval_score = self.evaluator.eval(next);
+            v.push((
+                next,
+                pos,
+                bonus + weighted_mobility(&next) as i16 * SCALE + eval_score as i16,
+                eval_score,
+                0,
+            ));
         }
-        v.sort_by(|a, b| (a.0, a.1, a.2).cmp(&(b.0, b.1, b.2)));
-        let mut nexts = Vec::new();
-        for &(_, _, _, pos, next) in &v {
-            nexts.push((pos, next));
-        }
+        v.sort_by(|a, b| (a.2, a.3, a.4).cmp(&(b.2, b.3, b.4)));
         let mut res = -64 * SCALE;
         let mut best = None;
-        for (i, &(pos, next)) in nexts.iter().enumerate() {
+        for (i, &(next, pos, eval_score, _, _)) in v.iter().enumerate() {
             if i == 0 {
                 res = -self.think(next, -beta, -alpha, false, depth - 1)?.0;
                 best = Some(pos);
             } else {
-                let reduce = if -self.evaluator.eval(next) < alpha - 16 * SCALE {
+                let reduce = if -eval_score < alpha - 16 * SCALE {
                     2
                 } else {
                     1
@@ -80,7 +119,7 @@ impl Searcher {
                 return Some((res, best.unwrap()));
             }
         }
-        if nexts.is_empty() {
+        if v.is_empty() {
             if passed {
                 return Some(((board.score() as i16) * SCALE, Hand::Pass));
             } else {
@@ -105,6 +144,9 @@ impl Searcher {
         if depth <= 0 {
             let res = self.evaluator.eval(board);
             Some((res, None))
+        } else if depth <= 2 {
+            let (res, best) = self.think_naive(board, alpha, beta, passed, depth)?;
+            Some((res, Some(best)))
         } else {
             if depth > 8 {
                 if let Some(t) = &self.timer {
@@ -113,7 +155,8 @@ impl Searcher {
                     }
                 }
             }
-            let (lower, upper, old_best) = if depth > 2 {
+            let min_cache_depth = 4;
+            let (lower, upper, old_best) = if depth >= min_cache_depth {
                 match self.cache.get(board) {
                     Some(entry) => {
                         if entry.depth >= depth {
@@ -131,29 +174,31 @@ impl Searcher {
             let new_beta = beta.min(upper);
             if new_alpha >= new_beta {
                 return if alpha >= upper {
-                    Some((upper, None))
+                    Some((upper, old_best))
                 } else {
-                    Some((lower, None))
+                    Some((lower, old_best))
                 };
             }
             let (res, best) =
                 self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
-            let range = if res <= new_alpha {
-                (-64 * SCALE, res)
-            } else if res >= new_beta {
-                (res, 64 * SCALE)
-            } else {
-                (res, res)
-            };
-            let entry = EvalCache {
-                board,
-                lower: range.0,
-                upper: range.1,
-                gen: self.cache.gen,
-                best: Some(best),
-                depth,
-            };
-            self.cache.update(entry);
+            if depth >= min_cache_depth {
+                let range = if res <= new_alpha {
+                    (-64 * SCALE, res)
+                } else if res >= new_beta {
+                    (res, 64 * SCALE)
+                } else {
+                    (res, res)
+                };
+                let entry = EvalCache {
+                    board,
+                    lower: range.0,
+                    upper: range.1,
+                    gen: self.cache.gen,
+                    best: Some(best),
+                    depth,
+                };
+                self.cache.update(entry);
+            }
             Some((res, Some(best)))
         }
     }
