@@ -110,9 +110,13 @@ impl Evaluator {
         for (i, pattern) in self.patterns.iter().enumerate() {
             let player_pattern = pext(board.player, *pattern) as usize;
             let opponent_pattern = pext(board.opponent, *pattern) as usize;
-            score += self.weights[index]
-                [self.offsets[i] + self.base3[player_pattern] + 2 * self.base3[opponent_pattern]]
-                as i32;
+            unsafe {
+                score += *self.weights.get_unchecked(index).get_unchecked(
+                    self.offsets.get_unchecked(i)
+                        + self.base3.get_unchecked(player_pattern)
+                        + 2 * self.base3.get_unchecked(opponent_pattern),
+                ) as i32;
+            }
         }
         score
     }
