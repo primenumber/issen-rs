@@ -134,6 +134,78 @@ fn play(matches: &ArgMatches) -> Board {
     board
 }
 
+fn self_play(matches: &ArgMatches) -> Board {
+    let search_params = SearchParams {
+        reduce: false,
+        ybwc_depth_limit: 12,
+        ybwc_elder_add: 1,
+        ybwc_younger_add: 2,
+        ybwc_empties_limit: 16,
+        eval_ordering_limit: 15,
+        res_cache_limit: 11,
+        stability_cut_limit: 12,
+        ffs_ordering_limit: 6,
+        static_ordering_limit: 3,
+    };
+    let evaluator = Arc::new(Evaluator::new("table-211122"));
+    let mut res_cache = ResCacheTable::new(256, 65536);
+    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let pool = ThreadPool::new().unwrap();
+
+    let mut board = Board {
+        player: 0x0000000810000000,
+        opponent: 0x0000001008000000,
+        is_black: true,
+    };
+    while !board.is_gameover() {
+        board.print_with_sides();
+        println!("Thinking...");
+        let best = if popcnt(board.empty()) > 22 {
+            let time_limit = 1000;
+            let start = Instant::now();
+            let timer = Timer {
+                period: start,
+                time_limit,
+            };
+            let mut searcher = Searcher {
+                evaluator: evaluator.clone(),
+                cache: eval_cache.clone(),
+                timer: Some(timer),
+                node_count: 0,
+            };
+            let (score, best, depth) =
+                searcher.iterative_think(board, -64 * SCALE, 64 * SCALE, false);
+            eprintln!(
+                "Estimated result: {}, Depth: {}, Nodes: {}",
+                score, depth, searcher.node_count
+            );
+            best
+        } else {
+            let mut obj = SolveObj::new(
+                res_cache.clone(),
+                eval_cache.clone(),
+                evaluator.clone(),
+                search_params.clone(),
+                pool.clone(),
+            );
+            executor::block_on(solve_with_move(board, &mut obj))
+        };
+        eval_cache.inc_gen();
+        res_cache.inc_gen();
+        let hand = best;
+        match hand {
+            Hand::Pass => board = board.pass(),
+            Hand::Play(hand) => match board.play(hand) {
+                Ok(next) => board = next,
+                Err(_) => println!("Invalid move"),
+            },
+        }
+    }
+    println!("Game over, score: {}", board.score());
+    board.print_with_sides();
+    board
+}
+
 fn to_si(x: usize) -> String {
     if x == 0 {
         return "0".to_string();
@@ -349,6 +421,7 @@ fn main() {
                     .takes_value(true),
             ),
         )
+        .subcommand(SubCommand::with_name("self-play").about("Automatic self play"))
         .subcommand(
             SubCommand::with_name("clean-record")
                 .about("Cleaning record")
@@ -572,6 +645,9 @@ fn main() {
         }
         ("play", Some(matches)) => {
             play(matches);
+        }
+        ("self-play", Some(matches)) => {
+            self_play(matches);
         }
         ("clean-record", Some(matches)) => {
             clean_record(matches);
