@@ -497,53 +497,6 @@ fn lookup_table(
     make_lookup_result(res_cache, alpha, beta)
 }
 
-fn make_record(
-    gen: u16,
-    board: Board,
-    mut res: i8,
-    best: Option<Hand>,
-    alpha: i8,
-    beta: i8,
-    range: (i8, i8),
-) -> ResCache {
-    res = res.clamp(range.0, range.1);
-    let updated_range = if res <= alpha {
-        (range.0, res)
-    } else if res >= beta {
-        (res, range.1)
-    } else {
-        (res, res)
-    };
-    ResCache {
-        board,
-        lower: updated_range.0,
-        upper: updated_range.1,
-        gen,
-        best,
-    }
-}
-
-fn update_table(
-    solve_obj: &mut SolveObj,
-    board: Board,
-    res: i8,
-    best: Option<Hand>,
-    alpha: i8,
-    beta: i8,
-    range: (i8, i8),
-) {
-    let record = make_record(
-        solve_obj.res_cache.gen,
-        board,
-        res,
-        best,
-        alpha,
-        beta,
-        range,
-    );
-    solve_obj.res_cache.update(record);
-}
-
 fn stability_cut(board: Board, alpha: i8, beta: i8) -> CutType {
     let (bits_me, bits_op) = board.stable_partial();
     let lower = 2 * popcnt(bits_me) - 64;
@@ -605,7 +558,15 @@ fn solve_inner(
                 CacheLookupResult::NoCut(l, u, _) => (l, u),
             };
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed);
-            update_table(solve_obj, board, res, None, alpha, beta, (lower, upper));
+            update_table(
+                &mut solve_obj.res_cache,
+                board,
+                res,
+                None,
+                alpha,
+                beta,
+                (lower, upper),
+            );
             (res, stat)
         } else {
             let (lower, upper, old_best) =
@@ -616,7 +577,15 @@ fn solve_inner(
             let (res, best, stat) =
                 move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best);
             if rem >= solve_obj.params.res_cache_limit {
-                update_table(solve_obj, board, res, best, alpha, beta, (lower, upper));
+                update_table(
+                    &mut solve_obj.res_cache,
+                    board,
+                    res,
+                    best,
+                    alpha,
+                    beta,
+                    (lower, upper),
+                );
             }
             (res, stat)
         }
@@ -670,7 +639,7 @@ pub fn solve_outer(
                 ybwc(&mut solve_obj, board, alpha, beta, passed, old_best, depth).await;
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
-                    &mut solve_obj,
+                    &mut solve_obj.res_cache,
                     board,
                     res,
                     best,

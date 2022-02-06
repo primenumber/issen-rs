@@ -202,3 +202,42 @@ impl<T: CacheElement> CacheTable<T> {
 
 pub type EvalCacheTable = CacheTable<EvalCache>;
 pub type ResCacheTable = CacheTable<ResCache>;
+
+fn make_record(
+    gen: u16,
+    board: Board,
+    mut res: i8,
+    best: Option<Hand>,
+    alpha: i8,
+    beta: i8,
+    range: (i8, i8),
+) -> ResCache {
+    res = res.clamp(range.0, range.1);
+    let updated_range = if res <= alpha {
+        (range.0, res)
+    } else if res >= beta {
+        (res, range.1)
+    } else {
+        (res, res)
+    };
+    ResCache {
+        board,
+        lower: updated_range.0,
+        upper: updated_range.1,
+        gen,
+        best,
+    }
+}
+
+pub fn update_table(
+    res_cache: &mut ResCacheTable,
+    board: Board,
+    res: i8,
+    best: Option<Hand>,
+    alpha: i8,
+    beta: i8,
+    range: (i8, i8),
+) {
+    let record = make_record(res_cache.gen, board, res, best, alpha, beta, range);
+    res_cache.update(record);
+}
