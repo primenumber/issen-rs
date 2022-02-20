@@ -481,7 +481,7 @@ fn norm(x: &[f64]) -> f64 {
 
 fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
     let mut pa = vec![0.; spm.row_size()];
-    spm.mul_vec(&a, &mut pa);
+    spm.mul_vec(a, &mut pa);
     let mut r = vec![0.; spm.row_size()];
     for i in 0..spm.row_size() {
         r[i] = b[i] - pa[i];
@@ -505,7 +505,7 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
         spm.mul_vec_transposed(&r, &mut s);
         let new_s_norm = norm(&s);
         if i % 10 == 0 {
-            spm.mul_vec(&a, &mut pa);
+            spm.mul_vec(a, &mut pa);
             let except_l2_norm_len = spm.row_size() - spm.col_size;
             for j in 0..except_l2_norm_len {
                 d[j] = b[j] - pa[j];
