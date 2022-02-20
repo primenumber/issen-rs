@@ -379,7 +379,6 @@ impl SparseMat {
         self.row_starts.len() - 1
     }
 
-    #[allow(dead_code)]
     fn transpose(&self) -> SparseMat {
         let mut weight_t = vec![Vec::new(); self.col_size];
         let mut cols_t = vec![Vec::new(); self.col_size];
@@ -427,48 +426,6 @@ impl SparseMat {
             };
         });
     }
-
-    // x = A^t*y
-    // Unparallelized
-    fn mul_vec_transposed_naive(&self, y: &[f64], row_offset: usize, x: &mut [f64]) {
-        for e in x.iter_mut() {
-            *e = 0.;
-        }
-        unsafe {
-            for (row_local, elem) in y.iter().enumerate() {
-                let row = row_local + row_offset;
-                let row_start = *self.row_starts.get_unchecked(row);
-                let row_end = *self.row_starts.get_unchecked(row + 1);
-                let val = *elem;
-                for (col, w) in self.cols[row_start..row_end]
-                    .iter()
-                    .zip(&self.weight[row_start..row_end])
-                {
-                    *x.get_unchecked_mut(*col as usize) += w * val;
-                }
-            }
-        }
-    }
-
-    fn mul_vec_transposed_(&self, y: &[f64], row_offset: usize, x: &mut [f64]) {
-        if y.len() < 65536 {
-            self.mul_vec_transposed_naive(y, row_offset, x);
-        } else {
-            let mid = y.len() / 2;
-            let mut another_x = x.to_vec();
-            rayon::join(
-                || self.mul_vec_transposed_(&y[..mid], row_offset, x),
-                || self.mul_vec_transposed_(&y[mid..], row_offset + mid, &mut another_x),
-            );
-            for (elem, another_elem) in x.iter_mut().zip(&another_x) {
-                *elem += another_elem;
-            }
-        }
-    }
-
-    fn mul_vec_transposed(&self, y: &[f64], x: &mut [f64]) {
-        self.mul_vec_transposed_(y, 0, x);
-    }
 }
 
 fn norm(x: &[f64]) -> f64 {
@@ -487,12 +444,12 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
         r[i] = b[i] - pa[i];
     }
     let mut p = vec![0.; spm.col_size];
-    //let spm_t = spm.transpose();
-    spm.mul_vec_transposed(&r, &mut p);
+    let spm_t = spm.transpose();
+    spm_t.mul_vec(&r, &mut p);
     let mut s = p.clone();
     let mut old_s_norm = norm(&s);
     let mut q = vec![0.; spm.row_size()];
-    let mut d = vec![0.; spm.row_size()];
+    let mut diff = vec![0.; spm.row_size()];
     for i in 0..iter_num {
         spm.mul_vec(&p, &mut q);
         let alpha = old_s_norm / norm(&q);
@@ -502,18 +459,18 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
         for idx in 0..spm.row_size() {
             r[idx] -= alpha * q[idx];
         }
-        spm.mul_vec_transposed(&r, &mut s);
+        spm_t.mul_vec(&r, &mut s);
         let new_s_norm = norm(&s);
         if i % 10 == 0 {
             spm.mul_vec(a, &mut pa);
             let except_l2_norm_len = spm.row_size() - spm.col_size;
             for j in 0..except_l2_norm_len {
-                d[j] = b[j] - pa[j];
+                diff[j] = b[j] - pa[j];
             }
             eprintln!(
                 "Step: {}, CGLS Diff: {}",
                 i,
-                (norm(&d[0..except_l2_norm_len]) / except_l2_norm_len as f64).sqrt()
+                (norm(&diff[0..except_l2_norm_len]) / except_l2_norm_len as f64).sqrt()
             );
         }
         if new_s_norm < 1.0 {
