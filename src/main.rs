@@ -5,6 +5,7 @@ mod eval;
 mod playout;
 mod search;
 mod serialize;
+mod sparse_mat;
 mod table;
 mod think;
 mod train;
