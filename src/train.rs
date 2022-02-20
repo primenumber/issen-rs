@@ -163,41 +163,6 @@ pub async fn create_record_by_solve(mut board: Board, solve_obj: &mut SolveObj) 
     (result, board)
 }
 
-async fn update_record_impl(
-    record: &[usize],
-    solve_obj: &mut SolveObj,
-    depth: usize,
-) -> Option<(String, i8)> {
-    let mut board = Board {
-        player: 0x0000_0008_1000_0000,
-        opponent: 0x0000_0010_0800_0000,
-        is_black: true,
-    };
-    let mut updated_record = String::new();
-    for &pos in record {
-        if popcnt(board.empty()) as usize <= depth {
-            let (s, b) = create_record_by_solve(board, solve_obj).await;
-            board = b;
-            updated_record += &s;
-            break;
-        } else {
-            board = match step_by_pos(&board, pos) {
-                Some(next) => next,
-                None => {
-                    return None;
-                }
-            };
-            updated_record += &pos_to_str(pos);
-        }
-    }
-    let score = if board.is_black {
-        board.score()
-    } else {
-        -board.score()
-    };
-    Some((updated_record, score))
-}
-
 pub fn update_record(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();
     let depth = matches.value_of("DEPTH").unwrap().parse().unwrap();
