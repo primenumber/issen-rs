@@ -436,6 +436,14 @@ fn norm(x: &[f64]) -> f64 {
     ans
 }
 
+fn l1_norm(x: &[f64]) -> f64 {
+    let mut ans = 0.;
+    for a in x {
+        ans += a.abs();
+    }
+    ans
+}
+
 fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
     let mut pa = vec![0.; spm.row_size()];
     spm.mul_vec(a, &mut pa);
@@ -468,9 +476,10 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
                 diff[j] = b[j] - pa[j];
             }
             eprintln!(
-                "Step: {}, CGLS Diff: {}",
+                "Step: {}, CGLS Diff: {}, L1 err: {}",
                 i,
-                (norm(&diff[0..except_l2_norm_len]) / except_l2_norm_len as f64).sqrt()
+                (norm(&diff[0..except_l2_norm_len]) / except_l2_norm_len as f64).sqrt(),
+                l1_norm(&diff[0..except_l2_norm_len]) / except_l2_norm_len as f64,
             );
         }
         if new_s_norm < 1.0 {
