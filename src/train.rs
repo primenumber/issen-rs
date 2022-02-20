@@ -444,6 +444,7 @@ fn l1_norm(x: &[f64]) -> f64 {
     ans
 }
 
+// solve min_a ||spm * a - b|| by CGLS method
 fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
     let mut pa = vec![0.; spm.row_size()];
     spm.mul_vec(a, &mut pa);
