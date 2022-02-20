@@ -238,7 +238,7 @@ pub fn update_record(matches: &ArgMatches) {
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
 
-    write!(writer, "{}\n", result.len()).unwrap();
+    writeln!(writer, "{}", result.len()).unwrap();
     for line in result {
         write!(writer, "{}", line).unwrap();
     }
@@ -319,9 +319,9 @@ pub fn gen_dataset(matches: &ArgMatches) {
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
 
-    write!(
+    writeln!(
         &mut writer,
-        "{}\n",
+        "{}",
         min(boards_with_results.len(), max_output)
     )
     .unwrap();
@@ -329,9 +329,9 @@ pub fn gen_dataset(matches: &ArgMatches) {
         if idx >= max_output {
             break;
         }
-        write!(
+        writeln!(
             &mut writer,
-            "{:016x} {:016x} {} {}\n",
+            "{:016x} {:016x} {} {}",
             board.player, board.opponent, score, pos,
         )
         .unwrap();
