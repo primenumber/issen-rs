@@ -455,21 +455,21 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
     let mut p = vec![0.; spm.col_size];
     let spm_t = spm.transpose();
     spm_t.mul_vec(&dsc, &mut p);
-    let mut s = p.clone();
-    let mut old_s_norm = norm(&s);
+    let mut re = p.clone();
+    let mut old_re_norm = norm(&re);
     let mut q = vec![0.; spm.row_size()];
     let mut diff = vec![0.; spm.row_size()];
     for i in 0..iter_num {
         spm.mul_vec(&p, &mut q);
-        let alpha = old_s_norm / norm(&q);
+        let alpha = old_re_norm / norm(&q);
         for idx in 0..spm.col_size {
             a[idx] += alpha * p[idx];
         }
         for idx in 0..spm.row_size() {
             dsc[idx] -= alpha * q[idx];
         }
-        spm_t.mul_vec(&dsc, &mut s);
-        let new_s_norm = norm(&s);
+        spm_t.mul_vec(&dsc, &mut re);
+        let new_re_norm = norm(&re);
         if i % 10 == 0 {
             spm.mul_vec(a, &mut pa);
             let except_l2_norm_len = spm.row_size() - spm.col_size;
@@ -483,14 +483,14 @@ fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
                 l1_norm(&diff[0..except_l2_norm_len]) / except_l2_norm_len as f64,
             );
         }
-        if new_s_norm < 1.0 {
+        if new_re_norm < 1.0 {
             break;
         }
-        let beta = new_s_norm / old_s_norm;
+        let beta = new_re_norm / old_re_norm;
         for idx in 0..spm.col_size {
-            p[idx] = s[idx] + beta * p[idx];
+            p[idx] = re[idx] + beta * p[idx];
         }
-        old_s_norm = new_s_norm;
+        old_re_norm = new_re_norm;
     }
 }
 
