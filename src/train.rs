@@ -132,7 +132,7 @@ pub fn clean_record(matches: &ArgMatches) {
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
 
-    write!(writer, "{}\n", result.len()).unwrap();
+    writeln!(writer, "{}", result.len()).unwrap();
     for line in result {
         write!(writer, "{}", line).unwrap();
     }
