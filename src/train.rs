@@ -91,6 +91,30 @@ pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     Some(boards)
 }
 
+fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, usize)>, i8) {
+    match record.first() {
+        Some(&first) => {
+            let ((mut boards, score), pos) = if board.mobility_bits() == 0 {
+                (boards_from_record_impl(board.pass(), record), PASS)
+            } else {
+                (
+                    boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
+                    first,
+                )
+            };
+            boards.insert(0, (board, -score, pos));
+            (boards, -score)
+        }
+        None => (vec![(board, board.score(), PASS)], board.score()),
+    }
+}
+
+fn boards_from_record(line: &str) -> Vec<(Board, i8, usize)> {
+    let record = parse_record(line);
+    let board = Board::initial_state();
+    boards_from_record_impl(board, &record).0
+}
+
 pub fn load_records(input_path: &str) -> Vec<Vec<Board>> {
     let in_f = File::open(input_path).unwrap();
     let mut reader = BufReader::new(in_f);
@@ -245,7 +269,7 @@ pub fn update_record(matches: &ArgMatches) {
     }
 }
 
-pub fn gen_dataset(matches: &ArgMatches) {
+pub fn gen_dataset_with_minimax(matches: &ArgMatches) {
     let input_path = matches.value_of("INPUT").unwrap();
     let output_path = matches.value_of("OUTPUT").unwrap();
     let max_output = matches.value_of("MAX_OUT").unwrap().parse().unwrap();
@@ -327,6 +351,51 @@ pub fn gen_dataset(matches: &ArgMatches) {
     )
     .unwrap();
     for (idx, (board, (score, pos))) in boards_with_results.iter().enumerate() {
+        if idx >= max_output {
+            break;
+        }
+        writeln!(
+            &mut writer,
+            "{:016x} {:016x} {} {}",
+            board.player, board.opponent, score, pos,
+        )
+        .unwrap();
+    }
+    eprintln!("Finished!");
+}
+
+pub fn gen_dataset(matches: &ArgMatches) {
+    let input_path = matches.value_of("INPUT").unwrap();
+    let output_path = matches.value_of("OUTPUT").unwrap();
+    let max_output = matches.value_of("MAX_OUT").unwrap().parse().unwrap();
+
+    eprintln!("Parse input...");
+    let in_f = File::open(input_path).unwrap();
+    let mut reader = BufReader::new(in_f);
+
+    let mut input_line = String::new();
+    reader.read_line(&mut input_line).unwrap();
+    let num_records = input_line.trim().parse().unwrap();
+    let mut boards_with_results = Vec::new();
+    for _i in 0..num_records {
+        let mut input_line = String::new();
+        reader.read_line(&mut input_line).unwrap();
+        boards_with_results.append(&mut boards_from_record(&input_line));
+    }
+
+    eprintln!("Total board count = {}", boards_with_results.len());
+
+    eprintln!("Writing to file...");
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    writeln!(
+        &mut writer,
+        "{}",
+        min(boards_with_results.len(), max_output)
+    )
+    .unwrap();
+    for (idx, (board, score, pos)) in boards_with_results.iter().enumerate() {
         if idx >= max_output {
             break;
         }
