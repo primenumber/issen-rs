@@ -24,11 +24,18 @@ pub enum EncodeError {
     OutOfRange,
 }
 
-pub fn encode_utf16(input: u32) -> Result<char, EncodeError> {
+pub fn encode_utf16(mut input: u32) -> Result<char, EncodeError> {
     if input > 0xF7FF {
         return Err(EncodeError::OutOfRange);
     }
-    let u32data = input + 0x0800; // 3-byte UTF-8
+    input += 0x800;
+    if input >= 0x202A { // skip 0x202A - 0x202E
+        input += 5;
+    }
+    if input >= 0x2066 { // skip 0x2066 - 0x2069
+        input += 4;
+    }
+    let u32data = input; // 3-byte UTF-8
     Ok(char::from_u32(u32data).unwrap())
 }
 
