@@ -135,7 +135,7 @@ fn play(matches: &ArgMatches) -> Board {
     board
 }
 
-fn self_play(matches: &ArgMatches) -> Board {
+fn self_play(_matches: &ArgMatches) -> Board {
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 12,
