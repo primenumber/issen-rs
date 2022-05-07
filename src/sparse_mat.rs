@@ -74,19 +74,11 @@ impl SparseMat {
 }
 
 fn norm(x: &[f64]) -> f64 {
-    let mut ans = 0.;
-    for a in x {
-        ans += a * a;
-    }
-    ans
+    x.par_iter().map(|x| x * x).sum()
 }
 
 fn l1_norm(x: &[f64]) -> f64 {
-    let mut ans = 0.;
-    for a in x {
-        ans += a.abs();
-    }
-    ans
+    x.par_iter().map(|x| x.abs()).sum()
 }
 
 // solve min_a ||spm * a - b|| by CGLS method
@@ -107,12 +99,12 @@ pub fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
     for i in 0..iter_num {
         spm.mul_vec(&p, &mut q);
         let alpha = old_re_norm / norm(&q);
-        for idx in 0..spm.col_size {
-            a[idx] += alpha * p[idx];
-        }
-        for idx in 0..spm.row_size() {
-            dsc[idx] -= alpha * q[idx];
-        }
+        a.par_iter_mut().enumerate().for_each(|(idx, elem)| {
+            *elem += alpha * p[idx];
+        });
+        dsc.par_iter_mut().enumerate().for_each(|(idx, elem)| {
+            *elem -= alpha * q[idx];
+        });
         spm_t.mul_vec(&dsc, &mut re);
         let new_re_norm = norm(&re);
         if i % 10 == 0 {
@@ -132,9 +124,9 @@ pub fn cgls(spm: &SparseMat, a: &mut [f64], b: &[f64], iter_num: usize) {
             break;
         }
         let beta = new_re_norm / old_re_norm;
-        for idx in 0..spm.col_size {
-            p[idx] = re[idx] + beta * p[idx];
-        }
+        p.par_iter_mut().enumerate().for_each(|(idx, elem)| {
+            *elem = re[idx] + beta * *elem;
+        });
         old_re_norm = new_re_norm;
     }
 }
