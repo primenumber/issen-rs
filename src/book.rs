@@ -28,7 +28,7 @@ fn write_record<W: Write>(current: &mut Vec<Hand>, writer: &mut W) {
 }
 
 fn minimax_record_impl<W: Write>(
-    mut board: Board,
+    board: Board,
     tree: &HashMap<Board, (i8, Vec<Hand>)>,
     current: &mut Vec<Hand>,
     writer: &mut W,
@@ -64,7 +64,7 @@ fn minimax_record_impl<W: Write>(
 }
 
 fn get_best_records(
-    mut board: Board,
+    board: Board,
     tree: &HashMap<Board, (i8, Vec<Hand>)>,
     current: &mut Vec<Hand>,
 ) -> Vec<Vec<Hand>> {
