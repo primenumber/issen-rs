@@ -36,17 +36,26 @@ impl Searcher {
         let mut res = -64 * SCALE - 1;
         let mut best = None;
         for (i, (next, pos)) in board.next_iter().enumerate() {
-            let tmp = -self.think(next, -alpha - 1, -alpha, false, depth - 1)?.0;
-            if tmp > res {
-                res = tmp;
-                best = Some(pos);
-            }
-            if res >= beta {
-                return Some((res, best.unwrap()));
-            }
-            if res > alpha {
-                alpha = res;
+            if i == 0 {
                 res = res.max(-self.think(next, -beta, -alpha, false, depth - 1)?.0);
+                best = Some(pos);
+                if res >= beta {
+                    return Some((res, pos));
+                }
+                alpha = max(alpha, res);
+            } else {
+                let tmp = -self.think(next, -alpha - 1, -alpha, false, depth - 1)?.0;
+                if tmp > res {
+                    res = tmp;
+                    best = Some(pos);
+                }
+                if res >= beta {
+                    return Some((res, best.unwrap()));
+                }
+                if res > alpha {
+                    alpha = res;
+                    res = res.max(-self.think(next, -beta, -alpha, false, depth - 1)?.0);
+                }
             }
         }
         if best == None {
