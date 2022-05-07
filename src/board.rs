@@ -72,6 +72,14 @@ pub const BOARD_SIZE: usize = 64;
 pub const PASS: usize = 64;
 
 impl Board {
+    pub fn initial_state() -> Board {
+        Board {
+            player: 0x00_00_00_08_10_00_00_00,
+            opponent: 0x00_00_00_10_08_00_00_00,
+            is_black: true,
+        }
+    }
+
     pub fn reverse_vertical(&self) -> Board {
         Board {
             player: flip_vertical(self.player),
