@@ -3,6 +3,7 @@ mod board;
 mod book;
 mod eval;
 mod playout;
+mod remote;
 mod search;
 mod serialize;
 mod sparse_mat;
@@ -14,13 +15,16 @@ use crate::bits::*;
 use crate::board::*;
 use crate::book::*;
 use crate::eval::*;
+use crate::remote::*;
 use crate::search::*;
 use crate::table::*;
 use crate::think::*;
 use crate::train::*;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use futures::executor;
 use futures::executor::ThreadPool;
+use futures::task::SpawnExt;
+use futures::{executor, future};
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -28,6 +32,8 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
+use surf::{Client, Url};
+use tide::{Body, Request};
 
 pub struct HandParseError;
 
@@ -66,11 +72,18 @@ fn play(matches: &ArgMatches) -> Board {
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
+        use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-211122"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -115,6 +128,7 @@ fn play(matches: &ArgMatches) -> Board {
                     evaluator.clone(),
                     search_params.clone(),
                     pool.clone(),
+                    client.clone(),
                 );
                 executor::block_on(solve_with_move(board, &mut obj))
             };
@@ -147,11 +161,18 @@ fn self_play(_matches: &ArgMatches) -> Board {
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
+        use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-211122"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -188,6 +209,7 @@ fn self_play(_matches: &ArgMatches) -> Board {
                 evaluator.clone(),
                 search_params.clone(),
                 pool.clone(),
+                client.clone(),
             );
             executor::block_on(solve_with_move(board, &mut obj))
         };
@@ -225,11 +247,17 @@ fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
+        use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-211122"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733")?)
+            .try_into()?,
+    );
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
@@ -310,6 +338,7 @@ fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
                 evaluator.clone(),
                 search_params.clone(),
                 pool.clone(),
+                client.clone(),
             );
             executor::block_on(solve_with_move(board, &mut obj))
         };
@@ -380,6 +409,7 @@ fn solve_ffo(
     res_cache: &mut ResCacheTable,
     eval_cache: &mut EvalCacheTable,
     pool: &ThreadPool,
+    client: Arc<Client>,
 ) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
@@ -388,7 +418,7 @@ fn solve_ffo(
     let mut stats = Vec::new();
     for line in reader.lines() {
         let line_str = line.unwrap();
-        let desired = line_str[71..].split(';').next().unwrap().parse().unwrap();
+        let desired: i8 = line_str[71..].split(';').next().unwrap().parse().unwrap();
         match Board::from_str(&line_str) {
             Ok(board) => {
                 let rem = popcnt(board.empty());
@@ -399,6 +429,7 @@ fn solve_ffo(
                     evaluator.clone(),
                     search_params.clone(),
                     pool.clone(),
+                    client.clone(),
                 );
                 let (res, best, stat) = solve(&mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
@@ -458,17 +489,24 @@ fn ffo_benchmark() {
         ybwc_depth_limit: 12,
         ybwc_elder_add: 1,
         ybwc_younger_add: 2,
-        ybwc_empties_limit: 16,
+        ybwc_empties_limit: 18,
         eval_ordering_limit: 15,
         res_cache_limit: 11,
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
+        use_worker: true,
     };
     let evaluator = Arc::new(Evaluator::new("table-211122"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://192.168.10.192:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
     let mut index: usize = 1;
     let mut stats = Vec::new();
     //stats.extend(solve_ffo(
@@ -497,6 +535,7 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
+        client.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
@@ -506,6 +545,7 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
+        client.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
@@ -515,6 +555,7 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
+        client.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
@@ -524,8 +565,110 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
+        client.clone(),
     ));
     report_stats(&stats);
+}
+
+async fn worker_impl() -> tide::Result<()> {
+    let search_params = SearchParams {
+        reduce: false,
+        ybwc_depth_limit: 12,
+        ybwc_elder_add: 1,
+        ybwc_younger_add: 2,
+        ybwc_empties_limit: 16,
+        eval_ordering_limit: 15,
+        res_cache_limit: 11,
+        stability_cut_limit: 12,
+        ffs_ordering_limit: 6,
+        static_ordering_limit: 3,
+        use_worker: false,
+    };
+    let evaluator = Arc::new(Evaluator::new("table-211122"));
+    let res_cache = ResCacheTable::new(256, 65536);
+    let eval_cache = EvalCacheTable::new(256, 65536);
+    let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
+    let solve_obj = SolveObj::new(
+        res_cache.clone(),
+        eval_cache.clone(),
+        evaluator.clone(),
+        search_params.clone(),
+        pool.clone(),
+        client.clone(),
+    );
+    //tide::log::start();
+    let mut app = tide::with_state(solve_obj);
+    app.with(tide::log::LogMiddleware::new());
+    app.at("/").post(|mut req: Request<SolveObj>| async move {
+        let mut solve_obj = req.state().clone();
+        let query: SolveRequest = req.body_json().await?;
+        let board = Board::from_base81(&query.board).unwrap();
+        let result = solve_inner(&mut solve_obj, board, query.alpha, query.beta, false);
+        Body::from_json(&SolveResponse {
+            result: result.0,
+            node_count: result.1.node_count,
+            st_cut_count: result.1.st_cut_count,
+        })
+    });
+    app.listen("0.0.0.0:7733").await?;
+    Ok(())
+}
+
+fn worker(_matches: &ArgMatches) {
+    async_std::task::block_on(worker_impl()).unwrap();
+}
+
+fn send_query(_matches: &ArgMatches) {
+    let name = "problem/stress_test_54_10k.b81r";
+    let file = File::open(name).unwrap();
+    let reader = BufReader::new(file);
+    let client: Client = surf::Config::new()
+        .set_base_url(Url::parse("http://localhost:7733").unwrap())
+        .try_into()
+        .unwrap();
+    let pool = executor::ThreadPool::new().unwrap();
+    let mut futures = Vec::new();
+    for (_idx, line) in reader.lines().enumerate() {
+        let client = client.clone();
+        futures.push(
+            pool.spawn_with_handle(async move {
+                let line_str = line.unwrap();
+                let desired: i8 = line_str[17..].parse().unwrap();
+                match Board::from_base81(&line_str[..16]) {
+                    Ok(board) => {
+                        let data = SolveRequest {
+                            board: board.to_base81(),
+                            alpha: -64,
+                            beta: 64,
+                        };
+                        let data_str = serde_json::json!(data);
+                        let solve_res: SolveResponse = client
+                            .post("/")
+                            .body(http_types::Body::from_json(&data_str).unwrap())
+                            .recv_json()
+                            .await
+                            .unwrap();
+                        let res = solve_res.result;
+                        if res != desired {
+                            board.print();
+                        }
+                        assert_eq!(res, desired);
+                    }
+                    Err(_) => {
+                        panic!();
+                    }
+                }
+            })
+            .unwrap(),
+        );
+    }
+    executor::block_on(future::join_all(futures));
 }
 
 fn main() {
@@ -757,6 +900,8 @@ fn main() {
                 ),
         )
         .subcommand(SubCommand::with_name("codingame").about("Codingame player"))
+        .subcommand(SubCommand::with_name("worker").about("worker mode"))
+        .subcommand(SubCommand::with_name("query").about("query mode"))
         .get_matches();
     match matches.subcommand() {
         ("ffobench", Some(_matches)) => {
@@ -811,7 +956,13 @@ fn main() {
             eval_stats(matches);
         }
         ("codingame", Some(matches)) => {
-            codingame(matches);
+            codingame(matches).unwrap();
+        }
+        ("worker", Some(matches)) => {
+            worker(matches);
+        }
+        ("query", Some(matches)) => {
+            send_query(matches);
         }
         ("", None) => {
             eprintln!("Need subcommand");

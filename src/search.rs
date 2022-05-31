@@ -1,6 +1,7 @@
 use crate::bits::*;
 use crate::board::*;
 use crate::eval::*;
+use crate::remote::*;
 use crate::table::*;
 use crate::think::*;
 use bitintr::Tzcnt;
@@ -11,8 +12,11 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::task::SpawnExt;
 use futures::StreamExt;
 use std::cmp::{max, min};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::mem::{swap, MaybeUninit};
 use std::sync::Arc;
+use surf::Client;
 
 #[derive(Clone)]
 pub struct SearchParams {
@@ -26,6 +30,7 @@ pub struct SearchParams {
     pub stability_cut_limit: i8,
     pub ffs_ordering_limit: i8,
     pub static_ordering_limit: i8,
+    pub use_worker: bool,
 }
 
 #[derive(Clone)]
@@ -35,6 +40,7 @@ pub struct SolveObj {
     pub evaluator: Arc<Evaluator>,
     params: SearchParams,
     pool: ThreadPool,
+    client: Arc<Client>,
 }
 
 enum CutType {
@@ -75,6 +81,7 @@ impl SolveObj {
         evaluator: Arc<Evaluator>,
         params: SearchParams,
         pool: ThreadPool,
+        client: Arc<Client>,
     ) -> SolveObj {
         SolveObj {
             res_cache,
@@ -82,6 +89,7 @@ impl SolveObj {
             evaluator,
             params,
             pool,
+            client,
         }
     }
 }
@@ -510,7 +518,7 @@ fn stability_cut(board: Board, alpha: i8, beta: i8) -> CutType {
     }
 }
 
-fn solve_inner(
+pub fn solve_inner(
     solve_obj: &mut SolveObj,
     board: Board,
     mut alpha: i8,
@@ -604,8 +612,32 @@ pub fn solve_outer(
     async move {
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
-            let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
-            (res, None, stat)
+            if solve_obj.params.use_worker {
+                let data = SolveRequest {
+                    board: board.to_base81(),
+                    alpha,
+                    beta,
+                };
+                let mut hasher = DefaultHasher::new();
+                board.player.hash(&mut hasher);
+                board.opponent.hash(&mut hasher);
+                let suffix = 192 + hasher.finish() % 4;
+                let data_str = serde_json::json!(data);
+                let res: SolveResponse = Client::new()
+                    .post(format!("http://192.168.10.{}:7733/", suffix))
+                    .body(http_types::Body::from_json(&data_str).unwrap())
+                    .recv_json()
+                    .await
+                    .unwrap();
+                let stat = SolveStat {
+                    node_count: res.node_count,
+                    st_cut_count: res.st_cut_count,
+                };
+                (res.result, None, stat)
+            } else {
+                let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
+                (res, None, stat)
+            }
         } else {
             match stability_cut(board, alpha, beta) {
                 CutType::NoCut => (),
@@ -703,7 +735,7 @@ mod tests {
             lower: -24,
             upper: 16,
             gen: 3,
-            best: 0,
+            best: Some(Hand::Play(0)),
         };
         // [alpha, beta] is contained in [lower, upper]
         {
@@ -712,7 +744,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
             );
             assert_eq!(alpha, -12);
             assert_eq!(beta, 4);
@@ -724,7 +756,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
             );
             assert_eq!(alpha, res_cache.lower);
             assert_eq!(beta, res_cache.upper);
@@ -736,7 +768,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
             );
             assert_eq!(alpha, res_cache.lower);
             assert_eq!(beta, 8);
@@ -748,7 +780,7 @@ mod tests {
             let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
             assert_eq!(
                 result,
-                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, Some(res_cache.best))
+                CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
             );
             assert_eq!(alpha, -6);
             assert_eq!(beta, res_cache.upper);
@@ -805,7 +837,7 @@ mod tests {
                 lower: 16,
                 upper: 16,
                 gen: 3,
-                best: 0,
+                best: Some(Hand::Play(0)),
             };
             let mut alpha = -38;
             let mut beta = 30;
@@ -825,6 +857,12 @@ mod tests {
         let res_cache = ResCacheTable::new(256, 256);
         let eval_cache = EvalCacheTable::new(256, 256);
         let pool = ThreadPool::new().unwrap();
+        let client: Arc<Client> = Arc::new(
+            surf::Config::new()
+                .set_base_url(Url::parse("http://localhost:7733").unwrap())
+                .try_into()
+                .unwrap(),
+        );
         let search_params = SearchParams {
             reduce: false,
             ybwc_depth_limit: 0,
@@ -836,6 +874,7 @@ mod tests {
             stability_cut_limit: 7,
             ffs_ordering_limit: 6,
             static_ordering_limit: 3,
+            use_worker: false,
         };
         for (_idx, line) in reader.lines().enumerate() {
             let line_str = line.unwrap();
@@ -848,6 +887,7 @@ mod tests {
                         evaluator.clone(),
                         search_params.clone(),
                         pool.clone(),
+                        client.clone(),
                     );
                     let (res, _stat) = solve_inner(&mut obj, board, -64, 64, false);
                     if res != desired {

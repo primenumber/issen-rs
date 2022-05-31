@@ -13,10 +13,12 @@ use futures::task::SpawnExt;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
+use surf::{Client, Url};
 
 fn write_record<W: Write>(current: &mut Vec<Hand>, writer: &mut W) {
     for hand in current {
@@ -245,9 +247,16 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
+        use_worker: false,
     };
     let depth = 18;
     let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
     for _ in 0..100 {
         let boards_with_results_all = minimax_record_body(&boards_set);
         eprintln!("Get best records...");
@@ -263,6 +272,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
                 evaluator.clone(),
                 search_params.clone(),
                 pool.clone(),
+                client.clone(),
             );
             let finished = finished.clone();
 

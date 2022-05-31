@@ -14,11 +14,13 @@ use futures::task::SpawnExt;
 use rayon::prelude::*;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use surf::{Client, Url};
 
 const PACKED_SCALE: i32 = 256;
 
@@ -214,8 +216,15 @@ pub fn update_record(matches: &ArgMatches) {
         stability_cut_limit: 12,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
+        use_worker: false,
     };
     let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
 
     let mut handles = Vec::new();
     let finished = Arc::new(AtomicUsize::new(0));
@@ -226,6 +235,7 @@ pub fn update_record(matches: &ArgMatches) {
             evaluator.clone(),
             search_params.clone(),
             pool.clone(),
+            client.clone(),
         );
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();

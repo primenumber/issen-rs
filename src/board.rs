@@ -349,7 +349,6 @@ impl Board {
         (res_me, res_op)
     }
 
-    #[allow(dead_code)]
     pub fn from_base81(s: &str) -> Result<Board, BoardParseError> {
         if s.len() != 16 {
             return Err(BoardParseError {});
@@ -383,6 +382,26 @@ impl Board {
             opponent,
             is_black: true,
         })
+    }
+
+    pub fn to_base81(&self) -> String {
+        let mut result = Vec::with_capacity(16);
+        let coeff = [1, 3, 9, 32];
+        for i in 0..16 {
+            let mut val = 33;
+            let bp = (self.player >> (i * 4)) & 0xf;
+            let bo = (self.opponent >> (i * 4)) & 0xf;
+            for (j, &c) in coeff.iter().enumerate() {
+                if (bp >> j) & 1 > 0 {
+                    val += c;
+                }
+                if (bo >> j) & 1 > 0 {
+                    val += c * 2;
+                }
+            }
+            result.push(val);
+        }
+        String::from_utf8(result).unwrap()
     }
 
     pub fn transform(&self, rotate: usize, mirror: bool) -> Board {
@@ -853,5 +872,13 @@ mod tests {
         assert_eq!(board.mobility_bits(), naive_board.mobility_bits());
         assert_eq!(board.mobility(), naive_board.mobility());
         assert_eq!(board.score(), naive_board.score());
+    }
+
+    #[test]
+    fn test_base81() {
+        const TEST_BASE81: &str = "!#jiR;rO[ORNM2MN";
+        let board = Board::from_base81(TEST_BASE81).unwrap();
+        let encoded = board.to_base81();
+        assert_eq!(TEST_BASE81, encoded)
     }
 }
