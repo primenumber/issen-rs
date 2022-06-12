@@ -35,8 +35,6 @@ use std::time::Instant;
 use surf::{Client, Url};
 use tide::{Body, Request};
 
-pub struct HandParseError;
-
 fn read_hand() -> Option<usize> {
     let mut s = String::new();
     std::io::stdin().read_line(&mut s).unwrap();
