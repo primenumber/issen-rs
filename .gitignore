@@ -1,4 +1,4 @@
-
+*.txt
 /target
 **/*.rs.bk
 table/*
