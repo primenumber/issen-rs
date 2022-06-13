@@ -21,7 +21,7 @@ use crate::remote::*;
 use crate::search::*;
 use crate::table::*;
 use crate::train::*;
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{Arg, ArgMatches, Command};
 use futures::executor::ThreadPool;
 use futures::task::SpawnExt;
 use futures::{executor, future};
@@ -300,301 +300,298 @@ fn send_query(_matches: &ArgMatches) {
 }
 
 fn main() {
-    let matches = App::new("Issen-rs")
-        .subcommand(SubCommand::with_name("ffobench").about("Run FFO benchmark 1-79"))
+    let matches = Command::new("Issen-rs")
+        .subcommand(Command::new("ffobench").about("Run FFO benchmark 1-79"))
         .subcommand(
-            SubCommand::with_name("play").about("Interactive play").arg(
-                Arg::with_name("player")
-                    .short("i")
+            Command::new("play").about("Interactive play").arg(
+                Arg::new("player")
+                    .short('i')
                     .required(true)
                     .takes_value(true),
             ),
         )
-        .subcommand(SubCommand::with_name("self-play").about("Automatic self play"))
+        .subcommand(Command::new("self-play").about("Automatic self play"))
         .subcommand(
-            SubCommand::with_name("clean-record")
+            Command::new("clean-record")
                 .about("Cleaning record")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("update-record")
+            Command::new("update-record")
                 .about("Update record by end-game search")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("DEPTH")
-                        .short("d")
+                    Arg::new("DEPTH")
+                        .short('d')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("minimax-record")
+            Command::new("minimax-record")
                 .about("Minimax Record")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("gen-dataset")
+            Command::new("gen-dataset")
                 .about("Generate training dataset")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 )
-                .arg(Arg::with_name("MAX_OUT").short("n").takes_value(true)),
+                .arg(Arg::new("MAX_OUT").short('n').takes_value(true)),
         )
         .subcommand(
-            SubCommand::with_name("train")
+            Command::new("train")
                 .about("Train weights")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 )
-                .arg(Arg::with_name("from").required(true).takes_value(true))
-                .arg(Arg::with_name("to").required(true).takes_value(true))
-                .arg(Arg::with_name("width").required(true).takes_value(true)),
+                .arg(Arg::new("from").required(true).takes_value(true))
+                .arg(Arg::new("to").required(true).takes_value(true))
+                .arg(Arg::new("width").required(true).takes_value(true)),
         )
         .subcommand(
-            SubCommand::with_name("update-record-v2")
+            Command::new("update-record-v2")
                 .about("Update record iterative")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("gen-book")
+            Command::new("gen-book")
                 .about("Generate book")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("MAX_COUNT")
-                        .short("c")
+                    Arg::new("MAX_COUNT")
+                        .short('c')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("binarize")
+            Command::new("binarize")
                 .about("Binarize weights file")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("pack")
+            Command::new("pack")
                 .about("Pack weights file")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("pack-book")
+            Command::new("pack-book")
                 .about("Pack book file")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("last-table")
+            Command::new("last-table")
                 .about("Generate last move flip count table")
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("last-mask")
+            Command::new("last-mask")
                 .about("Generate last move flip count mask")
                 .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
+                    Arg::new("OUTPUT")
+                        .short('o')
                         .required(true)
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("parse-board")
+            Command::new("parse-board")
                 .about("Parse board")
-                .arg(
-                    Arg::with_name("str")
-                        .short("b")
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(Arg::new("str").short('b').required(true).takes_value(true)),
         )
         .subcommand(
-            SubCommand::with_name("eval-stats")
+            Command::new("eval-stats")
                 .about("Compute stats from dataset")
                 .arg(
-                    Arg::with_name("INPUT")
-                        .short("i")
+                    Arg::new("INPUT")
+                        .short('i')
                         .required(true)
                         .takes_value(true),
                 ),
         )
-        .subcommand(SubCommand::with_name("codingame").about("Codingame player"))
-        .subcommand(SubCommand::with_name("worker").about("worker mode"))
-        .subcommand(SubCommand::with_name("query").about("query mode"))
+        .subcommand(Command::new("codingame").about("Codingame player"))
+        .subcommand(Command::new("worker").about("worker mode"))
+        .subcommand(Command::new("query").about("query mode"))
         .get_matches();
     match matches.subcommand() {
-        ("ffobench", Some(_matches)) => {
+        Some(("ffobench", _matches)) => {
             ffo_benchmark();
         }
-        ("play", Some(matches)) => {
+        Some(("play", matches)) => {
             play(matches);
         }
-        ("self-play", Some(matches)) => {
+        Some(("self-play", matches)) => {
             self_play(matches);
         }
-        ("clean-record", Some(matches)) => {
+        Some(("clean-record", matches)) => {
             clean_record(matches);
         }
-        ("update-record", Some(matches)) => {
+        Some(("update-record", matches)) => {
             update_record(matches);
         }
-        ("update-record-v2", Some(matches)) => {
+        Some(("update-record-v2", matches)) => {
             iterative_update_book(matches);
         }
-        ("minimax-record", Some(matches)) => {
+        Some(("minimax-record", matches)) => {
             minimax_record(matches);
         }
-        ("gen-dataset", Some(matches)) => {
+        Some(("gen-dataset", matches)) => {
             gen_dataset(matches);
         }
-        ("train", Some(matches)) => {
+        Some(("train", matches)) => {
             train(matches);
         }
-        ("gen-book", Some(matches)) => {
+        Some(("gen-book", matches)) => {
             gen_book(matches);
         }
-        ("binarize", Some(matches)) => {
+        Some(("binarize", matches)) => {
             binarize_weights(matches);
         }
-        ("pack", Some(matches)) => {
+        Some(("pack", matches)) => {
             pack_weights(matches);
         }
-        ("pack-book", Some(matches)) => {
+        Some(("pack-book", matches)) => {
             pack_book(matches);
         }
-        ("last-table", Some(matches)) => {
+        Some(("last-table", matches)) => {
             gen_last_table(matches);
         }
-        ("last-mask", Some(matches)) => {
+        Some(("last-mask", matches)) => {
             gen_last_mask(matches);
         }
-        ("parse-board", Some(matches)) => {
+        Some(("parse-board", matches)) => {
             parse_board(matches);
         }
-        ("eval-stats", Some(matches)) => {
+        Some(("eval-stats", matches)) => {
             eval_stats(matches);
         }
-        ("codingame", Some(matches)) => {
+        Some(("codingame", matches)) => {
             codingame(matches).unwrap();
         }
-        ("worker", Some(matches)) => {
+        Some(("worker", matches)) => {
             worker(matches);
         }
-        ("query", Some(matches)) => {
+        Some(("query", matches)) => {
             send_query(matches);
         }
-        ("", None) => {
+        Some(_) => {
+            eprintln!("Unknown subcommand");
+        }
+        None => {
             eprintln!("Need subcommand");
         }
-        _ => unreachable!(),
     }
 }
