@@ -300,6 +300,14 @@ fn send_query(_matches: &ArgMatches) {
 }
 
 fn main() {
+    let arg_input_file = Arg::new("INPUT")
+        .short('i')
+        .required(true)
+        .takes_value(true);
+    let arg_output_file = Arg::new("OUTPUT")
+        .short('o')
+        .required(true)
+        .takes_value(true);
     let matches = Command::new("Issen-rs")
         .subcommand(Command::new("ffobench").about("Run FFO benchmark 1-79"))
         .subcommand(
@@ -314,89 +322,39 @@ fn main() {
         .subcommand(
             Command::new("clean-record")
                 .about("Cleaning record")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("update-record")
                 .about("Update record by end-game search")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(arg_input_file.clone())
                 .arg(
                     Arg::new("DEPTH")
                         .short('d')
                         .required(true)
                         .takes_value(true),
                 )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("minimax-record")
                 .about("Minimax Record")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("gen-dataset")
                 .about("Generate training dataset")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone())
                 .arg(Arg::new("MAX_OUT").short('n').takes_value(true)),
         )
         .subcommand(
             Command::new("train")
                 .about("Train weights")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone())
                 .arg(Arg::new("from").required(true).takes_value(true))
                 .arg(Arg::new("to").required(true).takes_value(true))
                 .arg(Arg::new("width").required(true).takes_value(true)),
@@ -404,34 +362,14 @@ fn main() {
         .subcommand(
             Command::new("update-record-v2")
                 .about("Update record iterative")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("gen-book")
                 .about("Generate book")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone())
                 .arg(
                     Arg::new("MAX_COUNT")
                         .short('c')
@@ -442,70 +380,30 @@ fn main() {
         .subcommand(
             Command::new("binarize")
                 .about("Binarize weights file")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("pack")
                 .about("Pack weights file")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("pack-book")
                 .about("Pack book file")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("last-table")
                 .about("Generate last move flip count table")
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("last-mask")
                 .about("Generate last move flip count mask")
-                .arg(
-                    Arg::new("OUTPUT")
-                        .short('o')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_output_file.clone()),
         )
         .subcommand(
             Command::new("parse-board")
@@ -515,12 +413,7 @@ fn main() {
         .subcommand(
             Command::new("eval-stats")
                 .about("Compute stats from dataset")
-                .arg(
-                    Arg::new("INPUT")
-                        .short('i')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(arg_input_file.clone()),
         )
         .subcommand(Command::new("codingame").about("Codingame player"))
         .subcommand(Command::new("worker").about("worker mode"))
