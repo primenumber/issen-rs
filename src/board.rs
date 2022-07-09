@@ -73,9 +73,9 @@ impl fmt::Display for Hand {
             Self::Play(pos) => {
                 let row = *pos as u8 / 8;
                 let col = *pos as u8 % 8;
-                let row_char = 0x30 + row;
-                let col_char = 0x41 + col;
-                write!(f, "{}{}", row_char as char, col_char as char)
+                let row_char = b'1' + row;
+                let col_char = b'A' + col;
+                write!(f, "{}{}", col_char as char, row_char as char)
             }
             Self::Pass => write!(f, "ps"),
         }
