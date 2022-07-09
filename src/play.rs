@@ -347,10 +347,11 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let initial_records = generate_depth_n(initial_board, random_depth, false, &mut record);
     eprintln!("{}", initial_records.len());
     let mut rng = SmallRng::from_entropy();
+    let initial_records = initial_records
+        .choose_multiple(&mut rng, take_count)
+        .collect::<Vec<_>>();
     let mut results = Vec::new();
     initial_records
-        .choose_multiple(&mut rng, take_count)
-        .collect::<Vec<_>>()
         .par_iter()
         .map(|r| self_play_worker(obj.clone(), r))
         .collect_into_vec(&mut results);
