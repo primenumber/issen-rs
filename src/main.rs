@@ -69,8 +69,8 @@ fn hand_to_string(hand: Hand) -> String {
         Hand::Play(hand) => {
             let row = hand as u8 / 8;
             let col = hand as u8 % 8;
-            let row_char = 0x30 + row;
-            let col_char = 0x41 + col;
+            let row_char = b'1' + row;
+            let col_char = b'A' + col;
             let s = [col_char, row_char];
             str::from_utf8(&s).unwrap().to_string()
         }
