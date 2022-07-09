@@ -67,6 +67,21 @@ impl Hand {
     }
 }
 
+impl fmt::Display for Hand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Play(pos) => {
+                let row = *pos as u8 / 8;
+                let col = *pos as u8 % 8;
+                let row_char = 0x30 + row;
+                let col_char = 0x41 + col;
+                write!(f, "{}{}", row_char as char, col_char as char)
+            }
+            Self::Pass => write!(f, "ps"),
+        }
+    }
+}
+
 pub const BOARD_SIZE: usize = 64;
 
 pub const PASS: usize = 64;

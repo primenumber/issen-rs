@@ -8,7 +8,7 @@ authors = ["prime <prime@kmc.gr.jp>"]
 packed_simd = { version = "0.3.8", package = "packed_simd_2" }
 bitintr = "0.3"
 lazy_static = "1.4"
-rand = "0.8"
+rand = { version = "0.8", features = ["small_rng"] }
 rand_xoshiro = "0.6"
 futures = { version = "0.3", features = ["thread-pool"] }
 yaml-rust = "0.4"

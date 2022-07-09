@@ -320,6 +320,23 @@ fn main() {
         )
         .subcommand(Command::new("self-play").about("Automatic self play"))
         .subcommand(
+            Command::new("gen-record")
+                .about("Generate record")
+                .arg(
+                    Arg::new("DEPTH")
+                        .short('d')
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::new("COUNT")
+                        .short('n')
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(arg_output_file.clone()),
+        )
+        .subcommand(
             Command::new("clean-record")
                 .about("Cleaning record")
                 .arg(arg_input_file.clone())
@@ -428,6 +445,9 @@ fn main() {
         }
         Some(("self-play", matches)) => {
             self_play(matches);
+        }
+        Some(("gen-record", matches)) => {
+            parallel_self_play(matches);
         }
         Some(("clean-record", matches)) => {
             clean_record(matches);

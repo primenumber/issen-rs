@@ -8,8 +8,14 @@ use crate::train::*;
 use clap::ArgMatches;
 use futures::executor;
 use futures::executor::ThreadPool;
+use rand::prelude::*;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
+use rayon::prelude::*;
+use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Instant;
 use surf::{Client, Url};
@@ -206,12 +212,23 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     board
 }
 
-fn self_play_worker(mut solve_obj: SolveObj) {
+fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8) {
     let mut board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
         is_black: true,
     };
+    let mut record_str = String::new();
+    for hand in initial_record {
+        record_str += &format!("{}", hand);
+        match hand {
+            Hand::Pass => board = board.pass(),
+            Hand::Play(hand) => match board.play(*hand) {
+                Ok(next) => board = next,
+                Err(_) => panic!(),
+            },
+        }
+    }
     while !board.is_gameover() {
         let best = if popcnt(board.empty()) > 16 {
             let time_limit = 200;
@@ -236,6 +253,7 @@ fn self_play_worker(mut solve_obj: SolveObj) {
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
         let hand = best;
+        record_str += &format!("{}", hand);
         match hand {
             Hand::Pass => board = board.pass(),
             Hand::Play(hand) => match board.play(hand) {
@@ -244,9 +262,51 @@ fn self_play_worker(mut solve_obj: SolveObj) {
             },
         }
     }
+    let result = if board.is_black {
+        board.score()
+    } else {
+        -board.score()
+    };
+    (record_str, result)
+}
+
+fn generate_depth_n(
+    board: Board,
+    depth: usize,
+    prev_passed: bool,
+    record: &mut Vec<Hand>,
+) -> Vec<Vec<Hand>> {
+    if depth == 0 {
+        return vec![record.clone()];
+    }
+    let mut result = Vec::new();
+    let mut is_pass = true;
+    for (next, hand) in board.next_iter() {
+        is_pass = false;
+        record.push(hand);
+        result.extend(generate_depth_n(next, depth - 1, false, record));
+        record.pop();
+    }
+    if is_pass {
+        if prev_passed {
+            return vec![];
+        } else {
+            record.push(Hand::Pass);
+            result = generate_depth_n(board.pass(), depth, true, record);
+            record.pop();
+        }
+    }
+    result
 }
 
 pub fn parallel_self_play(matches: &ArgMatches) {
+    let output_path = matches.value_of("OUTPUT").unwrap();
+    let random_depth = matches.value_of("DEPTH").unwrap().parse().unwrap();
+    let take_count = matches.value_of("COUNT").unwrap().parse().unwrap();
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 12,
@@ -261,8 +321,8 @@ pub fn parallel_self_play(matches: &ArgMatches) {
         use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-211122"));
-    let mut res_cache = ResCacheTable::new(256, 65536);
-    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = ResCacheTable::new(256, 65536);
+    let eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
     let client: Arc<Client> = Arc::new(
         surf::Config::new()
@@ -270,15 +330,33 @@ pub fn parallel_self_play(matches: &ArgMatches) {
             .try_into()
             .unwrap(),
     );
-    let mut obj = SolveObj::new(
-        res_cache.clone(),
-        eval_cache.clone(),
-        evaluator.clone(),
-        search_params.clone(),
-        pool.clone(),
-        client.clone(),
+    let obj = SolveObj::new(
+        res_cache,
+        eval_cache,
+        evaluator,
+        search_params,
+        pool,
+        client,
     );
-    self_play_worker(obj);
+    let initial_board = Board {
+        player: 0x0000000810000000,
+        opponent: 0x0000001008000000,
+        is_black: true,
+    };
+    let mut record = Vec::new();
+    let initial_records = generate_depth_n(initial_board, random_depth, false, &mut record);
+    eprintln!("{}", initial_records.len());
+    let mut rng = SmallRng::from_entropy();
+    let mut results = Vec::new();
+    initial_records
+        .choose_multiple(&mut rng, take_count)
+        .collect::<Vec<_>>()
+        .par_iter()
+        .map(|r| self_play_worker(obj.clone(), r))
+        .collect_into_vec(&mut results);
+    for (record, score) in results {
+        writeln!(writer, "{} {}", record, score).unwrap();
+    }
 }
 
 macro_rules! parse_input {
