@@ -206,6 +206,81 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     board
 }
 
+fn self_play_worker(mut solve_obj: SolveObj) {
+    let mut board = Board {
+        player: 0x0000000810000000,
+        opponent: 0x0000001008000000,
+        is_black: true,
+    };
+    while !board.is_gameover() {
+        let best = if popcnt(board.empty()) > 16 {
+            let time_limit = 200;
+            let start = Instant::now();
+            let timer = Timer {
+                period: start,
+                time_limit,
+            };
+            let mut searcher = Searcher {
+                evaluator: solve_obj.evaluator.clone(),
+                cache: solve_obj.eval_cache.clone(),
+                timer: Some(timer),
+                node_count: 0,
+            };
+            let (score, best, depth) =
+                searcher.iterative_think(board, -64 * SCALE, 64 * SCALE, false);
+            best
+        } else {
+            let mut obj = solve_obj.clone();
+            executor::block_on(solve_with_move(board, &mut obj))
+        };
+        solve_obj.eval_cache.inc_gen();
+        solve_obj.res_cache.inc_gen();
+        let hand = best;
+        match hand {
+            Hand::Pass => board = board.pass(),
+            Hand::Play(hand) => match board.play(hand) {
+                Ok(next) => board = next,
+                Err(_) => panic!(),
+            },
+        }
+    }
+}
+
+pub fn parallel_self_play(matches: &ArgMatches) {
+    let search_params = SearchParams {
+        reduce: false,
+        ybwc_depth_limit: 12,
+        ybwc_elder_add: 1,
+        ybwc_younger_add: 2,
+        ybwc_empties_limit: 64,
+        eval_ordering_limit: 15,
+        res_cache_limit: 11,
+        stability_cut_limit: 12,
+        ffs_ordering_limit: 6,
+        static_ordering_limit: 3,
+        use_worker: false,
+    };
+    let evaluator = Arc::new(Evaluator::new("table-211122"));
+    let mut res_cache = ResCacheTable::new(256, 65536);
+    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let pool = ThreadPool::new().unwrap();
+    let client: Arc<Client> = Arc::new(
+        surf::Config::new()
+            .set_base_url(Url::parse("http://localhost:7733").unwrap())
+            .try_into()
+            .unwrap(),
+    );
+    let mut obj = SolveObj::new(
+        res_cache.clone(),
+        eval_cache.clone(),
+        evaluator.clone(),
+        search_params.clone(),
+        pool.clone(),
+        client.clone(),
+    );
+    self_play_worker(obj);
+}
+
 macro_rules! parse_input {
     ($x:expr, $t:ident) => {
         $x.trim().parse::<$t>().unwrap()

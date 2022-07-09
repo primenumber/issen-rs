@@ -35,7 +35,7 @@ pub struct SearchParams {
 
 #[derive(Clone)]
 pub struct SolveObj {
-    res_cache: ResCacheTable,
+    pub res_cache: ResCacheTable,
     pub eval_cache: EvalCacheTable,
     pub evaluator: Arc<Evaluator>,
     params: SearchParams,
