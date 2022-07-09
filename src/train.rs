@@ -44,6 +44,9 @@ fn parse_pos(s: &[u8]) -> Option<usize> {
 pub fn parse_record(line: &str) -> Vec<usize> {
     let mut result = Vec::new();
     for chunk in line.as_bytes().chunks(2) {
+        if chunk == "ps".as_bytes() {
+            continue;
+        }
         match parse_pos(chunk) {
             Some(pos) => result.push(pos),
             None => {
