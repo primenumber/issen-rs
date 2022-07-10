@@ -179,7 +179,7 @@ fn ffo_benchmark() {
         static_ordering_limit: 3,
         use_worker: false,
     };
-    let evaluator = Arc::new(Evaluator::new("table-211122"));
+    let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();

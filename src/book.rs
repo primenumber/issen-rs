@@ -235,7 +235,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
     };
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
-    let evaluator = Arc::new(Evaluator::new("table-211122"));
+    let evaluator = Arc::new(Evaluator::new("table-220710"));
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 10,
