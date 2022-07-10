@@ -74,7 +74,7 @@ impl Evaluator {
         for count_index in 0..range_size {
             for pattern_index in 0..length {
                 let mut w = Vec::new();
-                for diff in -1..=1 {
+                for diff in 0..=0 {
                     let ref_count_index = count_index as isize + diff;
                     if ref_count_index < 0 || ref_count_index >= range_size as isize {
                         continue;
