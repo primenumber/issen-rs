@@ -213,6 +213,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
 }
 
 fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8) {
+    use std::fmt::Write;
     let mut board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -220,11 +221,13 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
     };
     let mut record_str = String::new();
     for hand in initial_record {
-        record_str += &format!("{}", hand);
         match hand {
             Hand::Pass => board = board.pass(),
             Hand::Play(hand) => match board.play(*hand) {
-                Ok(next) => board = next,
+                Ok(next) => {
+                    write!(&mut record_str, "{}", hand).unwrap();
+                    board = next;
+                }
                 Err(_) => panic!(),
             },
         }
@@ -243,7 +246,7 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) =
+            let (_score, best, _depth) =
                 searcher.iterative_think(board, -64 * SCALE, 64 * SCALE, false);
             best
         } else {
@@ -253,11 +256,13 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
         let hand = best;
-        record_str += &format!("{}", hand);
         match hand {
             Hand::Pass => board = board.pass(),
             Hand::Play(hand) => match board.play(hand) {
-                Ok(next) => board = next,
+                Ok(next) => {
+                    write!(&mut record_str, "{}", hand).unwrap();
+                    board = next;
+                }
                 Err(_) => panic!(),
             },
         }
