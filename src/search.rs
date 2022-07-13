@@ -217,7 +217,8 @@ fn fastest_first(
     passed: bool,
 ) -> (i8, SolveStat) {
     const MAX_FFS_NEXT: usize = 20;
-    let mut nexts: [(i8, Board); MAX_FFS_NEXT] = unsafe { MaybeUninit::uninit().assume_init() };
+    let nexts = MaybeUninit::<[(i8, Board); MAX_FFS_NEXT]>::uninit();
+    let mut nexts = unsafe { nexts.assume_init() };
     let mut count = 0;
     for (next, _pos) in board.next_iter() {
         nexts[count] = (weighted_mobility(&next), next);
