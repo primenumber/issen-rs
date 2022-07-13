@@ -12,13 +12,13 @@ use futures::executor;
 use futures::executor::ThreadPool;
 use futures::task::SpawnExt;
 use rayon::prelude::*;
-use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::cmp::min;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const PACKED_SCALE: i32 = 256;
 
@@ -271,101 +271,6 @@ pub fn update_record(matches: &ArgMatches) {
     for line in result {
         write!(writer, "{}", line).unwrap();
     }
-}
-
-pub fn gen_dataset_with_minimax(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
-    let max_output = matches.value_of("MAX_OUT").unwrap().parse().unwrap();
-
-    eprintln!("Parse input...");
-    let boards_list = load_records(input_path);
-
-    eprintln!("Generate boards_set...");
-    let mut boards_set = vec![HashSet::new(); 64];
-    for boards in boards_list {
-        for board in boards {
-            boards_set[popcnt(board.empty()) as usize].insert(board);
-        }
-    }
-
-    let mut total_boards = 0;
-    for boards in &boards_set {
-        total_boards += boards.len();
-    }
-    eprintln!("Total board count = {}", total_boards);
-
-    eprintln!("Minimax-ing results...");
-    let mut boards_with_results = HashMap::new();
-    for boards in &boards_set {
-        let boards_with_results_next = Arc::new(Mutex::new(HashMap::new()));
-        boards.par_iter().for_each(|&board| {
-            let mut current = board;
-            let mut mobility = current.mobility();
-            let is_pass = mobility.is_empty();
-            if is_pass {
-                current = current.pass();
-                mobility = current.mobility();
-                if mobility.is_empty() {
-                    boards_with_results_next
-                        .lock()
-                        .unwrap()
-                        .insert(board, (board.score(), PASS));
-                    return;
-                }
-            }
-            let mut best_score = None;
-            let mut best_pos = None;
-            for pos in mobility {
-                let next = current.play(pos).unwrap();
-                for next_sym in next.sym_boards() {
-                    if let Some((score, _)) = boards_with_results.get(&next_sym) {
-                        best_score = Some(max(-score, best_score.unwrap_or(-64)));
-                        best_pos = Some(pos);
-                    }
-                }
-            }
-            if is_pass {
-                boards_with_results_next
-                    .lock()
-                    .unwrap()
-                    .insert(board, (-best_score.unwrap(), best_pos.unwrap()));
-            } else {
-                boards_with_results_next
-                    .lock()
-                    .unwrap()
-                    .insert(current, (best_score.unwrap(), best_pos.unwrap()));
-            }
-        });
-        for (&k, v) in boards_with_results_next.lock().unwrap().iter() {
-            boards_with_results.insert(k, v.clone());
-        }
-    }
-
-    eprintln!("Remaining board count = {}", boards_with_results.len());
-
-    eprintln!("Writing to file...");
-    let out_f = File::create(output_path).unwrap();
-    let mut writer = BufWriter::new(out_f);
-
-    writeln!(
-        &mut writer,
-        "{}",
-        min(boards_with_results.len(), max_output)
-    )
-    .unwrap();
-    for (idx, (board, (score, pos))) in boards_with_results.iter().enumerate() {
-        if idx >= max_output {
-            break;
-        }
-        writeln!(
-            &mut writer,
-            "{:016x} {:016x} {} {}",
-            board.player, board.opponent, score, pos,
-        )
-        .unwrap();
-    }
-    eprintln!("Finished!");
 }
 
 pub fn gen_dataset(matches: &ArgMatches) {
