@@ -18,7 +18,6 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Instant;
-use surf::{Client, Url};
 
 fn read_hand() -> Option<usize> {
     let mut s = String::new();
@@ -61,12 +60,6 @@ pub fn play(matches: &ArgMatches) -> Board {
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(Url::parse("http://localhost:7733").unwrap())
-            .try_into()
-            .unwrap(),
-    );
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -111,7 +104,6 @@ pub fn play(matches: &ArgMatches) -> Board {
                     evaluator.clone(),
                     search_params.clone(),
                     pool.clone(),
-                    client.clone(),
                 );
                 executor::block_on(solve_with_move(board, &mut obj))
             };
@@ -150,12 +142,6 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(Url::parse("http://localhost:7733").unwrap())
-            .try_into()
-            .unwrap(),
-    );
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -192,7 +178,6 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 evaluator.clone(),
                 search_params.clone(),
                 pool.clone(),
-                client.clone(),
             );
             executor::block_on(solve_with_move(board, &mut obj))
         };
@@ -329,20 +314,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(Url::parse("http://localhost:7733").unwrap())
-            .try_into()
-            .unwrap(),
-    );
-    let obj = SolveObj::new(
-        res_cache,
-        eval_cache,
-        evaluator,
-        search_params,
-        pool,
-        client,
-    );
+    let obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params, pool);
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -389,11 +361,6 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(Url::parse("http://localhost:7733")?)
-            .try_into()?,
-    );
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
@@ -474,7 +441,6 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 evaluator.clone(),
                 search_params.clone(),
                 pool.clone(),
-                client.clone(),
             );
             executor::block_on(solve_with_move(board, &mut obj))
         };

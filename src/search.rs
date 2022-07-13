@@ -40,7 +40,6 @@ pub struct SolveObj {
     pub evaluator: Arc<Evaluator>,
     params: SearchParams,
     pool: ThreadPool,
-    client: Arc<Client>,
 }
 
 enum CutType {
@@ -81,7 +80,6 @@ impl SolveObj {
         evaluator: Arc<Evaluator>,
         params: SearchParams,
         pool: ThreadPool,
-        client: Arc<Client>,
     ) -> SolveObj {
         SolveObj {
             res_cache,
@@ -89,7 +87,6 @@ impl SolveObj {
             evaluator,
             params,
             pool,
-            client,
         }
     }
 }
@@ -887,7 +884,6 @@ mod tests {
                         evaluator.clone(),
                         search_params.clone(),
                         pool.clone(),
-                        client.clone(),
                     );
                     let (res, _stat) = solve_inner(&mut obj, board, -64, 64, false);
                     if res != desired {

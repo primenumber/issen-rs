@@ -5,7 +5,6 @@ use crate::table::*;
 use clap::ArgMatches;
 use futures::executor::ThreadPool;
 use std::sync::Arc;
-use surf::{Client, Url};
 use tide::prelude::*;
 use tide::{Body, Request};
 
@@ -41,19 +40,12 @@ async fn worker_impl() -> tide::Result<()> {
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(Url::parse("http://localhost:7733").unwrap())
-            .try_into()
-            .unwrap(),
-    );
     let solve_obj = SolveObj::new(
         res_cache.clone(),
         eval_cache.clone(),
         evaluator.clone(),
         search_params.clone(),
         pool.clone(),
-        client.clone(),
     );
     //tide::log::start();
     let mut app = tide::with_state(solve_obj);

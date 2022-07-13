@@ -91,7 +91,6 @@ fn solve_ffo(
     res_cache: &mut ResCacheTable,
     eval_cache: &mut EvalCacheTable,
     pool: &ThreadPool,
-    client: Arc<Client>,
 ) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
@@ -111,7 +110,6 @@ fn solve_ffo(
                     evaluator.clone(),
                     search_params.clone(),
                     pool.clone(),
-                    client.clone(),
                 );
                 let (res, best, stat) = solve(&mut obj, board, -64, 64, false, 0);
                 let end = start.elapsed();
@@ -183,12 +181,6 @@ fn ffo_benchmark() {
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
     let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(Url::parse("http://192.168.10.192:7733").unwrap())
-            .try_into()
-            .unwrap(),
-    );
     let mut index: usize = 1;
     let mut stats = Vec::new();
     //stats.extend(solve_ffo(
@@ -217,7 +209,6 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
-        client.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
@@ -227,7 +218,6 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
-        client.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
@@ -237,7 +227,6 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
-        client.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
@@ -247,7 +236,6 @@ fn ffo_benchmark() {
         &mut res_cache,
         &mut eval_cache,
         &pool,
-        client.clone(),
     ));
     report_stats(&stats);
 }
