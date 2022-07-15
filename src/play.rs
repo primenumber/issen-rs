@@ -208,7 +208,7 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
     for hand in initial_record {
         match hand {
             Hand::Pass => board = board.pass(),
-            Hand::Play(hand) => match board.play(*hand) {
+            Hand::Play(pos) => match board.play(*pos) {
                 Ok(next) => {
                     write!(&mut record_str, "{}", hand).unwrap();
                     board = next;
@@ -243,7 +243,7 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
         let hand = best;
         match hand {
             Hand::Pass => board = board.pass(),
-            Hand::Play(hand) => match board.play(hand) {
+            Hand::Play(pos) => match board.play(pos) {
                 Ok(next) => {
                     write!(&mut record_str, "{}", hand).unwrap();
                     board = next;
