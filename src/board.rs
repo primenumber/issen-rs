@@ -324,18 +324,17 @@ impl Board {
 
     pub fn stable_partial(&self) -> (u64, u64) {
         const MASK_TOP: u64 = 0x0000_0000_0000_00FF;
-        //const MASK_BOTTOM: u64 = 0xFF00_0000_0000_0000;
+        const MASK_BOTTOM: u64 = 0xFF00_0000_0000_0000;
         const MASK_LEFT: u64 = 0x0101_0101_0101_0101;
-        //const MASK_RIGHT: u64 = 0x8080_8080_8080_8080;
-        //const MASKS: [u64; 4] = [MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT];
+        const MASK_RIGHT: u64 = 0x8080_8080_8080_8080;
+        const MASKS: [u64; 4] = [MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT];
         let mut res = 0;
-        // FIXME: edge stability is buggy
-        //for mask in &MASKS {
-        //    let me = pext(self.player, *mask) as usize;
-        //    let op = pext(self.opponent, *mask) as usize;
-        //    let base3 = BASE3[me] + 2 * BASE3[op];
-        //    res |= pdep(STABLE[base3], *mask);
-        //}
+        for mask in &MASKS {
+            let me = pext(self.player, *mask) as usize;
+            let op = pext(self.opponent, *mask) as usize;
+            let base3 = BASE3[me] + 2 * BASE3[op];
+            res |= pdep(STABLE[base3], *mask);
+        }
         for r in 0..8 {
             let mask_h = MASK_TOP << (r * 8);
             for c in 0..8 {
