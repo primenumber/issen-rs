@@ -335,29 +335,40 @@ impl Board {
             let base3 = BASE3[me] + 2 * BASE3[op];
             res |= pdep(STABLE[base3], *mask);
         }
-        for r in 0..8 {
-            let mask_h = MASK_TOP << (r * 8);
-            for c in 0..8 {
-                let mask_v = MASK_LEFT << c;
-                const MASK_D_A1H8: u64 = 0x8040201008040201;
-                let mask_d_a1h8 = if (r - c) >= 0 {
-                    MASK_D_A1H8 << ((r - c) * 8)
-                } else {
-                    MASK_D_A1H8 >> ((c - r) * 8)
-                };
-                const MASK_D_A8H1: u64 = 0x0102040810204080;
-                let mask_d_a8h1 = if (r + c - 7) >= 0 {
-                    MASK_D_A8H1 << ((r + c - 7) * 8)
-                } else {
-                    MASK_D_A8H1 >> ((7 - r - c) * 8)
-                };
-                let mask = mask_h | mask_v | mask_d_a1h8 | mask_d_a8h1;
-                let pos = r * 8 + c;
-                if (self.empty() & mask) == 0 {
-                    res |= 1 << pos;
-                }
-            }
-        }
+        let filled = !self.empty();
+        let mut filled_v = filled;
+        let mut filled_h = filled;
+        let mut filled_a1h8 = filled;
+        let mut filled_a8h1 = filled;
+        // reduce
+        filled_v &= filled_v >> 32;
+        filled_h &= (filled_h >> 4) & 0x0F0F_0F0F_0F0F_0F0F;
+        filled_a1h8 &= (filled_a1h8 >> 36) | 0x0F0F_0F0F_F0F0_F0F0;
+        filled_a8h1 &= (filled_a8h1 >> 28) | 0xF0F0_F0F0_0F0F_0F0F;
+        filled_v &= filled_v >> 16;
+        filled_h &= (filled_h >> 2) & 0x3333_3333_3333_3333;
+        filled_a1h8 &= (filled_a1h8 >> 18) | 0x0303_0000_0000_C0C0;
+        filled_a8h1 &= (filled_a8h1 >> 14) | 0xC0C0_0000_0000_0303;
+        filled_v &= filled_v >> 8;
+        filled_h &= (filled_h >> 1) & 0x5555_5555_5555_5555;
+        filled_a1h8 &= (filled_a1h8 >> 9) | 0x0100_0000_0000_0080;
+        filled_a8h1 &= (filled_a8h1 >> 7) | 0x8000_0000_0000_0001;
+        filled_a1h8 &= 0x0101_0101_0101_01FF;
+        filled_a8h1 &= 0x8080_8080_8080_80FF;
+        // broadcast
+        filled_v |= filled_v << 8;
+        filled_h |= filled_h << 1;
+        filled_a1h8 |= (filled_a1h8 << 9) & 0x0202_0202_0202_FE00;
+        filled_a8h1 |= (filled_a8h1 << 7) & 0x4040_4040_4040_7F00;
+        filled_v |= filled_v << 16;
+        filled_h |= filled_h << 2;
+        filled_a1h8 |= (filled_a1h8 << 18) & 0x0C0C_0C0C_FCFC_0000;
+        filled_a8h1 |= (filled_a8h1 << 14) & 0x3030_3030_3F3F_0000;
+        filled_v |= filled_v << 32;
+        filled_h |= filled_h << 4;
+        filled_a1h8 |= (filled_a1h8 << 36) & 0xF0F0_F0F0_0000_0000;
+        filled_a8h1 |= (filled_a8h1 << 28) & 0x0F0F_0F0F_0000_0000;
+        res |= filled_v & filled_h & filled_a1h8 & filled_a8h1;
         let res_me = res & self.player;
         let res_op = res & self.opponent;
         (res_me, res_op)
