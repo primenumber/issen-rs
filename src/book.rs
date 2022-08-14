@@ -242,7 +242,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         ybwc_empties_limit: 17,
         eval_ordering_limit: 16,
         res_cache_limit: 11,
-        stability_cut_limit: 12,
+        stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
         use_worker: false,
