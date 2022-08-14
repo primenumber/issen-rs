@@ -528,37 +528,27 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
     if let Some(res) = memo[index] {
         return res;
     }
-    let mut res = 0xFFFF_FFFF_FFFF_FFFF;
-    let mut pass = true;
-    for next_pos in board.mobility() {
-        pass = false;
-        let next = board.play(next_pos).unwrap();
-        let flip = board.flip(next_pos);
-        res &= !flip;
-        res &= !(1 << next_pos);
-        res &= stable_bits_8(next, false, memo);
-    }
-    if pass && !passed {
-        let next = board.pass();
-        res &= stable_bits_8(next, true, memo);
-    }
+    let mut res = 0xFF;
     for pos in 0..8 {
         if ((board.empty() >> pos) & 1) != 1 {
             continue;
         }
         let flip = board.flip(pos);
-        if flip != 0 {
-            continue;
-        }
+        let pos_bit = 1 << pos;
         let next = Board {
-            player: board.opponent,
-            opponent: board.player | (1 << pos),
+            player: board.opponent ^ flip,
+            opponent: (board.player ^ flip) | pos_bit,
             is_black: !board.is_black,
         };
-        res &= !(1 << pos);
+        res &= !flip;
+        res &= !pos_bit;
         res &= stable_bits_8(next, false, memo);
     }
-    memo[index] = Some(res);
+    if !passed {
+        let next = board.pass();
+        res &= stable_bits_8(next, true, memo);
+        memo[index] = Some(res);
+    }
     res
 }
 
