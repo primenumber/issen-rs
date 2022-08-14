@@ -368,6 +368,9 @@ impl Board {
         filled_h |= filled_h << 4;
         filled_a1h8 |= (filled_a1h8 << 36) & 0xF0F0_F0F0_0000_0000;
         filled_a8h1 |= (filled_a8h1 << 28) & 0x0F0F_0F0F_0000_0000;
+        // lines that size <= 2 are treated as filled
+        filled_a1h8 |= 0x0301_0000_0000_80C0;
+        filled_a8h1 |= 0xC080_0000_0000_0103;
         res |= filled_v & filled_h & filled_a1h8 & filled_a8h1;
         let res_me = res & self.player;
         let res_op = res & self.opponent;
