@@ -851,13 +851,13 @@ mod tests {
         let name = "problem/stress_test_54_1k.b81r";
         let file = File::open(name).unwrap();
         let reader = BufReader::new(file);
-        let evaluator = Arc::new(Evaluator::new("table"));
+        let evaluator = Arc::new(Evaluator::new("table-220715"));
         let res_cache = ResCacheTable::new(256, 256);
         let eval_cache = EvalCacheTable::new(256, 256);
         let pool = ThreadPool::new().unwrap();
         let client: Arc<Client> = Arc::new(
             surf::Config::new()
-                .set_base_url(Url::parse("http://localhost:7733").unwrap())
+                .set_base_url(surf::Url::parse("http://localhost:7733").unwrap())
                 .try_into()
                 .unwrap(),
         );
