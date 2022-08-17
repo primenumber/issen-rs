@@ -70,6 +70,7 @@ impl Searcher {
         }
         Some((res, best.unwrap()))
     }
+
     fn think_impl(
         &mut self,
         board: Board,
