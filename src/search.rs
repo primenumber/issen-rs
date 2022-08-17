@@ -299,7 +299,13 @@ fn move_ordering_impl(
                 node_count: 0,
             };
             let score = searcher
-                .think(next, -64 * SCALE, 64 * SCALE, false, think_depth)
+                .think(
+                    next,
+                    -64 * SCALE,
+                    64 * SCALE,
+                    false,
+                    think_depth as i32 * DEPTH_SCALE,
+                )
                 .unwrap()
                 .0;
             tmp.push((score + bonus, pos, next));

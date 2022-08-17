@@ -637,9 +637,13 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
             };
             for depth in 1..=depth_max {
                 eval_cache.inc_gen();
-                if let Some((evaluated, _)) =
-                    searcher.think(board, -64 * SCALE, 64 * SCALE, false, depth as i8)
-                {
+                if let Some((evaluated, _)) = searcher.think(
+                    board,
+                    -64 * SCALE,
+                    64 * SCALE,
+                    false,
+                    depth as i32 * DEPTH_SCALE,
+                ) {
                     scores.push(evaluated);
                 } else {
                     panic!()

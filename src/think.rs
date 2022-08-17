@@ -24,6 +24,8 @@ pub struct Searcher {
     pub node_count: usize,
 }
 
+pub const DEPTH_SCALE: i32 = 256;
+
 impl Searcher {
     fn think_naive(
         &mut self,
@@ -31,20 +33,26 @@ impl Searcher {
         mut alpha: i16,
         beta: i16,
         passed: bool,
-        depth: i8,
+        depth: i32,
     ) -> Option<(i16, Hand)> {
         let mut res = -64 * SCALE - 1;
         let mut best = None;
         for (i, (next, pos)) in board.next_iter().enumerate() {
             if i == 0 {
-                res = res.max(-self.think(next, -beta, -alpha, false, depth - 1)?.0);
+                res = res.max(
+                    -self
+                        .think(next, -beta, -alpha, false, depth - DEPTH_SCALE)?
+                        .0,
+                );
                 best = Some(pos);
                 if res >= beta {
                     return Some((res, pos));
                 }
                 alpha = max(alpha, res);
             } else {
-                let tmp = -self.think(next, -alpha - 1, -alpha, false, depth - 1)?.0;
+                let tmp = -self
+                    .think(next, -alpha - 1, -alpha, false, depth - DEPTH_SCALE)?
+                    .0;
                 if tmp > res {
                     res = tmp;
                     best = Some(pos);
@@ -54,7 +62,11 @@ impl Searcher {
                 }
                 if res > alpha {
                     alpha = res;
-                    res = res.max(-self.think(next, -beta, -alpha, false, depth - 1)?.0);
+                    res = res.max(
+                        -self
+                            .think(next, -beta, -alpha, false, depth - DEPTH_SCALE)?
+                            .0,
+                    );
                 }
             }
         }
@@ -78,7 +90,7 @@ impl Searcher {
         beta: i16,
         passed: bool,
         old_best: Option<Hand>,
-        depth: i8,
+        depth: i32,
     ) -> Option<(i16, Hand)> {
         let mut v = Vec::with_capacity(16);
         for (next, pos) in board.next_iter() {
@@ -101,14 +113,16 @@ impl Searcher {
         let mut best = None;
         for (i, &(next, pos, eval_score, _, _)) in v.iter().enumerate() {
             if i == 0 {
-                res = -self.think(next, -beta, -alpha, false, depth - 1)?.0;
+                res = -self
+                    .think(next, -beta, -alpha, false, depth - DEPTH_SCALE)?
+                    .0;
                 best = Some(pos);
             } else {
                 let reduce = if -eval_score < alpha - 16 * SCALE {
                     2
                 } else {
                     1
-                };
+                } * DEPTH_SCALE;
                 let tmp = -self
                     .think(next, -alpha - 1, -alpha, false, depth - reduce)?
                     .0;
@@ -121,7 +135,11 @@ impl Searcher {
                 }
                 if res > alpha {
                     alpha = res;
-                    res = res.max(-self.think(next, -beta, -alpha, false, depth - 1)?.0);
+                    res = res.max(
+                        -self
+                            .think(next, -beta, -alpha, false, depth - DEPTH_SCALE)?
+                            .0,
+                    );
                 }
             }
             alpha = alpha.max(res);
@@ -148,24 +166,24 @@ impl Searcher {
         alpha: i16,
         beta: i16,
         passed: bool,
-        depth: i8,
+        depth: i32,
     ) -> Option<(i16, Option<Hand>)> {
         self.node_count += 1;
         if depth <= 0 {
             let res = self.evaluator.eval(board);
             Some((res, None))
-        } else if depth <= 2 {
+        } else if depth <= 2 * DEPTH_SCALE {
             let (res, best) = self.think_naive(board, alpha, beta, passed, depth)?;
             Some((res, Some(best)))
         } else {
-            if depth > 8 {
+            if depth > 8 * DEPTH_SCALE {
                 if let Some(t) = &self.timer {
                     if !t.is_ok() {
                         return None;
                     }
                 }
             }
-            let min_cache_depth = 4;
+            let min_cache_depth = 4 * DEPTH_SCALE;
             let (lower, upper, old_best) = if depth >= min_cache_depth {
                 match self.cache.get(board) {
                     Some(entry) => {
@@ -219,7 +237,7 @@ impl Searcher {
         mut alpha: i16,
         beta: i16,
         passed: bool,
-        depth: i8,
+        depth: i32,
     ) -> Option<(i16, Hand)> {
         let (score, hand) = self.think(board, alpha, beta, passed, depth)?;
 
@@ -231,7 +249,9 @@ impl Searcher {
         let mut current_hand = None;
         let mut pass = true;
         for (next, hand) in board.next_iter() {
-            let s = -self.think(next, -beta, -alpha, false, depth - 1)?.0;
+            let s = -self
+                .think(next, -beta, -alpha, false, depth - DEPTH_SCALE)?
+                .0;
             if s > current_score {
                 current_hand = Some(hand);
                 current_score = s;
@@ -261,19 +281,19 @@ impl Searcher {
             .unwrap();
 
         if !self.timer.as_ref().unwrap().is_ok() {
-            return (score, hand, current_depth);
+            return (score, hand, current_depth as i8);
         }
 
         for depth in (min_depth + 1).. {
             self.cache.inc_gen();
-            let t = match self.think_with_move(board, alpha, beta, passed, depth) {
+            let t = match self.think_with_move(board, alpha, beta, passed, depth * DEPTH_SCALE) {
                 Some(t) => t,
-                _ => return (score, hand, current_depth),
+                _ => return (score, hand, current_depth as i8),
             };
             score = t.0;
             hand = t.1;
             current_depth = depth;
         }
-        (score, hand, current_depth)
+        (score, hand, current_depth as i8)
     }
 }

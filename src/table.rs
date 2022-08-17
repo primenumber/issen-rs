@@ -19,7 +19,7 @@ pub struct EvalCache {
     pub upper: i16,
     pub gen: u16,
     pub best: Option<Hand>,
-    pub depth: i8,
+    pub depth: i32,
 }
 
 impl Default for EvalCache {
