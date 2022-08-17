@@ -8,6 +8,34 @@ use std::ops::RangeInclusive;
 use std::path::Path;
 use yaml_rust::yaml;
 
+struct EvaluatorConfig {
+    masks: Vec<String>,
+    stones_range: RangeInclusive<usize>,
+}
+
+impl EvaluatorConfig {
+    fn new(config_path: &Path) -> Option<EvaluatorConfig> {
+        let mut config_file = File::open(&config_path).ok()?;
+        let mut config_string = String::new();
+        config_file.read_to_string(&mut config_string).ok()?;
+        let config_objs = yaml::YamlLoader::load_from_str(&config_string).ok()?;
+        let config = &config_objs[0];
+        let masks = config["masks"]
+            .as_vec()?
+            .iter()
+            .map(|e| e.as_str().unwrap().to_string())
+            .collect();
+        let stones_range_yaml = &config["stone_counts"];
+        let from = stones_range_yaml["from"].as_i64()? as usize;
+        let to = stones_range_yaml["to"].as_i64()? as usize;
+        let stones_range = from..=to;
+        Some(EvaluatorConfig {
+            masks,
+            stones_range,
+        })
+    }
+}
+
 pub struct Evaluator {
     stones_range: RangeInclusive<usize>,
     weights: Vec<Vec<i16>>,
@@ -29,18 +57,13 @@ pub const SCALE: i16 = 256;
 impl Evaluator {
     pub fn new(table_dirname: &str) -> Evaluator {
         let table_path = Path::new(table_dirname);
-        let mut config_file = File::open(table_path.join("config.yaml")).unwrap();
-        let mut config_string = String::new();
-        config_file.read_to_string(&mut config_string).unwrap();
-        let config_objs = yaml::YamlLoader::load_from_str(&config_string).unwrap();
-        let config = &config_objs[0]; // first document of the file
+        let config_path = table_path.join("config.yaml");
+        let config = EvaluatorConfig::new(&config_path).unwrap();
         let mut patterns = Vec::new();
         let mut offsets = Vec::new();
         let mut length: usize = 0;
         let mut max_bits = 0;
-        let masks = &config["masks"];
-        for pattern_obj in masks.clone() {
-            let pattern_str = pattern_obj.as_str().unwrap();
+        for pattern_str in config.masks.iter() {
             let bits = u64::from_str_radix(&pattern_str, 2).unwrap();
             patterns.push(bits);
             offsets.push(length);
@@ -50,8 +73,8 @@ impl Evaluator {
         offsets.push(length);
         length += 4;
 
-        let from = config["stone_counts"]["from"].as_i64().unwrap() as usize;
-        let to = config["stone_counts"]["to"].as_i64().unwrap() as usize;
+        let from = *config.stones_range.start();
+        let to = *config.stones_range.end();
         let stones_range = from..=to;
         let range_size = to - from + 1;
         let mut weights = vec![vec![0i16; length]; range_size];
