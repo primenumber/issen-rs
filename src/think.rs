@@ -111,18 +111,22 @@ impl Searcher {
         v.sort_by(|a, b| (a.2, a.3, a.4).cmp(&(b.2, b.3, b.4)));
         let mut res = -64 * SCALE;
         let mut best = None;
-        for (i, &(next, pos, eval_score, _, _)) in v.iter().enumerate() {
+        for (i, &(next, pos, _, eval_score, _)) in v.iter().enumerate() {
             if i == 0 {
                 res = -self
                     .think(next, -beta, -alpha, false, depth - DEPTH_SCALE)?
                     .0;
                 best = Some(pos);
             } else {
-                let reduce = if -eval_score < alpha - 16 * SCALE {
-                    2
+                let reduce = if -eval_score < alpha - 8 * SCALE {
+                    4 * DEPTH_SCALE
+                } else if -eval_score < alpha - 5 * SCALE {
+                    3 * DEPTH_SCALE
+                } else if -eval_score < alpha - 3 * SCALE {
+                    2 * DEPTH_SCALE
                 } else {
-                    1
-                } * DEPTH_SCALE;
+                    DEPTH_SCALE
+                };
                 let tmp = -self
                     .think(next, -alpha - 1, -alpha, false, depth - reduce)?
                     .0;
