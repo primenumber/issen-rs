@@ -219,7 +219,7 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
     }
     while !board.is_gameover() {
         let best = if popcnt(board.empty()) > 16 {
-            let time_limit = 200;
+            let time_limit = 1000;
             let start = Instant::now();
             let timer = Timer {
                 period: start,
