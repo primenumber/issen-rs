@@ -130,7 +130,7 @@ fn test_solve_inner() {
     let name = "problem/stress_test_54_1k.b81r";
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
-    let evaluator = Arc::new(Evaluator::new("table-220715"));
+    let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 256);
     let eval_cache = EvalCacheTable::new(256, 256);
     let pool = ThreadPool::new().unwrap();
