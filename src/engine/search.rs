@@ -3,6 +3,7 @@ mod test;
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
+use crate::engine::hand::*;
 use crate::engine::remote::*;
 use crate::engine::table::*;
 use crate::engine::think::*;

@@ -1,6 +1,7 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
+use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::think::*;
 use crate::train::{create_record_by_solve, pos_to_str, step_by_pos};

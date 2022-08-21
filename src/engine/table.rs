@@ -1,5 +1,6 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
+use crate::engine::hand::*;
 use spin::Mutex;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

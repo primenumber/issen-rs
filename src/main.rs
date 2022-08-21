@@ -10,6 +10,7 @@ use crate::book::*;
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
+use crate::engine::hand::*;
 use crate::engine::remote::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
