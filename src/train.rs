@@ -370,8 +370,9 @@ impl WeightedPattern {
             offset += vp3[popcnt(*pattern) as usize];
             pattern_starts.push(offset);
         }
+        offset *= 2;
         // pcnt, ocnt, parity, const
-        offset += 4;
+        offset += 8;
         pattern_starts.push(offset);
         WeightedPattern {
             patterns: patterns.to_vec(),
@@ -395,7 +396,7 @@ impl WeightedPattern {
 
     fn generate_indices(&self, board: &Board) -> Vec<u32> {
         let mut board_rot = *board;
-        let mut indices = Vec::with_capacity(self.patterns.len() * 8 + 4);
+        let mut indices = Vec::with_capacity(self.patterns.len() * 8);
         for _i in 0..4 {
             indices.extend(self.generate_indices_impl(&board_rot));
             let board_rev = board_rot.reverse_vertical();
@@ -405,31 +406,78 @@ impl WeightedPattern {
         indices
     }
 
+    fn fix_symm_patterns(&mut self, symm: &[usize]) {
+        for &symm_index in symm {
+            let from = self.pattern_starts[symm_index];
+            let to = self.pattern_starts[symm_index + 1];
+            for i in from..to {
+                let index = i - from;
+                let parity = index % 2;
+                let mut base3 = index / 2;
+                let mut rev_me = 0;
+                let mut rev_op = 0;
+                let bits = popcnt(self.patterns[symm_index]);
+                for j in 0..bits {
+                    let rem = base3 % 3;
+                    rev_me <<= 1;
+                    rev_op <<= 1;
+                    match rem {
+                        1 => rev_me |= 1,
+                        2 => rev_op |= 1,
+                        _ => ()
+                    }
+                    base3 /= 3;
+                }
+                let rev_base3 = self.base3_converter.to_base3(rev_me, rev_op);
+                if rev_base3 < base3 {
+                    self.weight[from + rev_base3 * 2 + parity] += self.weight[i];
+                    self.weight[i] = 0.;
+                }
+            }
+        }
+    }
+
     fn train(&mut self, boards: &[Board], scores: &[f64]) {
-        let expected_size = boards.len() * (4 + 8 * self.patterns.len());
-        let mut row_starts = Vec::with_capacity(boards.len());
+        let col_size = self.pattern_starts[self.patterns.len()] * 2 + 8;
+        let expected_size = boards.len() * (16 * self.patterns.len() + 6 + 2) + col_size;
+        let mut row_starts = Vec::with_capacity(boards.len() + col_size + 1);
         row_starts.push(0);
         let mut mat_weights = Vec::with_capacity(expected_size);
         let mut cols = Vec::with_capacity(expected_size);
-        let other_params_offset = self.pattern_starts[self.patterns.len()] as u32;
+        let other_params_offset = self.pattern_starts[self.patterns.len()] as u32 * 2;
         // construct matrix
         for board in boards {
+            let stones = popcnt(!board.empty()) as u32;
+            let w = stones as f64 / 64.0;
+            let co_w = 1.0 - w;
             let indices = self.generate_indices(board);
-            cols.extend(indices);
-            mat_weights.resize(cols.len(), 1.0);
+            for idx in indices {
+                cols.push(2 * idx);
+                mat_weights.push(w);
+                cols.push(2 * idx + 1);
+                mat_weights.push(co_w);
+            }
             // pcnt, ocnt, parity, const
             cols.push(other_params_offset + 0);
-            mat_weights.push(popcnt(board.mobility_bits()) as f64);
+            mat_weights.push(popcnt(board.mobility_bits()) as f64 * w);
             cols.push(other_params_offset + 1);
-            mat_weights.push(popcnt(board.pass().mobility_bits()) as f64);
+            mat_weights.push(popcnt(board.mobility_bits()) as f64 * co_w);
             cols.push(other_params_offset + 2);
-            mat_weights.push((popcnt(board.empty()) % 2) as f64);
+            mat_weights.push(popcnt(board.pass().mobility_bits()) as f64 * w);
             cols.push(other_params_offset + 3);
-            mat_weights.push(1.0);
+            mat_weights.push(popcnt(board.pass().mobility_bits()) as f64 * co_w);
+            let parity_w = if stones % 2 == 0 { 0.0 } else { 1.0 };
+            cols.push(other_params_offset + 4);
+            mat_weights.push(parity_w * w);
+            cols.push(other_params_offset + 5);
+            mat_weights.push(parity_w * co_w);
+            cols.push(other_params_offset + 6);
+            mat_weights.push(w);
+            cols.push(other_params_offset + 7);
+            mat_weights.push(co_w);
             row_starts.push(cols.len());
         }
         // L2 normalization
-        let col_size = *self.pattern_starts.last().unwrap();
         for col in 0..col_size {
             cols.push(col as u32);
             mat_weights.push(8.0);
@@ -443,8 +491,21 @@ impl WeightedPattern {
 }
 
 #[allow(dead_code)]
-const PATTERNS: [u64; 10] = [
-    0x0000_0000_0000_00ff,
+const PATTERNS_LARGE: [u64; 10] = [
+    0x0000_0000_0000_42ff,
+    0x0000_0000_0000_ff00,
+    0x0000_0000_00ff_0000,
+    0x0000_0000_ff00_0000,
+    0x0000_0003_0303_0303,
+    0x0000_0000_0103_070f,
+    0x0000_0001_0306_0c18,
+    0x0000_0102_0408_1020,
+    0x0001_0204_0810_2040,
+    0x0102_0408_1020_4080,
+];
+
+const PATTERNS_SMALL: [u64; 10] = [
+    0x0000_0000_0000_02ff,
     0x0000_0000_0000_ff00,
     0x0000_0000_00ff_0000,
     0x0000_0000_ff00_0000,
@@ -456,7 +517,9 @@ const PATTERNS: [u64; 10] = [
     0x0102_0408_1020_4080,
 ];
 
-const PATTERNS_LARGE: [u64; 10] = [
+const SYMM_INDICES: [usize; 8] = [1, 2, 3, 5, 6, 7, 8, 9];
+
+const PATTERNS: [u64; 10] = [
     0x0000_0000_0000_02ff,
     0x0000_0000_0000_ff00,
     0x0000_0000_00ff_0000,
@@ -497,7 +560,7 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         });
         scores.push(data[2].trim().parse().unwrap());
     }
-    let mut wp = WeightedPattern::new(&PATTERNS_LARGE);
+    let mut wp = WeightedPattern::new(&PATTERNS_SMALL);
     for stone_count in range_min..=range_max {
         eprintln!("Stone count = {}", stone_count);
         let stones_min = stone_count - width + 1;
@@ -513,6 +576,7 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
             using_scores.push(score);
         }
         wp.train(&using_boards, &using_scores);
+        wp.fix_symm_patterns(&SYMM_INDICES);
 
         let out_f = File::create(format!("{}_{}.txt", output_path, stone_count)).ok()?;
         let mut writer = BufWriter::new(out_f);

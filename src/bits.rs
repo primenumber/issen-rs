@@ -70,6 +70,12 @@ pub fn pdep(x: u64, mask: u64) -> u64 {
     x.pdep(mask)
 }
 
+pub fn reverse_bits_n(mut x: u64, length: usize) -> u64 {
+    x = flip_vertical(x);
+    x = flip_horizontal(x);
+    x >> (64 - length)
+}
+
 lazy_static! {
     pub static ref BASE3: [usize; 256] = {
         let mut res = [0usize; 256];
