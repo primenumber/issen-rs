@@ -84,8 +84,6 @@ impl fmt::Display for Hand {
 
 pub const BOARD_SIZE: usize = 64;
 
-pub const PASS: usize = 64;
-
 impl Board {
     pub fn initial_state() -> Board {
         Board {
