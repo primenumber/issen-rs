@@ -85,7 +85,10 @@ fn test_lookup_result() {
         let mut alpha = -6;
         let mut beta = 26;
         let result = make_lookup_result(None, &mut alpha, &mut beta);
-        assert_eq!(result, CacheLookupResult::NoCut(-64, 64, None));
+        assert_eq!(
+            result,
+            CacheLookupResult::NoCut(-(BOARD_SIZE as i8), BOARD_SIZE as i8, None)
+        );
         assert_eq!(alpha, -6);
         assert_eq!(beta, 26);
     }
@@ -165,7 +168,13 @@ fn test_solve_inner() {
                     search_params.clone(),
                     pool.clone(),
                 );
-                let (res, _stat) = solve_inner(&mut obj, board, -64, 64, false);
+                let (res, _stat) = solve_inner(
+                    &mut obj,
+                    board,
+                    -(BOARD_SIZE as i8),
+                    BOARD_SIZE as i8,
+                    false,
+                );
                 if res != desired {
                     board.print();
                 }

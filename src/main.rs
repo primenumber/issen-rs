@@ -106,7 +106,14 @@ fn solve_ffo(
                     search_params.clone(),
                     pool.clone(),
                 );
-                let (res, best, stat) = solve(&mut obj, board, -64, 64, false, 0);
+                let (res, best, stat) = solve(
+                    &mut obj,
+                    board,
+                    -(BOARD_SIZE as i8),
+                    BOARD_SIZE as i8,
+                    false,
+                    0,
+                );
                 let end = start.elapsed();
                 let milli_seconds = end.as_millis() + 1; // ceil up, avoid zero-division
                 let nodes_per_sec = (stat.node_count * 1000) as u128 / milli_seconds;
@@ -255,8 +262,8 @@ fn send_query(_matches: &ArgMatches) {
                     Ok(board) => {
                         let data = SolveRequest {
                             board: board.to_base81(),
-                            alpha: -64,
-                            beta: 64,
+                            alpha: -(BOARD_SIZE as i8),
+                            beta: BOARD_SIZE as i8,
                         };
                         let data_str = serde_json::json!(data);
                         let solve_res: SolveResponse = client

@@ -35,7 +35,7 @@ impl Searcher {
         passed: bool,
         depth: i32,
     ) -> Option<(i16, Hand)> {
-        let mut res = -64 * SCALE - 1;
+        let mut res = -(BOARD_SIZE as i16) * SCALE - 1;
         let mut best = None;
         for (i, (next, pos)) in board.next_iter().enumerate() {
             if i == 0 {
@@ -109,7 +109,7 @@ impl Searcher {
             ));
         }
         v.sort_by(|a, b| (a.2, a.3, a.4).cmp(&(b.2, b.3, b.4)));
-        let mut res = -64 * SCALE;
+        let mut res = -(BOARD_SIZE as i16) * SCALE;
         let mut best = None;
         for (i, &(next, pos, _, eval_score, _)) in v.iter().enumerate() {
             if i == 0 {
@@ -194,13 +194,25 @@ impl Searcher {
                         if entry.depth >= depth {
                             (entry.lower, entry.upper, entry.best)
                         } else {
-                            (-64 * SCALE, 64 * SCALE, entry.best)
+                            (
+                                -(BOARD_SIZE as i16) * SCALE,
+                                BOARD_SIZE as i16 * SCALE,
+                                entry.best,
+                            )
                         }
                     }
-                    None => (-64 * SCALE, 64 * SCALE, None),
+                    None => (
+                        -(BOARD_SIZE as i16) * SCALE,
+                        BOARD_SIZE as i16 * SCALE,
+                        None,
+                    ),
                 }
             } else {
-                (-64 * SCALE, 64 * SCALE, None)
+                (
+                    -(BOARD_SIZE as i16) * SCALE,
+                    BOARD_SIZE as i16 * SCALE,
+                    None,
+                )
             };
             let new_alpha = alpha.max(lower);
             let new_beta = beta.min(upper);
@@ -215,9 +227,9 @@ impl Searcher {
                 self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
             if depth >= min_cache_depth {
                 let range = if res <= new_alpha {
-                    (-64 * SCALE, res)
+                    (-(BOARD_SIZE as i16) * SCALE, res)
                 } else if res >= new_beta {
-                    (res, 64 * SCALE)
+                    (res, BOARD_SIZE as i16 * SCALE)
                 } else {
                     (res, res)
                 };
@@ -249,7 +261,7 @@ impl Searcher {
             return Some((score, b));
         }
 
-        let mut current_score = -64 * SCALE - 1;
+        let mut current_score = -(BOARD_SIZE as i16) * SCALE - 1;
         let mut current_hand = None;
         let mut pass = true;
         for (next, hand) in board.next_iter() {

@@ -96,7 +96,7 @@ pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
 
 fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, usize)>, i8) {
     // FIXME: Use Hans::Pass
-    const PASS: usize = 64;
+    const PASS: usize = BOARD_SIZE;
     match record.first() {
         Some(&first) => {
             let ((mut boards, score), pos) = if board.mobility_bits() == 0 {
@@ -641,8 +641,8 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
                 eval_cache.inc_gen();
                 if let Some((evaluated, _)) = searcher.think(
                     board,
-                    -64 * SCALE,
-                    64 * SCALE,
+                    -(BOARD_SIZE as i16) * SCALE,
+                    BOARD_SIZE as i16 * SCALE,
                     false,
                     depth as i32 * DEPTH_SCALE,
                 ) {

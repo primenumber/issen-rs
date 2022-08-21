@@ -243,7 +243,7 @@ impl Board {
     #[allow(dead_code)]
     pub fn print(&self) {
         let mut writer = BufWriter::new(std::io::stdout());
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if ((self.player >> i) & 1) != 0 {
                 if self.is_black {
                     write!(writer, "X").unwrap();
@@ -298,9 +298,9 @@ impl Board {
         if pcnt == ocnt {
             0
         } else if pcnt > ocnt {
-            64 - 2 * ocnt
+            BOARD_SIZE as i8 - 2 * ocnt
         } else {
-            -64 + 2 * pcnt
+            -(BOARD_SIZE as i8) + 2 * pcnt
         }
     }
 
@@ -462,7 +462,7 @@ impl FromStr for Board {
         }
         let mut black = 0u64;
         let mut white = 0u64;
-        for (i, c) in s.chars().take(64).enumerate() {
+        for (i, c) in s.chars().take(BOARD_SIZE).enumerate() {
             match c {
                 'X' => black |= 1u64 << i,
                 'O' => white |= 1u64 << i,
@@ -489,7 +489,7 @@ impl FromStr for Board {
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if ((self.player >> i) & 1) != 0 {
                 if self.is_black {
                     write!(f, "X")?;

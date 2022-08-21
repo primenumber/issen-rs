@@ -147,9 +147,9 @@ impl Evaluator {
     fn smooth_val(raw_score: i32) -> i16 {
         let scale32 = SCALE as i32;
         (if raw_score > 63 * scale32 {
-            64 * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
+            (BOARD_SIZE as i32) * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
         } else if raw_score < -63 * scale32 {
-            -64 * scale32 - scale32 * scale32 / (raw_score + 62 * scale32)
+            -(BOARD_SIZE as i32) * scale32 - scale32 * scale32 / (raw_score + 62 * scale32)
         } else {
             raw_score
         }) as i16
@@ -158,7 +158,7 @@ impl Evaluator {
     pub fn eval(&self, mut board: Board) -> i16 {
         let mut score = 0i32;
         let rem: usize = popcnt(board.empty()) as usize;
-        let stones = (64 - rem)
+        let stones = (BOARD_SIZE - rem)
             .max(*self.stones_range.start())
             .min(*self.stones_range.end());
         let index = stones - self.stones_range.start();
@@ -188,8 +188,8 @@ mod tests {
     fn test_smooth() {
         for raw in -10000..=10000 {
             let smoothed = Evaluator::smooth_val(raw);
-            assert!(smoothed > -64 * SCALE);
-            assert!(smoothed < 64 * SCALE);
+            assert!(smoothed > -(BOARD_SIZE as i16) * SCALE);
+            assert!(smoothed < BOARD_SIZE as i16 * SCALE);
         }
     }
 }

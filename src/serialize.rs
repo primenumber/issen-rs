@@ -1,5 +1,5 @@
 use crate::engine::bits::*;
-use crate::engine::board::Board;
+use crate::engine::board::*;
 use clap::ArgMatches;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -135,7 +135,7 @@ pub fn gen_last_mask(matches: &ArgMatches) {
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
 
-    for pos in 0..64i8 {
+    for pos in 0..(BOARD_SIZE as i8) {
         let mut masks: [u64; 3] = [0, 0, 0];
         let pr = pos / 8;
         let pc = pos % 8;

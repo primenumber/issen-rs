@@ -119,7 +119,7 @@ fn naive(
     passed: bool,
 ) -> (i8, SolveStat) {
     let mut pass = true;
-    let mut res = -64;
+    let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
     for (next, _pos) in board.next_iter() {
         pass = false;
@@ -151,7 +151,7 @@ fn static_order(
     passed: bool,
 ) -> (i8, SolveStat) {
     let mut pass = true;
-    let mut res = -64;
+    let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
     const MASKS: [u64; 3] = [
         0x8100_0000_0000_0081, // Corner
@@ -229,7 +229,7 @@ fn fastest_first(
     assert!(count <= MAX_FFS_NEXT);
 
     nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
-    let mut res = -64;
+    let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
     for (i, &(_, next)) in nexts[0..count].iter().enumerate() {
         let (child_res, child_stat) = negascout_impl(solve_obj, next, alpha, beta, i == 0);
@@ -303,8 +303,8 @@ fn move_ordering_impl(
             let score = searcher
                 .think(
                     next,
-                    -64 * SCALE,
-                    64 * SCALE,
+                    -(BOARD_SIZE as i16) * SCALE,
+                    (BOARD_SIZE as i16) * SCALE,
                     false,
                     think_depth as i32 * DEPTH_SCALE,
                 )
@@ -336,7 +336,7 @@ fn move_ordering_by_eval(
     old_best: Option<Hand>,
 ) -> (i8, Option<Hand>, SolveStat) {
     let v = move_ordering_impl(solve_obj, board, old_best);
-    let mut res = -64;
+    let mut res = -(BOARD_SIZE as i8);
     let mut best = None;
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
@@ -384,7 +384,7 @@ async fn ybwc(
             return (-child_res, Some(Hand::Pass), stat);
         }
     }
-    let mut res = -64;
+    let mut res = -(BOARD_SIZE as i8);
     let mut best = None;
     let (tx, mut rx) = mpsc::unbounded();
     let mut handles = Vec::new();
@@ -485,7 +485,7 @@ fn make_lookup_result(
 ) -> CacheLookupResult {
     let (lower, upper, old_best) = match res_cache {
         Some(cache) => (cache.lower, cache.upper, cache.best),
-        None => (-64, 64, None),
+        None => (-(BOARD_SIZE as i8), BOARD_SIZE as i8, None),
     };
     let old_alpha = *alpha;
     *alpha = max(lower, *alpha);
@@ -513,8 +513,8 @@ fn lookup_table(
 
 fn stability_cut(board: Board, alpha: i8, beta: i8) -> CutType {
     let (bits_me, bits_op) = board.stable_partial();
-    let lower = 2 * popcnt(bits_me) - 64;
-    let upper = 64 - 2 * popcnt(bits_op);
+    let lower = 2 * popcnt(bits_me) - BOARD_SIZE as i8;
+    let upper = (BOARD_SIZE as i8) - 2 * popcnt(bits_op);
     if upper <= alpha {
         CutType::LessThanAlpha(upper)
     } else if lower >= beta {
@@ -704,14 +704,26 @@ pub fn solve(
 }
 
 pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> Hand {
-    match solve_outer(solve_obj, board, -64, 64, false, 0).await.1 {
+    match solve_outer(
+        solve_obj,
+        board,
+        -(BOARD_SIZE as i8),
+        BOARD_SIZE as i8,
+        false,
+        0,
+    )
+    .await
+    .1
+    {
         Some(best) => best,
         None => {
             let mut best_pos = None;
             let mut result = -65;
             for pos in board.mobility() {
                 let next = board.play(pos).unwrap();
-                let res = -solve_outer(solve_obj, next, -64, -result, false, 0).await.0;
+                let res = -solve_outer(solve_obj, next, -(BOARD_SIZE as i8), -result, false, 0)
+                    .await
+                    .0;
                 if res > result {
                     result = res;
                     best_pos = Some(pos);

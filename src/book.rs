@@ -105,7 +105,7 @@ fn load_records_from_file(input_path: &str) -> Vec<HashSet<Board>> {
     let boards_list = load_records(input_path);
 
     eprintln!("Generate boards_set...");
-    let mut boards_set = vec![HashSet::new(); 64];
+    let mut boards_set = vec![HashSet::new(); BOARD_SIZE];
     for boards in boards_list {
         for board in boards {
             boards_set[popcnt(board.empty()) as usize].insert(board);
@@ -328,7 +328,7 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
             opponent,
             is_black: true, // dummy
         };
-        if 64 - popcnt(board.empty()) > max_count {
+        if BOARD_SIZE as i8 - popcnt(board.empty()) > max_count {
             continue;
         }
         records.push((

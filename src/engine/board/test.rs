@@ -9,17 +9,17 @@ enum State {
 
 #[derive(Clone)]
 struct NaiveBoard {
-    data: [State; 64],
+    data: [State; BOARD_SIZE],
     is_black: bool,
 }
 
 impl From<Board> for NaiveBoard {
     fn from(board: Board) -> Self {
         let mut res = NaiveBoard {
-            data: [State::Empty; 64],
+            data: [State::Empty; BOARD_SIZE],
             is_black: board.is_black,
         };
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if ((board.player >> i) & 1) == 1 {
                 res.data[i] = State::Player;
             } else if ((board.opponent >> i) & 1) == 1 {
@@ -34,7 +34,7 @@ impl From<NaiveBoard> for Board {
     fn from(naive_board: NaiveBoard) -> Self {
         let mut player = 0;
         let mut opponent = 0;
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             match naive_board.data[i] {
                 State::Player => {
                     player |= 1 << i;
@@ -121,10 +121,10 @@ impl NaiveBoard {
             return Err(UnmovableError {});
         }
         let mut res = NaiveBoard {
-            data: [State::Empty; 64],
+            data: [State::Empty; BOARD_SIZE],
             is_black: !self.is_black,
         };
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if ((flip_bits >> i) & 1) == 1 {
                 res.data[i] = State::Opponent;
             } else if self.data[i] == State::Player {
@@ -140,7 +140,7 @@ impl NaiveBoard {
 
     fn empty(&self) -> u64 {
         let mut res = 0;
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if self.data[i] == State::Empty {
                 res |= 1 << i;
             }
@@ -150,7 +150,7 @@ impl NaiveBoard {
 
     fn mobility_bits(&self) -> u64 {
         let mut res = 0;
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if self.is_movable(i) {
                 res |= 1 << i;
             }
@@ -160,7 +160,7 @@ impl NaiveBoard {
 
     fn mobility(&self) -> Vec<usize> {
         let mut res = Vec::new();
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             if self.is_movable(i) {
                 res.push(i);
             }
@@ -171,7 +171,7 @@ impl NaiveBoard {
     fn score(&self) -> i8 {
         let mut pcnt = 0;
         let mut ocnt = 0;
-        for i in 0..64 {
+        for i in 0..BOARD_SIZE {
             match self.data[i] {
                 State::Player => {
                     pcnt += 1;
@@ -185,9 +185,9 @@ impl NaiveBoard {
         if pcnt == ocnt {
             0
         } else if pcnt > ocnt {
-            64 - 2 * ocnt
+            BOARD_SIZE as i8 - 2 * ocnt
         } else {
-            -64 + 2 * pcnt
+            -(BOARD_SIZE as i8) + 2 * pcnt
         }
     }
 }
@@ -198,7 +198,7 @@ fn test_ops() {
     let board = Board::from_base81(TEST_BASE81).unwrap();
     let naive_board = NaiveBoard::from(board);
     assert_eq!(board, Board::from(naive_board.clone()));
-    for i in 0..64 {
+    for i in 0..BOARD_SIZE {
         assert_eq!(board.flip(i), naive_board.flip(i));
         assert_eq!(board.is_movable(i), naive_board.is_movable(i));
         if board.is_movable(i) {
