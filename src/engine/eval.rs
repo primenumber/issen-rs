@@ -53,6 +53,8 @@ fn pow3(x: i8) -> usize {
 }
 
 pub const SCALE: i16 = 256;
+pub const EVAL_SCORE_MAX: i16 = BOARD_SIZE as i16 * SCALE;
+pub const EVAL_SCORE_MIN: i16 = -EVAL_SCORE_MAX;
 
 impl Evaluator {
     pub fn new(table_dirname: &str) -> Evaluator {
@@ -188,8 +190,8 @@ mod tests {
     fn test_smooth() {
         for raw in -10000..=10000 {
             let smoothed = Evaluator::smooth_val(raw);
-            assert!(smoothed > -(BOARD_SIZE as i16) * SCALE);
-            assert!(smoothed < BOARD_SIZE as i16 * SCALE);
+            assert!(smoothed > EVAL_SCORE_MIN);
+            assert!(smoothed < EVAL_SCORE_MAX);
         }
     }
 }

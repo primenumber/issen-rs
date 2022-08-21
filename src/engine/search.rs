@@ -303,8 +303,8 @@ fn move_ordering_impl(
             let score = searcher
                 .think(
                     next,
-                    -(BOARD_SIZE as i16) * SCALE,
-                    (BOARD_SIZE as i16) * SCALE,
+                    EVAL_SCORE_MIN,
+                    EVAL_SCORE_MAX,
                     false,
                     think_depth as i32 * DEPTH_SCALE,
                 )

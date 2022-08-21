@@ -93,12 +93,8 @@ pub fn play(matches: &ArgMatches) -> Board {
                     timer: Some(timer),
                     node_count: 0,
                 };
-                let (score, best, depth) = searcher.iterative_think(
-                    board,
-                    -(BOARD_SIZE as i16) * SCALE,
-                    BOARD_SIZE as i16 * SCALE,
-                    false,
-                );
+                let (score, best, depth) =
+                    searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
                 eprintln!("Estimated result: {}, Depth: {}", score, depth);
                 best
             } else {
@@ -168,12 +164,8 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) = searcher.iterative_think(
-                board,
-                -(BOARD_SIZE as i16) * SCALE,
-                BOARD_SIZE as i16 * SCALE,
-                false,
-            );
+            let (score, best, depth) =
+                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}",
                 score, depth, searcher.node_count
@@ -239,12 +231,8 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (_score, best, _depth) = searcher.iterative_think(
-                board,
-                -(BOARD_SIZE as i16) * SCALE,
-                (BOARD_SIZE as i16) * SCALE,
-                false,
-            );
+            let (_score, best, _depth) =
+                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             best
         } else {
             let mut obj = solve_obj.clone();
@@ -439,12 +427,8 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) = searcher.iterative_think(
-                board,
-                -(BOARD_SIZE as i16) * SCALE,
-                BOARD_SIZE as i16 * SCALE,
-                false,
-            );
+            let (score, best, depth) =
+                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}",
                 score, depth, searcher.node_count

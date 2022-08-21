@@ -35,7 +35,7 @@ impl Searcher {
         passed: bool,
         depth: i32,
     ) -> Option<(i16, Hand)> {
-        let mut res = -(BOARD_SIZE as i16) * SCALE - 1;
+        let mut res = EVAL_SCORE_MIN - 1;
         let mut best = None;
         for (i, (next, pos)) in board.next_iter().enumerate() {
             if i == 0 {
@@ -109,7 +109,7 @@ impl Searcher {
             ));
         }
         v.sort_by(|a, b| (a.2, a.3, a.4).cmp(&(b.2, b.3, b.4)));
-        let mut res = -(BOARD_SIZE as i16) * SCALE;
+        let mut res = EVAL_SCORE_MIN;
         let mut best = None;
         for (i, &(next, pos, _, eval_score, _)) in v.iter().enumerate() {
             if i == 0 {
@@ -194,25 +194,13 @@ impl Searcher {
                         if entry.depth >= depth {
                             (entry.lower, entry.upper, entry.best)
                         } else {
-                            (
-                                -(BOARD_SIZE as i16) * SCALE,
-                                BOARD_SIZE as i16 * SCALE,
-                                entry.best,
-                            )
+                            (EVAL_SCORE_MIN, EVAL_SCORE_MAX, entry.best)
                         }
                     }
-                    None => (
-                        -(BOARD_SIZE as i16) * SCALE,
-                        BOARD_SIZE as i16 * SCALE,
-                        None,
-                    ),
+                    None => (EVAL_SCORE_MIN, EVAL_SCORE_MAX, None),
                 }
             } else {
-                (
-                    -(BOARD_SIZE as i16) * SCALE,
-                    BOARD_SIZE as i16 * SCALE,
-                    None,
-                )
+                (EVAL_SCORE_MIN, EVAL_SCORE_MAX, None)
             };
             let new_alpha = alpha.max(lower);
             let new_beta = beta.min(upper);
@@ -227,9 +215,9 @@ impl Searcher {
                 self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
             if depth >= min_cache_depth {
                 let range = if res <= new_alpha {
-                    (-(BOARD_SIZE as i16) * SCALE, res)
+                    (EVAL_SCORE_MIN, res)
                 } else if res >= new_beta {
-                    (res, BOARD_SIZE as i16 * SCALE)
+                    (res, EVAL_SCORE_MAX)
                 } else {
                     (res, res)
                 };
@@ -261,7 +249,7 @@ impl Searcher {
             return Some((score, b));
         }
 
-        let mut current_score = -(BOARD_SIZE as i16) * SCALE - 1;
+        let mut current_score = EVAL_SCORE_MIN - 1;
         let mut current_hand = None;
         let mut pass = true;
         for (next, hand) in board.next_iter() {

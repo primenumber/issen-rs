@@ -641,8 +641,8 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
                 eval_cache.inc_gen();
                 if let Some((evaluated, _)) = searcher.think(
                     board,
-                    -(BOARD_SIZE as i16) * SCALE,
-                    BOARD_SIZE as i16 * SCALE,
+                    EVAL_SCORE_MIN,
+                    EVAL_SCORE_MAX,
                     false,
                     depth as i32 * DEPTH_SCALE,
                 ) {
