@@ -356,7 +356,12 @@ fn main() {
                 .about("Generate training dataset")
                 .arg(arg_input_file.clone())
                 .arg(arg_output_file.clone())
-                .arg(Arg::new("MAX_OUT").short('n').takes_value(true)),
+                .arg(
+                    Arg::new("MAX_OUT")
+                        .short('n')
+                        .required(true)
+                        .takes_value(true),
+                ),
         )
         .subcommand(
             Command::new("train")
