@@ -1,6 +1,6 @@
-use crate::board::*;
-use crate::eval::*;
-use crate::table::*;
+use crate::engine::board::*;
+use crate::engine::eval::*;
+use crate::engine::table::*;
 use std::cmp::max;
 use std::sync::Arc;
 use std::time::Instant;

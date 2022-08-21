@@ -1,5 +1,5 @@
-use crate::bits::*;
-use crate::board::*;
+use crate::engine::bits::*;
+use crate::engine::board::*;
 use std::cmp::max;
 use std::fs::File;
 use std::io::Read;

@@ -1,9 +1,9 @@
-use crate::bits::*;
-use crate::board::*;
-use crate::eval::*;
-use crate::remote::*;
-use crate::table::*;
-use crate::think::*;
+use crate::engine::bits::*;
+use crate::engine::board::*;
+use crate::engine::eval::*;
+use crate::engine::remote::*;
+use crate::engine::table::*;
+use crate::engine::think::*;
 use bitintr::Tzcnt;
 use futures::channel::mpsc;
 use futures::executor;

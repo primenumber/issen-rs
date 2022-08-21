@@ -1,3 +1,9 @@
+use crate::engine::bits::*;
+use crate::engine::board::Board;
+use clap::ArgMatches;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+
 pub fn encode_base64_impl(input: u8) -> Option<u8> {
     if input < 26 {
         // A-Z
@@ -29,10 +35,12 @@ pub fn encode_utf16(mut input: u32) -> Result<char, EncodeError> {
         return Err(EncodeError::OutOfRange);
     }
     input += 0x800;
-    if input >= 0x202A { // skip 0x202A - 0x202E
+    if input >= 0x202A {
+        // skip 0x202A - 0x202E
         input += 5;
     }
-    if input >= 0x2066 { // skip 0x2066 - 0x2069
+    if input >= 0x2066 {
+        // skip 0x2066 - 0x2069
         input += 4;
     }
     let u32data = input; // 3-byte UTF-8
@@ -94,4 +102,68 @@ pub fn compress(data: &[i16]) -> Vec<bool> {
         result_bits.append(&mut compress_word(word));
     }
     result_bits
+}
+
+pub fn gen_last_table(matches: &ArgMatches) {
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    let mut v = Vec::new();
+    for pos in 0..8 {
+        for bits in 0..256 {
+            let board = Board {
+                player: bits,
+                opponent: !(bits | (1 << pos)),
+                is_black: true,
+            };
+            let fcnt = popcnt(board.flip(pos));
+            v.push(fcnt);
+        }
+    }
+    for chunk in v.chunks(2) {
+        let val = chunk[0] | (chunk[1] << 3);
+        write!(writer, "{}", encode_base64_impl(val as u8).unwrap() as char).unwrap();
+    }
+    writeln!(writer).unwrap();
+}
+
+pub fn gen_last_mask(matches: &ArgMatches) {
+    let output_path = matches.value_of("OUTPUT").unwrap();
+
+    let out_f = File::create(output_path).unwrap();
+    let mut writer = BufWriter::new(out_f);
+
+    for pos in 0..64i8 {
+        let mut masks: [u64; 3] = [0, 0, 0];
+        let pr = pos / 8;
+        let pc = pos % 8;
+        for row in 0..8 {
+            for col in 0..8 {
+                let index = row * 8 + col;
+                if col == pc {
+                    masks[0] |= 1u64 << index;
+                }
+                if row + pc == pr + col {
+                    masks[1] |= 1u64 << index;
+                }
+                if row + col == pr + pc {
+                    masks[2] |= 1u64 << index;
+                }
+            }
+        }
+        for mask in masks {
+            for row in 0..8 {
+                let mask_in_the_row = (mask >> (8 * row)) & 0xff;
+                let col = if mask_in_the_row == 0 {
+                    8
+                } else {
+                    mask_in_the_row.trailing_zeros()
+                };
+                write!(writer, "{}", col).unwrap();
+            }
+        }
+    }
+    writeln!(writer).unwrap();
 }

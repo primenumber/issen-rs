@@ -1,7 +1,7 @@
-use crate::board::*;
-use crate::eval::*;
-use crate::search::*;
-use crate::table::*;
+use crate::engine::board::*;
+use crate::engine::eval::*;
+use crate::engine::search::*;
+use crate::engine::table::*;
 use clap::ArgMatches;
 use futures::executor::ThreadPool;
 use std::sync::Arc;

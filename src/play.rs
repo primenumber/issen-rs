@@ -1,9 +1,9 @@
-use crate::bits::*;
-use crate::board::*;
-use crate::eval::*;
-use crate::search::*;
-use crate::table::*;
-use crate::think::*;
+use crate::engine::bits::*;
+use crate::engine::board::*;
+use crate::engine::eval::*;
+use crate::engine::search::*;
+use crate::engine::table::*;
+use crate::engine::think::*;
 use crate::train::*;
 use clap::ArgMatches;
 use futures::executor;

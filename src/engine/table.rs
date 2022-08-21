@@ -1,5 +1,5 @@
-use crate::bits::*;
-use crate::board::*;
+use crate::engine::bits::*;
+use crate::engine::board::*;
 use spin::Mutex;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

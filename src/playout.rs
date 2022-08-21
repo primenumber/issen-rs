@@ -1,8 +1,8 @@
-use crate::bits::*;
-use crate::board::*;
-use crate::eval::*;
-use crate::search::*;
-use crate::think::*;
+use crate::engine::bits::*;
+use crate::engine::board::*;
+use crate::engine::eval::*;
+use crate::engine::search::*;
+use crate::engine::think::*;
 use crate::train::{create_record_by_solve, pos_to_str, step_by_pos};
 use std::time::Instant;
 
