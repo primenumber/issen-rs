@@ -94,27 +94,25 @@ pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     Some(boards)
 }
 
-fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, usize)>, i8) {
-    // FIXME: Use Hans::Pass
-    const PASS: usize = BOARD_SIZE;
+fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, Hand)>, i8) {
     match record.first() {
         Some(&first) => {
-            let ((mut boards, score), pos) = if board.mobility_bits() == 0 {
-                (boards_from_record_impl(board.pass(), record), PASS)
+            let ((mut boards, score), hand) = if board.mobility_bits() == 0 {
+                (boards_from_record_impl(board.pass(), record), Hand::Pass)
             } else {
                 (
                     boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
-                    first,
+                    Hand::Play(first),
                 )
             };
-            boards.insert(0, (board, -score, pos));
+            boards.insert(0, (board, -score, hand));
             (boards, -score)
         }
-        None => (vec![(board, board.score(), PASS)], board.score()),
+        None => (vec![(board, board.score(), Hand::Pass)], board.score()),
     }
 }
 
-fn boards_from_record(line: &str) -> Vec<(Board, i8, usize)> {
+fn boards_from_record(line: &str) -> Vec<(Board, i8, Hand)> {
     let record = parse_record(line);
     let board = Board::initial_state();
     boards_from_record_impl(board, &record).0
@@ -306,16 +304,18 @@ pub fn gen_dataset(matches: &ArgMatches) {
         min(boards_with_results.len(), max_output)
     )
     .unwrap();
-    for (idx, (board, score, pos)) in boards_with_results.iter().enumerate() {
+    for (idx, (board, score, hand)) in boards_with_results.iter().enumerate() {
         if idx >= max_output {
             break;
         }
-        writeln!(
-            &mut writer,
-            "{:016x} {:016x} {} {}",
-            board.player, board.opponent, score, pos,
-        )
-        .unwrap();
+        if let Hand::Play(pos) = hand {
+            writeln!(
+                &mut writer,
+                "{:016x} {:016x} {} {}",
+                board.player, board.opponent, score, pos,
+            )
+            .unwrap();
+        }
     }
     eprintln!("Finished!");
 }
