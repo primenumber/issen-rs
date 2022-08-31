@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Hand {
@@ -53,5 +54,40 @@ impl fmt::Display for Hand {
             }
             Self::Pass => write!(f, "ps"),
         }
+    }
+}
+
+pub struct ParseHandError {}
+
+impl FromStr for Hand {
+    type Err = ParseHandError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() != 2 {
+            return Err(Self::Err {});
+        }
+        if s == "ps" {
+            return Ok(Hand::Pass);
+        }
+        let s = s.as_bytes();
+        const CODE_1: u8 = '1' as u32 as u8;
+        const CODE_8: u8 = '8' as u32 as u8;
+        const CODE_UPPER_A: u8 = 'A' as u32 as u8;
+        const CODE_UPPER_H: u8 = 'H' as u32 as u8;
+        const CODE_LOWER_A: u8 = 'a' as u32 as u8;
+        const CODE_LOWER_H: u8 = 'h' as u32 as u8;
+        let col = if s[0] >= CODE_UPPER_A && s[0] <= CODE_UPPER_H {
+            s[0] - CODE_UPPER_A
+        } else if s[0] >= CODE_LOWER_A && s[0] <= CODE_LOWER_H {
+            s[0] - CODE_LOWER_A
+        } else {
+            return Err(Self::Err {});
+        };
+        let row = if s[1] >= CODE_1 && s[1] <= CODE_8 {
+            s[1] - CODE_1
+        } else {
+            return Err(Self::Err {});
+        };
+        Ok(Hand::Play((row * 8 + col) as usize))
     }
 }

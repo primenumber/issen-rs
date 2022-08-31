@@ -20,29 +20,6 @@ use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Instant;
 
-fn read_hand() -> Option<Hand> {
-    let mut s = String::new();
-    std::io::stdin().read_line(&mut s).unwrap();
-    if s.len() < 2 {
-        return None;
-    }
-    if &s[0..2] == "ps" {
-        return Some(Hand::Pass);
-    }
-    let mut itr = s.chars();
-    let column_code = itr.next().unwrap() as usize;
-    if column_code < 'a' as usize || ('h' as usize) < column_code {
-        return None;
-    }
-    let row_code = itr.next().unwrap() as usize;
-    if row_code < '1' as usize || ('8' as usize) < row_code {
-        return None;
-    }
-    Some(Hand::Play(
-        (row_code - '1' as usize) * 8 + (column_code - 'a' as usize),
-    ))
-}
-
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.value_of("player").unwrap() == "B";
 
@@ -75,7 +52,9 @@ pub fn play(matches: &ArgMatches) -> Board {
             let hand: Hand;
             loop {
                 println!("Input move");
-                if let Some(h) = read_hand() {
+                let mut s = String::new();
+                std::io::stdin().read_line(&mut s).unwrap();
+                if let Ok(h) = s.trim().parse::<Hand>() {
                     hand = h;
                     break;
                 }
