@@ -77,7 +77,8 @@ pub fn play(matches: &ArgMatches) -> Board {
                 };
                 let (score, best, depth) =
                     searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
-                eprintln!("Estimated result: {}, Depth: {}", score, depth);
+                let scaled_score = score as f64 / SCALE as f64;
+                eprintln!("Estimated result: {}, Depth: {}", scaled_score, depth);
                 best
             } else {
                 let mut obj = SolveObj::new(
