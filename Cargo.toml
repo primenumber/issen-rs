@@ -15,9 +15,7 @@ yaml-rust = "0.4"
 spin = "0.7"
 clap = "3.1"
 rayon = "1.5.3"
-tide = "0.16.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.40"
-http-types = "2.5.0"
-surf = "2.3.2"
-async-std = "1.11.0"
+tokio = { version = "1.2" , features = ["full"] }
+hyper = { version = "0.14", features = ["full"] }

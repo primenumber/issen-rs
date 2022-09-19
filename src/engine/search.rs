@@ -14,12 +14,12 @@ use futures::executor::ThreadPool;
 use futures::future::{BoxFuture, FutureExt};
 use futures::task::SpawnExt;
 use futures::StreamExt;
+use hyper::{Body, Client, Method, Request};
 use std::cmp::{max, min};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::mem::{swap, MaybeUninit};
 use std::sync::Arc;
-use surf::Client;
 
 #[derive(Clone)]
 pub struct SearchParams {
@@ -607,6 +607,42 @@ pub fn solve_inner(
     }
 }
 
+async fn solve_remote(
+    _solve_obj: &mut SolveObj,
+    board: Board,
+    alpha: i8,
+    beta: i8,
+    _passed: bool,
+    _depth: i8,
+) -> (i8, Option<Hand>, SolveStat) {
+    let data = SolveRequest {
+        board: board.to_base81(),
+        alpha,
+        beta,
+    };
+    let mut hasher = DefaultHasher::new();
+    board.player.hash(&mut hasher);
+    board.opponent.hash(&mut hasher);
+    let suffix = 192 + hasher.finish() % 4;
+    let data_str = serde_json::to_string(&serde_json::json!(data)).unwrap();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(format!("http://192.168.10.{}:7733", suffix))
+        .header("content-type", "application/json")
+        .body(Body::from(data_str))
+        .unwrap();
+    let client = Client::new();
+    let resp = client.request(req).await.unwrap();
+    let res_bytes = hyper::body::to_bytes(resp.into_body()).await.unwrap();
+    let res: SolveResponse =
+        serde_json::from_str(&String::from_utf8(res_bytes.to_vec()).unwrap()).unwrap();
+    let stat = SolveStat {
+        node_count: res.node_count,
+        st_cut_count: res.st_cut_count,
+    };
+    (res.result, None, stat)
+}
+
 pub fn solve_outer(
     solve_obj: &mut SolveObj,
     board: Board,
@@ -620,27 +656,7 @@ pub fn solve_outer(
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
             if solve_obj.params.use_worker {
-                let data = SolveRequest {
-                    board: board.to_base81(),
-                    alpha,
-                    beta,
-                };
-                let mut hasher = DefaultHasher::new();
-                board.player.hash(&mut hasher);
-                board.opponent.hash(&mut hasher);
-                let suffix = 192 + hasher.finish() % 4;
-                let data_str = serde_json::json!(data);
-                let res: SolveResponse = Client::new()
-                    .post(format!("http://192.168.10.{}:7733/", suffix))
-                    .body(http_types::Body::from_json(&data_str).unwrap())
-                    .recv_json()
-                    .await
-                    .unwrap();
-                let stat = SolveStat {
-                    node_count: res.node_count,
-                    st_cut_count: res.st_cut_count,
-                };
-                (res.result, None, stat)
+                solve_remote(&mut solve_obj, board, alpha, beta, passed, depth).await
             } else {
                 let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
                 (res, None, stat)

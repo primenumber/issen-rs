@@ -19,9 +19,6 @@ use crate::serialize::*;
 use crate::train::*;
 use clap::{Arg, ArgMatches, Command};
 use futures::executor::ThreadPool;
-use futures::task::SpawnExt;
-use futures::{executor, future};
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -29,7 +26,6 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
-use surf::{Client, Url};
 
 fn to_si(x: usize) -> String {
     if x == 0 {
@@ -244,50 +240,50 @@ fn ffo_benchmark() {
 }
 
 fn send_query(_matches: &ArgMatches) {
-    let name = "problem/stress_test_54_10k.b81r";
-    let file = File::open(name).unwrap();
-    let reader = BufReader::new(file);
-    let client: Client = surf::Config::new()
-        .set_base_url(Url::parse("http://localhost:7733").unwrap())
-        .try_into()
-        .unwrap();
-    let pool = executor::ThreadPool::new().unwrap();
-    let mut futures = Vec::new();
-    for (_idx, line) in reader.lines().enumerate() {
-        let client = client.clone();
-        futures.push(
-            pool.spawn_with_handle(async move {
-                let line_str = line.unwrap();
-                let desired: i8 = line_str[17..].parse().unwrap();
-                match Board::from_base81(&line_str[..16]) {
-                    Ok(board) => {
-                        let data = SolveRequest {
-                            board: board.to_base81(),
-                            alpha: -(BOARD_SIZE as i8),
-                            beta: BOARD_SIZE as i8,
-                        };
-                        let data_str = serde_json::json!(data);
-                        let solve_res: SolveResponse = client
-                            .post("/")
-                            .body(http_types::Body::from_json(&data_str).unwrap())
-                            .recv_json()
-                            .await
-                            .unwrap();
-                        let res = solve_res.result;
-                        if res != desired {
-                            board.print();
-                        }
-                        assert_eq!(res, desired);
-                    }
-                    Err(_) => {
-                        panic!();
-                    }
-                }
-            })
-            .unwrap(),
-        );
-    }
-    executor::block_on(future::join_all(futures));
+    //let name = "problem/stress_test_54_10k.b81r";
+    //let file = File::open(name).unwrap();
+    //let reader = BufReader::new(file);
+    //let client: Client = surf::Config::new()
+    //    .set_base_url(Url::parse("http://localhost:7733").unwrap())
+    //    .try_into()
+    //    .unwrap();
+    //let pool = executor::ThreadPool::new().unwrap();
+    //let mut futures = Vec::new();
+    //for (_idx, line) in reader.lines().enumerate() {
+    //    let client = client.clone();
+    //    futures.push(
+    //        pool.spawn_with_handle(async move {
+    //            let line_str = line.unwrap();
+    //            let desired: i8 = line_str[17..].parse().unwrap();
+    //            match Board::from_base81(&line_str[..16]) {
+    //                Ok(board) => {
+    //                    let data = SolveRequest {
+    //                        board: board.to_base81(),
+    //                        alpha: -(BOARD_SIZE as i8),
+    //                        beta: BOARD_SIZE as i8,
+    //                    };
+    //                    let data_str = serde_json::json!(data);
+    //                    let solve_res: SolveResponse = client
+    //                        .post("/")
+    //                        .body(http_types::Body::from_json(&data_str).unwrap())
+    //                        .recv_json()
+    //                        .await
+    //                        .unwrap();
+    //                    let res = solve_res.result;
+    //                    if res != desired {
+    //                        board.print();
+    //                    }
+    //                    assert_eq!(res, desired);
+    //                }
+    //                Err(_) => {
+    //                    panic!();
+    //                }
+    //            }
+    //        })
+    //        .unwrap(),
+    //    );
+    //}
+    //executor::block_on(future::join_all(futures));
 }
 
 fn main() {

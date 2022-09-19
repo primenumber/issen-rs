@@ -4,9 +4,12 @@ use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;
 use futures::executor::ThreadPool;
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Request, Response, Server};
+use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use tide::prelude::*;
-use tide::{Body, Request};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SolveRequest {
@@ -22,7 +25,31 @@ pub struct SolveResponse {
     pub st_cut_count: usize,
 }
 
-async fn worker_impl() -> tide::Result<()> {
+async fn worker_impl(
+    solve_obj: SolveObj,
+    req: Request<Body>,
+) -> Result<Response<Body>, Infallible> {
+    let bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
+    let query: SolveRequest =
+        serde_json::from_str(&String::from_utf8(bytes.to_vec()).unwrap()).unwrap();
+    let board = Board::from_base81(&query.board).unwrap();
+    let result = solve_inner(
+        &mut solve_obj.clone(),
+        board,
+        query.alpha,
+        query.beta,
+        false,
+    );
+    let res_str = serde_json::to_string(&serde_json::json!(SolveResponse {
+        result: result.0,
+        node_count: result.1.node_count,
+        st_cut_count: result.1.st_cut_count,
+    }))
+    .unwrap();
+    Ok(Response::new(res_str.into()))
+}
+
+async fn worker_body() {
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 12,
@@ -47,24 +74,23 @@ async fn worker_impl() -> tide::Result<()> {
         search_params.clone(),
         pool.clone(),
     );
-    //tide::log::start();
-    let mut app = tide::with_state(solve_obj);
-    app.with(tide::log::LogMiddleware::new());
-    app.at("/").post(|mut req: Request<SolveObj>| async move {
-        let mut solve_obj = req.state().clone();
-        let query: SolveRequest = req.body_json().await?;
-        let board = Board::from_base81(&query.board).unwrap();
-        let result = solve_inner(&mut solve_obj, board, query.alpha, query.beta, false);
-        Body::from_json(&SolveResponse {
-            result: result.0,
-            node_count: result.1.node_count,
-            st_cut_count: result.1.st_cut_count,
-        })
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 7733));
+
+    let make_service = make_service_fn(move |_conn| {
+        let context = solve_obj.clone();
+        let service = service_fn(move |req| worker_impl(context.clone(), req));
+        async move { Ok::<_, Infallible>(service) }
     });
-    app.listen("0.0.0.0:7733").await?;
-    Ok(())
+
+    let server = Server::bind(&addr).serve(make_service);
+
+    if let Err(e) = server.await {
+        eprintln!("server error: {}", e);
+    }
 }
 
 pub fn worker(_matches: &ArgMatches) {
-    async_std::task::block_on(worker_impl()).unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(worker_body());
 }
