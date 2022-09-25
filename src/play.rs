@@ -18,6 +18,7 @@ use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.value_of("player").unwrap() == "B";
@@ -85,9 +86,10 @@ pub fn play(matches: &ArgMatches) -> Board {
                     evaluator.clone(),
                     search_params.clone(),
                 );
+                let sem = Arc::new(Semaphore::new(1024));
                 Runtime::new()
                     .unwrap()
-                    .block_on(solve_with_move(board, &mut obj))
+                    .block_on(solve_with_move(board, &mut obj, sem))
             };
             eval_cache.inc_gen();
             res_cache.inc_gen();
@@ -159,9 +161,10 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 evaluator.clone(),
                 search_params.clone(),
             );
+            let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj))
+                .block_on(solve_with_move(board, &mut obj, sem))
         };
         eval_cache.inc_gen();
         res_cache.inc_gen();
@@ -218,9 +221,10 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
             best
         } else {
             let mut obj = solve_obj.clone();
+            let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj))
+                .block_on(solve_with_move(board, &mut obj, sem))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
@@ -423,9 +427,10 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 evaluator.clone(),
                 search_params.clone(),
             );
+            let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj))
+                .block_on(solve_with_move(board, &mut obj, sem))
         };
         eval_cache.inc_gen();
         res_cache.inc_gen();

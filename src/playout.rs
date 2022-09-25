@@ -5,7 +5,9 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::think::*;
 use crate::train::{create_record_by_solve, pos_to_str, step_by_pos};
+use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::Semaphore;
 
 pub async fn playout(
     record: &[usize],
@@ -18,10 +20,11 @@ pub async fn playout(
         opponent: 0x0000_0010_0800_0000,
         is_black: true,
     };
+    let sem = Arc::new(Semaphore::new(1024));
     let mut updated_record = String::new();
     for &pos in record {
         if popcnt(board.empty()) as usize <= search_depth {
-            let (s, b) = create_record_by_solve(board, solve_obj).await;
+            let (s, b) = create_record_by_solve(board, solve_obj, sem.clone()).await;
             board = b;
             updated_record += &s;
             break;
@@ -48,7 +51,7 @@ pub async fn playout(
     };
     while !board.is_gameover() {
         if popcnt(board.empty()) as usize <= search_depth {
-            let (s, b) = create_record_by_solve(board, solve_obj).await;
+            let (s, b) = create_record_by_solve(board, solve_obj, sem.clone()).await;
             board = b;
             updated_record += &s;
             break;

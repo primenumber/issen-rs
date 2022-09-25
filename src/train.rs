@@ -18,6 +18,7 @@ use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 
 const PACKED_SCALE: i32 = 256;
 
@@ -176,10 +177,14 @@ pub fn pos_to_str(pos: usize) -> String {
     result
 }
 
-pub async fn create_record_by_solve(mut board: Board, solve_obj: &mut SolveObj) -> (String, Board) {
+pub async fn create_record_by_solve(
+    mut board: Board,
+    solve_obj: &mut SolveObj,
+    sem: Arc<Semaphore>,
+) -> (String, Board) {
     let mut result = String::new();
     while !board.is_gameover() {
-        let pos = solve_with_move(board, solve_obj).await;
+        let pos = solve_with_move(board, solve_obj, sem.clone()).await;
         if let Hand::Play(pos) = pos {
             result += &pos_to_str(pos);
             board = board.play(pos).unwrap();

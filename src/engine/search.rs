@@ -18,6 +18,7 @@ use std::hash::{Hash, Hasher};
 use std::mem::{swap, MaybeUninit};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct SearchParams {
@@ -361,6 +362,7 @@ fn move_ordering_by_eval(
 
 async fn ybwc(
     solve_obj: &mut SolveObj,
+    sem: Arc<Semaphore>,
     board: Board,
     mut alpha: i8,
     beta: i8,
@@ -374,8 +376,16 @@ async fn ybwc(
         if passed {
             return (board.score(), Some(Hand::Pass), stat);
         } else {
-            let (child_res, _child_best, child_stat) =
-                solve_outer(solve_obj, board.pass(), -beta, -alpha, true, depth).await;
+            let (child_res, _child_best, child_stat) = solve_outer(
+                solve_obj,
+                sem.clone(),
+                board.pass(),
+                -beta,
+                -alpha,
+                true,
+                depth,
+            )
+            .await;
             stat.merge(child_stat);
             return (-child_res, Some(Hand::Pass), stat);
         }
@@ -387,8 +397,16 @@ async fn ybwc(
     for (i, &(pos, next)) in v.iter().enumerate() {
         if i == 0 {
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
-            let (child_res, _child_best, child_stat) =
-                solve_outer(solve_obj, next, -beta, -alpha, false, next_depth).await;
+            let (child_res, _child_best, child_stat) = solve_outer(
+                solve_obj,
+                sem.clone(),
+                next,
+                -beta,
+                -alpha,
+                false,
+                next_depth,
+            )
+            .await;
             stat.merge(child_stat);
             res = -child_res;
             best = Some(pos);
@@ -400,16 +418,31 @@ async fn ybwc(
             let tx = tx.clone();
             let mut child_obj = solve_obj.clone();
             let mut stat = SolveStat::zero();
+            let sem = sem.clone();
             handles.push(tokio::task::spawn(async move {
                 let next_depth = depth + child_obj.params.ybwc_younger_add;
-                let child_future =
-                    solve_outer(&mut child_obj, next, -alpha - 1, -alpha, false, next_depth);
+                let child_future = solve_outer(
+                    &mut child_obj,
+                    sem.clone(),
+                    next,
+                    -alpha - 1,
+                    -alpha,
+                    false,
+                    next_depth,
+                );
                 let (child_res, _child_best, child_stat) = child_future.await;
                 stat.merge(child_stat);
                 let mut tmp = -child_res;
                 if alpha < tmp && tmp < beta {
-                    let child_future =
-                        solve_outer(&mut child_obj, next, -beta, -tmp, false, next_depth);
+                    let child_future = solve_outer(
+                        &mut child_obj,
+                        sem.clone(),
+                        next,
+                        -beta,
+                        -tmp,
+                        false,
+                        next_depth,
+                    );
                     let (child_res, _child_best, child_stat) = child_future.await;
                     stat.merge(child_stat);
                     tmp = -child_res;
@@ -422,13 +455,21 @@ async fn ybwc(
                 let _ = tx.unbounded_send((res_tuple, stat));
             }));
         } else {
-            let (child_res, _child_best, child_stat) =
-                solve_outer(solve_obj, next, -alpha - 1, -alpha, false, depth).await;
+            let (child_res, _child_best, child_stat) = solve_outer(
+                solve_obj,
+                sem.clone(),
+                next,
+                -alpha - 1,
+                -alpha,
+                false,
+                depth,
+            )
+            .await;
             stat.merge(child_stat);
             let mut tmp = -child_res;
             if alpha < tmp && tmp < beta {
                 let (child_res, _child_best, child_stat) =
-                    solve_outer(solve_obj, next, -beta, -tmp, false, depth).await;
+                    solve_outer(solve_obj, sem.clone(), next, -beta, -tmp, false, depth).await;
                 stat.merge(child_stat);
                 tmp = -child_res;
             }
@@ -593,6 +634,7 @@ pub fn solve_inner(
 
 async fn solve_remote(
     _solve_obj: &mut SolveObj,
+    sem: Arc<Semaphore>,
     board: Board,
     alpha: i8,
     beta: i8,
@@ -616,10 +658,12 @@ async fn solve_remote(
         .body(Body::from(data_str))
         .unwrap();
     let client = Client::new();
+    let permit = sem.clone().acquire_owned().await.unwrap();
     let resp = client.request(req).await.unwrap();
     let res_bytes = hyper::body::to_bytes(resp.into_body()).await.unwrap();
     let res: SolveResponse =
         serde_json::from_str(&String::from_utf8(res_bytes.to_vec()).unwrap()).unwrap();
+    drop(permit);
     let stat = SolveStat {
         node_count: res.node_count,
         st_cut_count: res.st_cut_count,
@@ -629,6 +673,7 @@ async fn solve_remote(
 
 pub fn solve_outer(
     solve_obj: &mut SolveObj,
+    sem: Arc<Semaphore>,
     board: Board,
     mut alpha: i8,
     mut beta: i8,
@@ -640,7 +685,7 @@ pub fn solve_outer(
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
             if solve_obj.params.use_worker {
-                solve_remote(&mut solve_obj, board, alpha, beta, passed, depth).await
+                solve_remote(&mut solve_obj, sem, board, alpha, beta, passed, depth).await
             } else {
                 let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
                 (res, None, stat)
@@ -674,8 +719,17 @@ pub fn solve_outer(
                     CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
                     CacheLookupResult::NoCut(l, u, b) => (l, u, b),
                 };
-            let (res, best, stat) =
-                ybwc(&mut solve_obj, board, alpha, beta, passed, old_best, depth).await;
+            let (res, best, stat) = ybwc(
+                &mut solve_obj,
+                sem,
+                board,
+                alpha,
+                beta,
+                passed,
+                old_best,
+                depth,
+            )
+            .await;
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
                     &mut solve_obj.res_cache,
@@ -702,12 +756,16 @@ pub fn solve(
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
     let rt = Runtime::new().unwrap();
-    rt.block_on(solve_outer(solve_obj, board, alpha, beta, passed, depth))
+    let sem = Arc::new(Semaphore::new(512));
+    rt.block_on(solve_outer(
+        solve_obj, sem, board, alpha, beta, passed, depth,
+    ))
 }
 
-pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> Hand {
+pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sem: Arc<Semaphore>) -> Hand {
     match solve_outer(
         solve_obj,
+        sem.clone(),
         board,
         -(BOARD_SIZE as i8),
         BOARD_SIZE as i8,
@@ -723,9 +781,17 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> Hand {
             let mut result = -65;
             for pos in board.mobility() {
                 let next = board.play(pos).unwrap();
-                let res = -solve_outer(solve_obj, next, -(BOARD_SIZE as i8), -result, false, 0)
-                    .await
-                    .0;
+                let res = -solve_outer(
+                    solve_obj,
+                    sem.clone(),
+                    next,
+                    -(BOARD_SIZE as i8),
+                    -result,
+                    false,
+                    0,
+                )
+                .await
+                .0;
                 if res > result {
                     result = res;
                     best_pos = Some(pos);
