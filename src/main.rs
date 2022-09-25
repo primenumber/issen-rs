@@ -171,7 +171,7 @@ fn ffo_benchmark() {
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
-        use_worker: false,
+        use_worker: true,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);

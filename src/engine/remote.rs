@@ -2,11 +2,11 @@ use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
+use anyhow::Result;
 use clap::ArgMatches;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server};
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -24,14 +24,10 @@ pub struct SolveResponse {
     pub st_cut_count: usize,
 }
 
-async fn worker_impl(
-    solve_obj: SolveObj,
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
-    let bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
-    let query: SolveRequest =
-        serde_json::from_str(&String::from_utf8(bytes.to_vec()).unwrap()).unwrap();
-    let board = Board::from_base81(&query.board).unwrap();
+async fn worker_impl(solve_obj: SolveObj, req: Request<Body>) -> Result<Response<Body>> {
+    let bytes = hyper::body::to_bytes(req.into_body()).await?;
+    let query: SolveRequest = serde_json::from_str(&String::from_utf8(bytes.to_vec())?)?;
+    let board = Board::from_base81(&query.board)?;
     let result = solve_inner(
         &mut solve_obj.clone(),
         board,
@@ -43,8 +39,7 @@ async fn worker_impl(
         result: result.0,
         node_count: result.1.node_count,
         st_cut_count: result.1.st_cut_count,
-    }))
-    .unwrap();
+    }))?;
     Ok(Response::new(res_str.into()))
 }
 
@@ -78,7 +73,7 @@ async fn worker_body() {
     let make_service = make_service_fn(move |_conn| {
         let context = solve_obj.clone();
         let service = service_fn(move |req| worker_impl(context.clone(), req));
-        async move { Ok::<_, Infallible>(service) }
+        async move { Ok::<_, anyhow::Error>(service) }
     });
 
     let server = Server::bind(&addr).serve(make_service);

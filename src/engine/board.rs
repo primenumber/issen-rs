@@ -8,6 +8,7 @@ use packed_simd::*;
 use std::fmt;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Board {
@@ -19,8 +20,14 @@ pub struct Board {
 #[derive(Debug)]
 pub struct UnmovableError;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub struct BoardParseError;
+
+impl fmt::Display for BoardParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "")
+    }
+}
 
 pub struct PlayIterator {
     board: Board,
