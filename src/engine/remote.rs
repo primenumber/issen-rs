@@ -48,6 +48,12 @@ async fn worker_impl(
     Ok(Response::new(res_str.into()))
 }
 
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
+}
+
 async fn worker_body() {
     let search_params = SearchParams {
         reduce: false,
@@ -65,12 +71,7 @@ async fn worker_body() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
-    let solve_obj = SolveObj::new(
-        res_cache.clone(),
-        eval_cache.clone(),
-        evaluator.clone(),
-        search_params.clone(),
-    );
+    let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 7733));
 
@@ -82,7 +83,9 @@ async fn worker_body() {
 
     let server = Server::bind(&addr).serve(make_service);
 
-    if let Err(e) = server.await {
+    let graceful = server.with_graceful_shutdown(shutdown_signal());
+
+    if let Err(e) = graceful.await {
         eprintln!("server error: {}", e);
     }
 }
