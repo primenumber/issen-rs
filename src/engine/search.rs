@@ -9,10 +9,7 @@ use crate::engine::table::*;
 use crate::engine::think::*;
 use bitintr::Tzcnt;
 use futures::channel::mpsc;
-use futures::executor;
-use futures::executor::ThreadPool;
 use futures::future::{BoxFuture, FutureExt};
-use futures::task::SpawnExt;
 use futures::StreamExt;
 use hyper::{Body, Client, Method, Request};
 use std::cmp::{max, min};
@@ -20,6 +17,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::mem::{swap, MaybeUninit};
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 #[derive(Clone)]
 pub struct SearchParams {
@@ -42,7 +40,6 @@ pub struct SolveObj {
     pub eval_cache: EvalCacheTable,
     pub evaluator: Arc<Evaluator>,
     params: SearchParams,
-    pool: ThreadPool,
 }
 
 enum CutType {
@@ -82,14 +79,12 @@ impl SolveObj {
         eval_cache: EvalCacheTable,
         evaluator: Arc<Evaluator>,
         params: SearchParams,
-        pool: ThreadPool,
     ) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
             params,
-            pool,
         }
     }
 }
@@ -405,38 +400,27 @@ async fn ybwc(
             let tx = tx.clone();
             let mut child_obj = solve_obj.clone();
             let mut stat = SolveStat::zero();
-            handles.push(
-                solve_obj
-                    .pool
-                    .spawn_with_handle(async move {
-                        let next_depth = depth + child_obj.params.ybwc_younger_add;
-                        let child_future = solve_outer(
-                            &mut child_obj,
-                            next,
-                            -alpha - 1,
-                            -alpha,
-                            false,
-                            next_depth,
-                        );
-                        let (child_res, _child_best, child_stat) = child_future.await;
-                        stat.merge(child_stat);
-                        let mut tmp = -child_res;
-                        if alpha < tmp && tmp < beta {
-                            let child_future =
-                                solve_outer(&mut child_obj, next, -beta, -tmp, false, next_depth);
-                            let (child_res, _child_best, child_stat) = child_future.await;
-                            stat.merge(child_stat);
-                            tmp = -child_res;
-                        }
-                        if tmp > res {
-                            best = Some(pos);
-                            res = tmp;
-                        }
-                        let res_tuple = (res, best);
-                        let _ = tx.unbounded_send((res_tuple, stat));
-                    })
-                    .unwrap(),
-            );
+            handles.push(tokio::task::spawn(async move {
+                let next_depth = depth + child_obj.params.ybwc_younger_add;
+                let child_future =
+                    solve_outer(&mut child_obj, next, -alpha - 1, -alpha, false, next_depth);
+                let (child_res, _child_best, child_stat) = child_future.await;
+                stat.merge(child_stat);
+                let mut tmp = -child_res;
+                if alpha < tmp && tmp < beta {
+                    let child_future =
+                        solve_outer(&mut child_obj, next, -beta, -tmp, false, next_depth);
+                    let (child_res, _child_best, child_stat) = child_future.await;
+                    stat.merge(child_stat);
+                    tmp = -child_res;
+                }
+                if tmp > res {
+                    best = Some(pos);
+                    res = tmp;
+                }
+                let res_tuple = (res, best);
+                let _ = tx.unbounded_send((res_tuple, stat));
+            }));
         } else {
             let (child_res, _child_best, child_stat) =
                 solve_outer(solve_obj, next, -alpha - 1, -alpha, false, depth).await;
@@ -717,7 +701,8 @@ pub fn solve(
     passed: bool,
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
-    executor::block_on(solve_outer(solve_obj, board, alpha, beta, passed, depth))
+    let rt = Runtime::new().unwrap();
+    rt.block_on(solve_outer(solve_obj, board, alpha, beta, passed, depth))
 }
 
 pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj) -> Hand {

@@ -3,7 +3,6 @@ use crate::engine::eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;
-use futures::executor::ThreadPool;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server};
 use serde::{Deserialize, Serialize};
@@ -66,13 +65,11 @@ async fn worker_body() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
-    let pool = ThreadPool::new().unwrap();
     let solve_obj = SolveObj::new(
         res_cache.clone(),
         eval_cache.clone(),
         evaluator.clone(),
         search_params.clone(),
-        pool.clone(),
     );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 7733));

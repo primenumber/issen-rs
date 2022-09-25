@@ -18,7 +18,6 @@ use crate::play::*;
 use crate::serialize::*;
 use crate::train::*;
 use clap::{Arg, ArgMatches, Command};
-use futures::executor::ThreadPool;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -82,7 +81,6 @@ fn solve_ffo(
     evaluator: Arc<Evaluator>,
     res_cache: &mut ResCacheTable,
     eval_cache: &mut EvalCacheTable,
-    pool: &ThreadPool,
 ) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
@@ -101,7 +99,6 @@ fn solve_ffo(
                     eval_cache.clone(),
                     evaluator.clone(),
                     search_params.clone(),
-                    pool.clone(),
                 );
                 let (res, best, stat) = solve(
                     &mut obj,
@@ -179,7 +176,6 @@ fn ffo_benchmark() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
-    let pool = ThreadPool::new().unwrap();
     let mut index: usize = 1;
     let mut stats = Vec::new();
     //stats.extend(solve_ffo(
@@ -189,7 +185,6 @@ fn ffo_benchmark() {
     //    evaluator.clone(),
     //    &mut res_cache,
     //    &mut eval_cache,
-    //    &pool,
     //));
     //stats.extend(solve_ffo(
     //    "problem/hard-25.obf",
@@ -198,7 +193,6 @@ fn ffo_benchmark() {
     //    evaluator.clone(),
     //    &mut res_cache,
     //    &mut eval_cache,
-    //    &pool,
     //));
     stats.extend(solve_ffo(
         "problem/fforum-1-19.obf",
@@ -207,7 +201,6 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
-        &pool,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
@@ -216,7 +209,6 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
-        &pool,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
@@ -225,7 +217,6 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
-        &pool,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
@@ -234,7 +225,6 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
-        &pool,
     ));
     report_stats(&stats);
 }
@@ -247,12 +237,11 @@ fn send_query(_matches: &ArgMatches) {
     //    .set_base_url(Url::parse("http://localhost:7733").unwrap())
     //    .try_into()
     //    .unwrap();
-    //let pool = executor::ThreadPool::new().unwrap();
     //let mut futures = Vec::new();
     //for (_idx, line) in reader.lines().enumerate() {
     //    let client = client.clone();
     //    futures.push(
-    //        pool.spawn_with_handle(async move {
+    //        tokio::task::spawn(async move {
     //            let line_str = line.unwrap();
     //            let desired: i8 = line_str[17..].parse().unwrap();
     //            match Board::from_base81(&line_str[..16]) {

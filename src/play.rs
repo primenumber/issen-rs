@@ -7,8 +7,6 @@ use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::train::*;
 use clap::ArgMatches;
-use futures::executor;
-use futures::executor::ThreadPool;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -19,6 +17,7 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::runtime::Runtime;
 
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.value_of("player").unwrap() == "B";
@@ -39,7 +38,6 @@ pub fn play(matches: &ArgMatches) -> Board {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
-    let pool = ThreadPool::new().unwrap();
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -86,9 +84,10 @@ pub fn play(matches: &ArgMatches) -> Board {
                     eval_cache.clone(),
                     evaluator.clone(),
                     search_params.clone(),
-                    pool.clone(),
                 );
-                executor::block_on(solve_with_move(board, &mut obj))
+                Runtime::new()
+                    .unwrap()
+                    .block_on(solve_with_move(board, &mut obj))
             };
             eval_cache.inc_gen();
             res_cache.inc_gen();
@@ -124,7 +123,6 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
-    let pool = ThreadPool::new().unwrap();
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -160,9 +158,10 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 eval_cache.clone(),
                 evaluator.clone(),
                 search_params.clone(),
-                pool.clone(),
             );
-            executor::block_on(solve_with_move(board, &mut obj))
+            Runtime::new()
+                .unwrap()
+                .block_on(solve_with_move(board, &mut obj))
         };
         eval_cache.inc_gen();
         res_cache.inc_gen();
@@ -219,7 +218,9 @@ fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String
             best
         } else {
             let mut obj = solve_obj.clone();
-            executor::block_on(solve_with_move(board, &mut obj))
+            Runtime::new()
+                .unwrap()
+                .block_on(solve_with_move(board, &mut obj))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
@@ -296,8 +297,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
-    let pool = ThreadPool::new().unwrap();
-    let obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params, pool);
+    let obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -343,7 +343,6 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
-    let pool = ThreadPool::new().unwrap();
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
@@ -423,9 +422,10 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 eval_cache.clone(),
                 evaluator.clone(),
                 search_params.clone(),
-                pool.clone(),
             );
-            executor::block_on(solve_with_move(board, &mut obj))
+            Runtime::new()
+                .unwrap()
+                .block_on(solve_with_move(board, &mut obj))
         };
         eval_cache.inc_gen();
         res_cache.inc_gen();

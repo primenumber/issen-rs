@@ -8,9 +8,6 @@ use crate::playout::*;
 use crate::serialize::*;
 use crate::train::*;
 use clap::ArgMatches;
-use futures::executor;
-use futures::executor::ThreadPool;
-use futures::task::SpawnExt;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -18,6 +15,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
+use tokio::runtime::Runtime;
 
 fn write_record<W: Write>(current: &mut Vec<Hand>, writer: &mut W) {
     for hand in current {
@@ -249,7 +247,6 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         use_worker: false,
     };
     let depth = 18;
-    let pool = ThreadPool::new().unwrap();
     for _ in 0..100 {
         let boards_with_results_all = minimax_record_body(&boards_set);
         eprintln!("Get best records...");
@@ -264,36 +261,32 @@ pub fn iterative_update_book(matches: &ArgMatches) {
                 eval_cache.clone(),
                 evaluator.clone(),
                 search_params.clone(),
-                pool.clone(),
             );
             let finished = finished.clone();
 
-            handles.push(
-                pool.spawn_with_handle(async move {
-                    let mut updateds = Vec::new();
-                    for (idx, _) in record.iter().enumerate() {
-                        let sub_record: Vec<_> = record[0..=idx]
-                            .iter()
-                            .map(|&x| match x {
-                                Hand::Play(pos) => pos,
-                                _ => panic!(),
-                            })
-                            .collect();
-                        let updated = playout(&sub_record, &mut solve_obj, 200, depth).await;
-                        let count = finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        if count % 1000 == 0 {
-                            eprintln!("{}", count);
-                        }
-                        updateds.push(updated);
+            handles.push(tokio::task::spawn(async move {
+                let mut updateds = Vec::new();
+                for (idx, _) in record.iter().enumerate() {
+                    let sub_record: Vec<_> = record[0..=idx]
+                        .iter()
+                        .map(|&x| match x {
+                            Hand::Play(pos) => pos,
+                            _ => panic!(),
+                        })
+                        .collect();
+                    let updated = playout(&sub_record, &mut solve_obj, 200, depth).await;
+                    let count = finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if count % 1000 == 0 {
+                        eprintln!("{}", count);
                     }
-                    updateds
-                })
-                .unwrap(),
-            );
+                    updateds.push(updated);
+                }
+                updateds
+            }));
         }
 
         for handle in handles {
-            let results = executor::block_on(handle);
+            let results = Runtime::new().unwrap().block_on(handle).unwrap();
             for (line, score) in results.iter().flatten() {
                 writeln!(writer, "{} {}", line, score).unwrap();
                 let record = parse_record(line);

@@ -9,9 +9,6 @@ use crate::playout::*;
 use crate::serialize::*;
 use crate::sparse_mat::*;
 use clap::ArgMatches;
-use futures::executor;
-use futures::executor::ThreadPool;
-use futures::task::SpawnExt;
 use rayon::prelude::*;
 use std::cmp::min;
 use std::collections::HashSet;
@@ -20,6 +17,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 const PACKED_SCALE: i32 = 256;
 
@@ -220,7 +218,6 @@ pub fn update_record(matches: &ArgMatches) {
         static_ordering_limit: 3,
         use_worker: false,
     };
-    let pool = ThreadPool::new().unwrap();
 
     let mut handles = Vec::new();
     let finished = Arc::new(AtomicUsize::new(0));
@@ -230,36 +227,32 @@ pub fn update_record(matches: &ArgMatches) {
             eval_cache.clone(),
             evaluator.clone(),
             search_params.clone(),
-            pool.clone(),
         );
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();
         let finished = finished.clone();
 
-        handles.push(
-            pool.spawn_with_handle(async move {
-                let record = parse_record(&input_line);
-                let mut updateds = Vec::new();
-                for (idx, _) in record.iter().enumerate() {
-                    let sub_record = record.clone();
-                    let sub_record = &sub_record[0..=idx];
-                    //let updated = update_record_impl(&record, &mut solve_obj, depth).await;
-                    let updated = playout(sub_record, &mut solve_obj, 100, depth).await;
-                    let count = finished.fetch_add(1, Ordering::SeqCst);
-                    if count % 1000 == 0 {
-                        eprintln!("{}", count);
-                    }
-                    updateds.push(updated);
+        handles.push(tokio::task::spawn(async move {
+            let record = parse_record(&input_line);
+            let mut updateds = Vec::new();
+            for (idx, _) in record.iter().enumerate() {
+                let sub_record = record.clone();
+                let sub_record = &sub_record[0..=idx];
+                //let updated = update_record_impl(&record, &mut solve_obj, depth).await;
+                let updated = playout(sub_record, &mut solve_obj, 100, depth).await;
+                let count = finished.fetch_add(1, Ordering::SeqCst);
+                if count % 1000 == 0 {
+                    eprintln!("{}", count);
                 }
-                updateds
-            })
-            .unwrap(),
-        );
+                updateds.push(updated);
+            }
+            updateds
+        }));
     }
 
     let mut result = Vec::new();
     for handle in handles {
-        let results = executor::block_on(handle);
+        let results = Runtime::new().unwrap().block_on(handle).unwrap();
         for (line, score) in results.iter().flatten() {
             result.push(format!("{} {}\n", line, score));
         }
