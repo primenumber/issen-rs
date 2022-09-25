@@ -11,7 +11,7 @@ use bitintr::Tzcnt;
 use futures::channel::mpsc;
 use futures::future::{BoxFuture, FutureExt};
 use futures::StreamExt;
-use hyper::{Body, Client, Method, Request};
+use reqwest::Client;
 use std::cmp::{max, min};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -650,19 +650,12 @@ async fn solve_remote(
     board.player.hash(&mut hasher);
     board.opponent.hash(&mut hasher);
     let suffix = 192 + hasher.finish() % 4;
-    let data_str = serde_json::to_string(&serde_json::json!(data)).unwrap();
-    let req = Request::builder()
-        .method(Method::POST)
-        .uri(format!("http://192.168.10.{}:7733", suffix))
-        .header("content-type", "application/json")
-        .body(Body::from(data_str))
-        .unwrap();
+    let data_json = serde_json::json!(data);
+    let uri = format!("http://192.168.10.{}:7733", suffix);
     let client = Client::new();
     let permit = sem.clone().acquire_owned().await.unwrap();
-    let resp = client.request(req).await.unwrap();
-    let res_bytes = hyper::body::to_bytes(resp.into_body()).await.unwrap();
-    let res: SolveResponse =
-        serde_json::from_str(&String::from_utf8(res_bytes.to_vec()).unwrap()).unwrap();
+    let resp = client.post(uri).json(&data_json).send().await.unwrap();
+    let res = resp.json::<SolveResponse>().await.unwrap();
     drop(permit);
     let stat = SolveStat {
         node_count: res.node_count,
