@@ -172,9 +172,15 @@ impl Board {
     }
 
     pub fn next_iter(&self) -> PlayIterator {
+        let e = self.empty();
+        let remain = if popcnt(e) > 16 {
+            self.mobility_bits()
+        } else {
+            e
+        };
         PlayIterator {
             board: *self,
-            remain: self.empty(),
+            remain,
         }
     }
 
