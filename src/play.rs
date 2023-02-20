@@ -149,9 +149,12 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
             };
             let (score, best, depth) =
                 searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let secs = start.elapsed().as_secs_f64();
+            let nps = (searcher.node_count as f64 / secs) as u64;
             eprintln!(
-                "Estimated result: {}, Depth: {}, Nodes: {}",
-                score, depth, searcher.node_count
+                "Estimated result: {}, Depth: {}, Nodes: {}, NPS: {}",
+                score, depth, searcher.node_count,
+                nps
             );
             best
         } else {
