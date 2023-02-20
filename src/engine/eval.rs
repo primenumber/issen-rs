@@ -109,6 +109,14 @@ impl Evaluator {
                 w.sort_unstable();
                 smoothed_weights[count_index][pattern_index] = w[w.len() / 2];
             }
+
+            // folding parity score
+            let non_patterns_offset = offsets.last().unwrap();
+            if count_index % 2 == 1 {
+                smoothed_weights[count_index][non_patterns_offset + 3]
+                    += smoothed_weights[count_index][non_patterns_offset + 2];
+            }
+            smoothed_weights[count_index][non_patterns_offset + 2] = 0;
         }
 
         let mut base3 = vec![0; 1 << max_bits];
@@ -174,9 +182,6 @@ impl Evaluator {
             * self.weights[index][non_patterns_offset + 0] as i32;
         score += popcnt(board.pass().mobility_bits()) as i32
             * self.weights[index][non_patterns_offset + 1] as i32;
-        if rem % 2 == 1 {
-            score += self.weights[index][non_patterns_offset + 2] as i32;
-        }
         score += self.weights[index][non_patterns_offset + 3] as i32;
         Self::smooth_val(score)
     }
