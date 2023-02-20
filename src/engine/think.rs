@@ -95,12 +95,17 @@ impl Searcher {
     ) -> Option<(i16, Hand)> {
         let mut v = Vec::with_capacity(16);
         for (next, pos) in board.next_iter() {
+            let use_eval_depth = 4;
             let bonus = if Some(pos) == old_best {
                 -16 * SCALE
             } else {
                 0
             };
-            let eval_score = self.evaluator.eval(next);
+            let eval_score = if depth < use_eval_depth * DEPTH_SCALE {
+                0
+            } else {
+                self.evaluator.eval(next)
+            };
             v.push((
                 next,
                 pos,
