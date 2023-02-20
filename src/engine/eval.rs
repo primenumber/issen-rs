@@ -132,12 +132,12 @@ impl Evaluator {
 
     fn eval_impl(&self, board: Board, index: usize) -> i32 {
         let mut score = 0i32;
-        for (i, pattern) in self.patterns.iter().enumerate() {
-            let player_pattern = pext(board.player, *pattern) as usize;
-            let opponent_pattern = pext(board.opponent, *pattern) as usize;
+        for (&pattern, &offset) in self.patterns.iter().zip(self.offsets.iter()) {
+            let player_pattern = pext(board.player, pattern) as usize;
+            let opponent_pattern = pext(board.opponent, pattern) as usize;
             unsafe {
                 score += *self.weights.get_unchecked(index).get_unchecked(
-                    self.offsets.get_unchecked(i)
+                    offset
                         + self.base3.get_unchecked(player_pattern)
                         + 2 * self.base3.get_unchecked(opponent_pattern),
                 ) as i32;
