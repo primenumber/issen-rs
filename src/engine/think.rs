@@ -182,7 +182,7 @@ impl Searcher {
         if depth <= 0 {
             let res = self.evaluator.eval(board);
             Some((res, None))
-        } else if depth <= 2 * DEPTH_SCALE {
+        } else if depth <= 3 * DEPTH_SCALE {
             let (res, best) = self.think_naive(board, alpha, beta, passed, depth)?;
             Some((res, Some(best)))
         } else {
