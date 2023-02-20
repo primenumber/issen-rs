@@ -133,8 +133,9 @@ impl Searcher {
                 } else {
                     DEPTH_SCALE
                 };
+                let next_depth = max(2 * DEPTH_SCALE, depth - reduce);
                 let tmp = -self
-                    .think(next, -alpha - 1, -alpha, false, depth - reduce)?
+                    .think(next, -alpha - 1, -alpha, false, next_depth)?
                     .0;
                 if tmp > res {
                     res = tmp;
