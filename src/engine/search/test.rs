@@ -136,13 +136,6 @@ fn test_solve_inner() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 256);
     let eval_cache = EvalCacheTable::new(256, 256);
-    let pool = ThreadPool::new().unwrap();
-    let client: Arc<Client> = Arc::new(
-        surf::Config::new()
-            .set_base_url(surf::Url::parse("http://localhost:7733").unwrap())
-            .try_into()
-            .unwrap(),
-    );
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 0,
@@ -166,7 +159,6 @@ fn test_solve_inner() {
                     eval_cache.clone(),
                     evaluator.clone(),
                     search_params.clone(),
-                    pool.clone(),
                 );
                 let (res, _stat) = solve_inner(
                     &mut obj,
