@@ -167,6 +167,7 @@ impl Parameters {
 pub struct Evaluator {
     stones_range: RangeInclusive<i8>,
     params: Vec<Parameters>,
+    line_to_indices: Vec<u16>,
     base3: Vec<usize>,
 }
 
@@ -224,6 +225,23 @@ impl Evaluator {
         result
     }
 
+    fn generate_indices_table(patterns: &[u64], b3conv: &[usize]) -> Vec<u16> {
+        let mut result = Vec::new();
+        for row in 0..8 {
+            for row_bits in 0..256 {
+                let bits = row_bits << (row * 8);
+                for &pattern in patterns {
+                    let index = b3conv[pext(bits, pattern) as usize];
+                    result.push(index as u16);
+                }
+                while result.len() % 16 != 0 {
+                    result.push(0);
+                }
+            }
+        }
+        result
+    }
+
     pub fn new(table_dirname: &str) -> Evaluator {
         let table_path = Path::new(table_dirname);
         let config_path = table_path.join("config.yaml");
@@ -274,6 +292,7 @@ impl Evaluator {
         Evaluator {
             stones_range: config.stones_range,
             params,
+            line_to_indices: Self::generate_indices_table(&patterns, &base3),
             base3,
         }
     }
@@ -294,8 +313,9 @@ impl Evaluator {
         let stones = (BOARD_SIZE - rem)
             .max(*self.stones_range.start() as usize)
             .min(*self.stones_range.end() as usize);
-        let index = stones - *self.stones_range.start() as usize;
-        let score = self.params[index].eval(board, &self.base3) as i32;
+        let param_index = stones - *self.stones_range.start() as usize;
+        let param = &self.params[param_index];
+        let score = param.eval(board, &self.base3) as i32;
         Self::smooth_val(score)
     }
 }
