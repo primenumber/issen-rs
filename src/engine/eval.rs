@@ -99,15 +99,18 @@ impl Parameters {
     }
 
     fn new(
-        weights: &[i16],
-        offsets: &[usize],
-        patterns: &[u64],
+        orig_weights: &[i16],
+        orig_offsets: &[usize],
+        orig_patterns: &[u64],
         b3conv: &[usize],
     ) -> Option<Parameters> {
         let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
-        for (i, &pattern) in patterns.iter().enumerate() {
-            let expanded =
-                Self::expand_weights_by_d4(&weights[offsets[i]..offsets[i + 1]], pattern, b3conv);
+        for (i, &pattern) in orig_patterns.iter().enumerate() {
+            let expanded = Self::expand_weights_by_d4(
+                &orig_weights[orig_offsets[i]..orig_offsets[i + 1]],
+                pattern,
+                b3conv,
+            );
             for (t_pattern, t_weights) in expanded {
                 if let Some((_, vw)) = v.iter_mut().find(|(p, _)| *p == t_pattern) {
                     for (w, &e) in vw.into_iter().zip(t_weights.iter()) {
@@ -118,7 +121,6 @@ impl Parameters {
                 }
             }
         }
-        let non_patterns_offset = *offsets.last().unwrap();
         let mut pattern_weights = Vec::new();
         let mut patterns = Vec::new();
         let mut offsets = Vec::new();
@@ -129,14 +131,15 @@ impl Parameters {
             pattern_weights.extend(ex_weights);
             patterns.push(pattern);
         }
+        let non_patterns_offset = *orig_offsets.last().unwrap();
         Some(Parameters {
             pattern_weights,
             patterns,
             offsets,
-            p_mobility_score: weights[non_patterns_offset],
-            o_mobility_score: weights[non_patterns_offset + 1],
-            parity_score: weights[non_patterns_offset + 2],
-            constant_score: weights[non_patterns_offset + 3],
+            p_mobility_score: orig_weights[non_patterns_offset],
+            o_mobility_score: orig_weights[non_patterns_offset + 1],
+            parity_score: orig_weights[non_patterns_offset + 2],
+            constant_score: orig_weights[non_patterns_offset + 3],
         })
     }
 
