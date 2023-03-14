@@ -5,7 +5,6 @@ version = "0.2.0"
 authors = ["prime <prime@kmc.gr.jp>"]
 
 [dependencies]
-packed_simd = { version = "0.3.8", package = "packed_simd_2" }
 bitintr = "0.3"
 lazy_static = "1.4"
 rand = { version = "0.8", features = ["small_rng"] }

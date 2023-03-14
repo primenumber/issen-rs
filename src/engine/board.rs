@@ -3,8 +3,8 @@ mod test;
 use crate::engine::bits::*;
 use crate::engine::hand::*;
 use clap::ArgMatches;
+use core::arch::x86_64::*;
 use lazy_static::lazy_static;
-use packed_simd::*;
 use std::fmt;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
@@ -29,6 +29,27 @@ pub struct PlayIterator {
 
 pub const BOARD_SIZE: usize = 64;
 
+unsafe fn upper_bit(mut x: __m256i) -> __m256i {
+    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 1));
+    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 2));
+    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 4));
+    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 8));
+    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 16));
+    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 32));
+    let lowers = _mm256_srli_epi64(x, 1);
+    _mm256_andnot_si256(lowers, x)
+}
+
+unsafe fn iszero(x: __m256i) -> __m256i {
+    let zero = _mm256_setzero_si256();
+    _mm256_cmpeq_epi64(x, zero)
+}
+
+unsafe fn reduce_or(x: __m256i) -> u64 {
+    let xh = _mm_or_si128(_mm256_castsi256_si128(x), _mm256_extracti128_si256(x, 1));
+    (_mm_cvtsi128_si64(xh) | _mm_extract_epi64(xh, 1)) as u64
+}
+
 impl Board {
     pub fn initial_state() -> Board {
         Board {
@@ -46,40 +67,48 @@ impl Board {
         }
     }
 
-    fn flip_simd(&self, pos: usize) -> u64x4 {
-        let p = u64x4::splat(self.player);
-        let o = u64x4::splat(self.opponent);
-        let omask = u64x4::new(
-            0xFFFFFFFFFFFFFFFFu64,
-            0x7E7E7E7E7E7E7E7Eu64,
-            0x7E7E7E7E7E7E7E7Eu64,
-            0x7E7E7E7E7E7E7E7Eu64,
+    unsafe fn flip_simd(&self, pos: usize) -> u64 {
+        let p = _mm256_set1_epi64x(self.player as i64);
+        let o = _mm256_set1_epi64x(self.opponent as i64);
+        let omask = _mm256_setr_epi64x(
+            0xFFFFFFFFFFFFFFFFu64 as i64,
+            0x7E7E7E7E7E7E7E7Eu64 as i64,
+            0x7E7E7E7E7E7E7E7Eu64 as i64,
+            0x7E7E7E7E7E7E7E7Eu64 as i64,
         );
-        let om = o & omask;
-        let mask1 = u64x4::new(
-            0x0080808080808080u64,
-            0x7f00000000000000u64,
-            0x0102040810204000u64,
-            0x0040201008040201u64,
+        let om = _mm256_and_si256(o, omask);
+        let mask1 = _mm256_setr_epi64x(
+            0x0080808080808080u64 as i64,
+            0x7f00000000000000u64 as i64,
+            0x0102040810204000u64 as i64,
+            0x0040201008040201u64 as i64,
         );
-        let mut mask = mask1 >> (63 - pos) as u32;
-        let mut outflank = upper_bit(!om & mask) & p;
-        let mut flipped = u64x4::from_cast(-i64x4::from_cast(outflank) << 1) & mask;
-        let mask2 = u64x4::new(
-            0x0101010101010100u64,
-            0x00000000000000feu64,
-            0x0002040810204080u64,
-            0x8040201008040200u64,
+        let mut mask = _mm256_srlv_epi64(mask1, _mm256_set1_epi64x((63 - pos) as i64));
+        let mut outflank = _mm256_and_si256(upper_bit(_mm256_andnot_si256(om, mask)), p);
+        let mut flipped = _mm256_and_si256(
+            _mm256_slli_epi64(_mm256_sub_epi64(_mm256_setzero_si256(), outflank), 1),
+            mask,
         );
-        mask = mask2 << pos as u32;
-        outflank = !((!om & mask) - 1) & (mask & p);
-        flipped |= !(iszero(outflank) - outflank) & mask;
-        flipped
+        let mask2 = _mm256_setr_epi64x(
+            0x0101010101010100u64 as i64,
+            0x00000000000000feu64 as i64,
+            0x0002040810204080u64 as i64,
+            0x8040201008040200u64 as i64,
+        );
+        mask = _mm256_sllv_epi64(mask2, _mm256_set1_epi64x(pos as i64));
+        outflank = _mm256_andnot_si256(
+            _mm256_sub_epi64(_mm256_andnot_si256(om, mask), _mm256_set1_epi64x(1)),
+            _mm256_and_si256(mask, p),
+        );
+        flipped = _mm256_or_si256(
+            flipped,
+            _mm256_andnot_si256(_mm256_sub_epi64(iszero(outflank), outflank), mask),
+        );
+        reduce_or(flipped)
     }
 
     pub fn flip_unchecked(&self, pos: usize) -> u64 {
-        let flips = self.flip_simd(pos);
-        flips.or()
+        unsafe { self.flip_simd(pos) }
     }
 
     pub fn flip(&self, pos: usize) -> u64 {
@@ -130,31 +159,53 @@ impl Board {
         !(self.player | self.opponent)
     }
 
-    pub fn mobility_bits(&self) -> u64 {
-        let shift1 = u64x4::new(1, 7, 9, 8);
-        let mask = u64x4::new(
-            0x7e7e7e7e7e7e7e7eu64,
-            0x7e7e7e7e7e7e7e7eu64,
-            0x7e7e7e7e7e7e7e7eu64,
-            0xffffffffffffffffu64,
+    unsafe fn mobility_bits_simd(&self) -> u64 {
+        let shift1 = _mm256_setr_epi64x(1, 7, 9, 8);
+        let mask = _mm256_setr_epi64x(
+            0x7e7e7e7e7e7e7e7eu64 as i64,
+            0x7e7e7e7e7e7e7e7eu64 as i64,
+            0x7e7e7e7e7e7e7e7eu64 as i64,
+            0xffffffffffffffffu64 as i64,
         );
-        let v_player = u64x4::splat(self.player);
-        let masked_op = u64x4::splat(self.opponent) & mask;
-        let mut flip_l = masked_op & (v_player << shift1);
-        let mut flip_r = masked_op & (v_player >> shift1);
-        flip_l |= masked_op & (flip_l << shift1);
-        flip_r |= masked_op & (flip_r >> shift1);
-        let pre_l = masked_op & (masked_op << shift1);
-        let pre_r = pre_l >> shift1;
-        let shift2 = shift1 + shift1;
-        flip_l |= pre_l & (flip_l << shift2);
-        flip_r |= pre_r & (flip_r >> shift2);
-        flip_l |= pre_l & (flip_l << shift2);
-        flip_r |= pre_r & (flip_r >> shift2);
-        let mut res = flip_l << shift1;
-        res |= flip_r >> shift1;
-        res &= u64x4::splat(self.empty());
-        res.or()
+        let v_player = _mm256_set1_epi64x(self.player as i64);
+        let masked_op = _mm256_and_si256(_mm256_set1_epi64x(self.opponent as i64), mask);
+        let mut flip_l = _mm256_and_si256(masked_op, _mm256_sllv_epi64(v_player, shift1));
+        let mut flip_r = _mm256_and_si256(masked_op, _mm256_srlv_epi64(v_player, shift1));
+        flip_l = _mm256_or_si256(
+            flip_l,
+            _mm256_and_si256(masked_op, _mm256_sllv_epi64(flip_l, shift1)),
+        );
+        flip_r = _mm256_or_si256(
+            flip_r,
+            _mm256_and_si256(masked_op, _mm256_srlv_epi64(flip_r, shift1)),
+        );
+        let pre_l = _mm256_and_si256(masked_op, _mm256_sllv_epi64(masked_op, shift1));
+        let pre_r = _mm256_srlv_epi64(pre_l, shift1);
+        let shift2 = _mm256_add_epi64(shift1, shift1);
+        flip_l = _mm256_or_si256(
+            flip_l,
+            _mm256_and_si256(pre_l, _mm256_sllv_epi64(flip_l, shift2)),
+        );
+        flip_r = _mm256_or_si256(
+            flip_r,
+            _mm256_and_si256(pre_r, _mm256_srlv_epi64(flip_r, shift2)),
+        );
+        flip_l = _mm256_or_si256(
+            flip_l,
+            _mm256_and_si256(pre_l, _mm256_sllv_epi64(flip_l, shift2)),
+        );
+        flip_r = _mm256_or_si256(
+            flip_r,
+            _mm256_and_si256(pre_r, _mm256_srlv_epi64(flip_r, shift2)),
+        );
+        let mut res = _mm256_sllv_epi64(flip_l, shift1);
+        res = _mm256_or_si256(res, _mm256_srlv_epi64(flip_r, shift1));
+        res = _mm256_and_si256(res, _mm256_set1_epi64x(self.empty() as i64));
+        reduce_or(res)
+    }
+
+    pub fn mobility_bits(&self) -> u64 {
+        unsafe { self.mobility_bits_simd() }
     }
 
     pub fn mobility(&self) -> Vec<usize> {
@@ -557,4 +608,78 @@ lazy_static! {
         }
         res
     };
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{Rng, SeedableRng};
+
+    fn upper_bit_naive(x: [u64; 4]) -> [u64; 4] {
+        let mut res = [0, 0, 0, 0];
+        for i in 0..4 {
+            let y = x[i];
+            let mut ans = 0;
+            for j in 0..64 {
+                let bit = 1 << j;
+                if (y & bit) != 0 {
+                    ans = bit;
+                }
+            }
+            res[i] = ans;
+        }
+        res
+    }
+
+    fn iszero_naive(x: [u64; 4]) -> [u64; 4] {
+        let mut res = [0, 0, 0, 0];
+        for i in 0..4 {
+            let y = x[i];
+            let ans = if y == 0 { 0xffffffffffffffff } else { 0 };
+            res[i] = ans;
+        }
+        res
+    }
+
+    unsafe fn upper_bit_wrapper(x: [u64; 4]) -> [u64; 4] {
+        let x = _mm256_loadu_si256(&x as *const u64 as *const __m256i);
+        let y = upper_bit(x);
+        let mut z = [0; 4];
+        _mm256_storeu_si256(&mut z as *mut u64 as *mut __m256i, y);
+        z
+    }
+
+    unsafe fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
+        let x = _mm256_loadu_si256(&x as *const u64 as *const __m256i);
+        let y = iszero(x);
+        let mut z = [0; 4];
+        _mm256_storeu_si256(&mut z as *mut u64 as *mut __m256i, y);
+        z
+    }
+
+    #[test]
+    fn test_ops() {
+        // gen data
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+        const LENGTH: usize = 256;
+        let mut ary = [0u64; LENGTH];
+        for i in 0..LENGTH {
+            ary[i] = rng.gen::<u64>();
+        }
+        // upper_bit
+        for i in 0..=(LENGTH - 4) {
+            let a = &ary[i..(i + 4)];
+            assert_eq!(
+                unsafe { upper_bit_wrapper(a.try_into().unwrap()) },
+                upper_bit_naive(a.try_into().unwrap())
+            );
+        }
+        // iszero
+        for i in 0..=(LENGTH - 4) {
+            let a = &ary[i..(i + 4)];
+            assert_eq!(
+                unsafe { iszero_wrapper(a.try_into().unwrap()) },
+                iszero_naive(a.try_into().unwrap())
+            );
+        }
+    }
 }

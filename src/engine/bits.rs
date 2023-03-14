@@ -1,22 +1,5 @@
 use bitintr::{Pdep, Pext};
 use lazy_static::lazy_static;
-use packed_simd::*;
-
-pub fn upper_bit(mut x: u64x4) -> u64x4 {
-    x = x | (x >> 1);
-    x = x | (x >> 2);
-    x = x | (x >> 4);
-    x = x | (x >> 8);
-    x = x | (x >> 16);
-    x = x | (x >> 32);
-    let lowers: u64x4 = x >> 1;
-    x & !lowers
-}
-
-pub fn iszero(x: u64x4) -> u64x4 {
-    let zero = u64x4::new(0, 0, 0, 0);
-    u64x4::from_cast(x.eq(zero))
-}
 
 pub fn popcnt(x: u64) -> i8 {
     x.count_ones() as i8
@@ -93,32 +76,6 @@ mod tests {
     use super::*;
     use rand::{Rng, SeedableRng};
 
-    fn upper_bit_naive(x: u64x4) -> u64x4 {
-        let mut res = u64x4::splat(0);
-        for i in 0..4 {
-            let y = x.extract(i);
-            let mut ans = 0;
-            for j in 0..64 {
-                let bit = 1 << j;
-                if (y & bit) != 0 {
-                    ans = bit;
-                }
-            }
-            res = res.replace(i, ans);
-        }
-        res
-    }
-
-    fn iszero_naive(x: u64x4) -> u64x4 {
-        let mut res = u64x4::splat(0);
-        for i in 0..4 {
-            let y = x.extract(i);
-            let ans = if y == 0 { 0xffffffffffffffff } else { 0 };
-            res = res.replace(i, ans);
-        }
-        res
-    }
-
     fn flip_vertical_naive(x: u64) -> u64 {
         let mut res = 0;
         for r in 0..8 {
@@ -187,16 +144,6 @@ mod tests {
         let mut ary = [0u64; LENGTH];
         for i in 0..LENGTH {
             ary[i] = rng.gen::<u64>();
-        }
-        // upper_bit
-        for i in 0..=(LENGTH - 4) {
-            let a = u64x4::from_slice_unaligned(&ary[i..(i + 4)]);
-            assert_eq!(upper_bit(a), upper_bit_naive(a));
-        }
-        // iszero
-        for i in 0..=(LENGTH - 4) {
-            let a = u64x4::from_slice_unaligned(&ary[i..(i + 4)]);
-            assert_eq!(iszero(a), iszero_naive(a));
         }
         // flip_vertical
         for a in ary.iter() {
