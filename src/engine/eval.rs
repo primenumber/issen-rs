@@ -1,5 +1,6 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
+use core::arch::x86_64::*;
 use std::cmp::max;
 use std::fs::File;
 use std::io::Read;
@@ -239,6 +240,7 @@ impl Evaluator {
                 }
             }
         }
+        eprintln!("{}", result.len());
         result
     }
 
@@ -279,7 +281,7 @@ impl Evaluator {
             base3[i] = sum;
         }
 
-        let params = smoothed_weights
+        let params: Vec<_> = smoothed_weights
             .iter()
             .enumerate()
             .map(|(i, w)| {
@@ -289,10 +291,13 @@ impl Evaluator {
             })
             .collect();
 
+        let line_to_indices =
+            Self::generate_indices_table(&params.first().unwrap().patterns, &base3);
+
         Evaluator {
             stones_range: config.stones_range,
             params,
-            line_to_indices: Self::generate_indices_table(&patterns, &base3),
+            line_to_indices,
             base3,
         }
     }
@@ -308,15 +313,57 @@ impl Evaluator {
         }) as i16
     }
 
-    pub fn eval(&self, board: Board) -> i16 {
+    unsafe fn eval_impl(&self, board: Board) -> i32 {
         let rem: usize = popcnt(board.empty()) as usize;
         let stones = (BOARD_SIZE - rem)
             .max(*self.stones_range.start() as usize)
             .min(*self.stones_range.end() as usize);
         let param_index = stones - *self.stones_range.start() as usize;
         let param = &self.params[param_index];
-        let score = param.eval(board, &self.base3) as i32;
-        Self::smooth_val(score)
+        let mut idx0 = _mm256_setzero_si256();
+        let mut idx1 = _mm256_setzero_si256();
+        let mut idx2 = _mm256_setzero_si256();
+        for row in 0..8 {
+            let pidx = ((board.player >> (row * 8)) & 0xff) as usize;
+            let oidx = ((board.opponent >> (row * 8)) & 0xff) as usize;
+            let vp0 = _mm256_loadu_si256(
+                &self.line_to_indices[48 * (pidx + 256 * row)] as *const u16 as *const __m256i,
+            );
+            let vp1 = _mm256_loadu_si256(
+                &self.line_to_indices[48 * (pidx + 256 * row) + 16] as *const u16 as *const __m256i,
+            );
+            let vp2 = _mm256_loadu_si256(
+                &self.line_to_indices[48 * (pidx + 256 * row) + 32] as *const u16 as *const __m256i,
+            );
+            let vo0 = _mm256_loadu_si256(
+                &self.line_to_indices[48 * (oidx + 256 * row)] as *const u16 as *const __m256i,
+            );
+            let vo1 = _mm256_loadu_si256(
+                &self.line_to_indices[48 * (oidx + 256 * row) + 16] as *const u16 as *const __m256i,
+            );
+            let vo2 = _mm256_loadu_si256(
+                &self.line_to_indices[48 * (oidx + 256 * row) + 32] as *const u16 as *const __m256i,
+            );
+            idx0 = _mm256_add_epi16(_mm256_add_epi16(idx0, vp0), _mm256_add_epi16(vo0, vo0));
+            idx1 = _mm256_add_epi16(_mm256_add_epi16(idx1, vp1), _mm256_add_epi16(vo1, vo1));
+            idx2 = _mm256_add_epi16(_mm256_add_epi16(idx2, vp2), _mm256_add_epi16(vo2, vo2));
+        }
+        let mut indices = [0u16; 48];
+        _mm256_storeu_si256(&mut indices[0] as *mut u16 as *mut __m256i, idx0);
+        _mm256_storeu_si256(&mut indices[16] as *mut u16 as *mut __m256i, idx1);
+        _mm256_storeu_si256(&mut indices[32] as *mut u16 as *mut __m256i, idx2);
+        let mut score = param.constant_score;
+        score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
+        score += param.o_mobility_score * popcnt(board.pass().mobility_bits()) as i16;
+        for i in 0..46 {
+            let index = indices[i] as usize + param.offsets[i];
+            score += param.pattern_weights[index];
+        }
+        score as i32
+    }
+
+    pub fn eval(&self, board: Board) -> i16 {
+        Self::smooth_val(unsafe { self.eval_impl(board) })
     }
 }
 
