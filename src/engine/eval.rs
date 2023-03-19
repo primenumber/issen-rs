@@ -40,7 +40,7 @@ impl EvaluatorConfig {
 struct Parameters {
     pattern_weights: Vec<i16>,
     patterns: Vec<u64>,
-    offsets: Vec<usize>,
+    offsets: Vec<u32>,
     p_mobility_score: i16,
     o_mobility_score: i16,
     parity_score: i16,
@@ -127,10 +127,13 @@ impl Parameters {
         let mut offsets = Vec::new();
         let mut offset = 0;
         for (pattern, ex_weights) in v {
-            offsets.push(offset);
+            offsets.push(offset as u32);
             offset += ex_weights.len();
             pattern_weights.extend(ex_weights);
             patterns.push(pattern);
+        }
+        while offsets.len() % 16 != 0 {
+            offsets.push(offset as u32);
         }
         let non_patterns_offset = *orig_offsets.last().unwrap();
         Some(Parameters {
@@ -157,7 +160,7 @@ impl Parameters {
             let pidx = pext(board.player, pattern) as usize;
             let oidx = pext(board.opponent, pattern) as usize;
             let windex = b3conv[pidx] + b3conv[oidx] * 2;
-            result += self.pattern_weights[windex + self.offsets[i]];
+            result += self.pattern_weights[windex + self.offsets[i] as usize];
         }
         result += self.p_mobility_score * popcnt(board.mobility_bits()) as i16;
         result += self.o_mobility_score * popcnt(board.pass().mobility_bits()) as i16;
@@ -313,13 +316,15 @@ impl Evaluator {
         }) as i16
     }
 
-    unsafe fn eval_impl(&self, board: Board) -> i32 {
-        let rem: usize = popcnt(board.empty()) as usize;
-        let stones = (BOARD_SIZE - rem)
-            .max(*self.stones_range.start() as usize)
-            .min(*self.stones_range.end() as usize);
-        let param_index = stones - *self.stones_range.start() as usize;
-        let param = &self.params[param_index];
+    unsafe fn gather_weight(param: &Parameters, offset: __m256i) -> __m256i {
+        let vmask = _mm256_set1_epi32(0x0000ffff);
+        _mm256_and_si256(
+            vmask,
+            _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2),
+        )
+    }
+
+    unsafe fn feature_indices(&self, board: Board) -> (__m256i, __m256i, __m256i) {
         let mut idx0 = _mm256_setzero_si256();
         let mut idx1 = _mm256_setzero_si256();
         let mut idx2 = _mm256_setzero_si256();
@@ -348,18 +353,71 @@ impl Evaluator {
             idx1 = _mm256_add_epi16(_mm256_add_epi16(idx1, vp1), _mm256_add_epi16(vo1, vo1));
             idx2 = _mm256_add_epi16(_mm256_add_epi16(idx2, vp2), _mm256_add_epi16(vo2, vo2));
         }
-        let mut indices = [0u16; 48];
-        _mm256_storeu_si256(&mut indices[0] as *mut u16 as *mut __m256i, idx0);
-        _mm256_storeu_si256(&mut indices[16] as *mut u16 as *mut __m256i, idx1);
-        _mm256_storeu_si256(&mut indices[32] as *mut u16 as *mut __m256i, idx2);
-        let mut score = param.constant_score;
+        (idx0, idx1, idx2)
+    }
+
+    unsafe fn eval_impl(&self, board: Board) -> i32 {
+        let rem: usize = popcnt(board.empty()) as usize;
+        let stones = (BOARD_SIZE - rem)
+            .max(*self.stones_range.start() as usize)
+            .min(*self.stones_range.end() as usize);
+        let param_index = stones - *self.stones_range.start() as usize;
+        let param = &self.params[param_index];
+        let mut score = param.constant_score as i16;
         score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
         score += param.o_mobility_score * popcnt(board.pass().mobility_bits()) as i16;
-        for i in 0..46 {
-            let index = indices[i] as usize + param.offsets[i];
-            score += param.pattern_weights[index];
-        }
-        score as i32
+        let mut score = score as i32;
+        const MM_PERM_ACBD: i32 = 0b11011000;
+        let (idx0, idx1, idx2) = self.feature_indices(board);
+        let idx0_p = _mm256_permute4x64_epi64(idx0, MM_PERM_ACBD);
+        let idx1_p = _mm256_permute4x64_epi64(idx1, MM_PERM_ACBD);
+        let idx2_p = _mm256_permute4x64_epi64(idx2, MM_PERM_ACBD);
+        let idxh0 = _mm256_unpacklo_epi16(idx0_p, _mm256_setzero_si256());
+        let idxh1 = _mm256_unpackhi_epi16(idx0_p, _mm256_setzero_si256());
+        let idxh2 = _mm256_unpacklo_epi16(idx1_p, _mm256_setzero_si256());
+        let idxh3 = _mm256_unpackhi_epi16(idx1_p, _mm256_setzero_si256());
+        let idxh4 = _mm256_unpacklo_epi16(idx2_p, _mm256_setzero_si256());
+        let idxh5 = _mm256_unpackhi_epi16(idx2_p, _mm256_setzero_si256());
+        let ofs0 = _mm256_add_epi32(
+            idxh0,
+            _mm256_loadu_si256(&param.offsets[0] as *const u32 as *const __m256i),
+        );
+        let ofs1 = _mm256_add_epi32(
+            idxh1,
+            _mm256_loadu_si256(&param.offsets[8] as *const u32 as *const __m256i),
+        );
+        let ofs2 = _mm256_add_epi32(
+            idxh2,
+            _mm256_loadu_si256(&param.offsets[16] as *const u32 as *const __m256i),
+        );
+        let ofs3 = _mm256_add_epi32(
+            idxh3,
+            _mm256_loadu_si256(&param.offsets[24] as *const u32 as *const __m256i),
+        );
+        let ofs4 = _mm256_add_epi32(
+            idxh4,
+            _mm256_loadu_si256(&param.offsets[32] as *const u32 as *const __m256i),
+        );
+        let ofs5 = _mm256_add_epi32(
+            idxh5,
+            _mm256_loadu_si256(&param.offsets[40] as *const u32 as *const __m256i),
+        );
+        let vw0 = Self::gather_weight(param, ofs0);
+        let vw1 = Self::gather_weight(param, ofs1);
+        let vw2 = Self::gather_weight(param, ofs2);
+        let vw3 = Self::gather_weight(param, ofs3);
+        let vw4 = Self::gather_weight(param, ofs4);
+        let vw5 = Self::gather_weight(param, ofs5);
+        let sum0 = _mm256_add_epi16(vw0, vw1);
+        let sum1 = _mm256_add_epi16(vw2, vw3);
+        let sum2 = _mm256_add_epi16(vw4, vw5);
+        let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
+        let sum_h = _mm256_hadd_epi16(sum, _mm256_setzero_si256());
+        let sum_h = _mm256_hadd_epi16(sum_h, _mm256_setzero_si256());
+        let sum_h = _mm256_hadd_epi16(sum_h, _mm256_setzero_si256());
+        score += _mm256_extract_epi16(sum_h, 0) as u16 as i16 as i32;
+        score += _mm256_extract_epi16(sum_h, 8) as u16 as i16 as i32;
+        score
     }
 
     pub fn eval(&self, board: Board) -> i16 {
