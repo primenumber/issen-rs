@@ -134,9 +134,7 @@ impl Searcher {
                     DEPTH_SCALE
                 };
                 let next_depth = max(2 * DEPTH_SCALE, depth - reduce);
-                let tmp = -self
-                    .think(next, -alpha - 1, -alpha, false, next_depth)?
-                    .0;
+                let tmp = -self.think(next, -alpha - 1, -alpha, false, next_depth)?.0;
                 if tmp > res {
                     res = tmp;
                     best = Some(pos);
