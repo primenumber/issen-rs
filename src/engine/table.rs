@@ -1,9 +1,9 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::hand::*;
+use crc64::Crc64;
 use spin::Mutex;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -177,18 +177,21 @@ impl<T: CacheElement> CacheTable<T> {
     }
 
     pub fn get(&mut self, board: Board) -> Option<T> {
-        let mut hasher = DefaultHasher::new();
-        board.hash(&mut hasher);
-        let hash = hasher.finish();
+        let mut crc64 = Crc64::new();
+        crc64.write(&board.player.to_le_bytes()).unwrap();
+        crc64.write(&board.opponent.to_le_bytes()).unwrap();
+        let hash = crc64.get();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
         self.arrays[bucket_id].lock().get(board, bucket_hash)
     }
 
     pub fn update(&mut self, cache: T) {
-        let mut hasher = DefaultHasher::new();
-        cache.get_key().hash(&mut hasher);
-        let hash = hasher.finish();
+        let mut crc64 = Crc64::new();
+        let board = cache.get_key();
+        crc64.write(&board.player.to_le_bytes()).unwrap();
+        crc64.write(&board.opponent.to_le_bytes()).unwrap();
+        let hash = crc64.get();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
         self.arrays[bucket_id]
