@@ -167,7 +167,7 @@ fn ffo_benchmark() {
         ybwc_younger_add: 2,
         ybwc_empties_limit: 18,
         eval_ordering_limit: 15,
-        res_cache_limit: 11,
+        res_cache_limit: 9,
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
