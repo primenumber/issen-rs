@@ -315,14 +315,6 @@ impl Evaluator {
         }) as i16
     }
 
-    unsafe fn gather_weight(param: &Parameters, offset: __m256i) -> __m256i {
-        let vmask = _mm256_set1_epi32(0x0000ffff);
-        _mm256_and_si256(
-            vmask,
-            _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2),
-        )
-    }
-
     unsafe fn feature_indices(&self, board: Board) -> (__m256i, __m256i, __m256i) {
         let mut idx0 = _mm256_setzero_si256();
         let mut idx1 = _mm256_setzero_si256();
@@ -389,12 +381,19 @@ impl Evaluator {
         let ofs3 = add_offset(param, idxh3, 24);
         let ofs4 = add_offset(param, idxh4, 32);
         let ofs5 = add_offset(param, idxh5, 40);
-        let vw0 = Self::gather_weight(param, ofs0);
-        let vw1 = Self::gather_weight(param, ofs1);
-        let vw2 = Self::gather_weight(param, ofs2);
-        let vw3 = Self::gather_weight(param, ofs3);
-        let vw4 = Self::gather_weight(param, ofs4);
-        let vw5 = Self::gather_weight(param, ofs5);
+        unsafe fn gather_weight(param: &Parameters, offset: __m256i) -> __m256i {
+            let vmask = _mm256_set1_epi32(0x0000ffff);
+            _mm256_and_si256(
+                vmask,
+                _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2),
+            )
+        }
+        let vw0 = gather_weight(param, ofs0);
+        let vw1 = gather_weight(param, ofs1);
+        let vw2 = gather_weight(param, ofs2);
+        let vw3 = gather_weight(param, ofs3);
+        let vw4 = gather_weight(param, ofs4);
+        let vw5 = gather_weight(param, ofs5);
         let sum0 = _mm256_add_epi16(vw0, vw1);
         let sum1 = _mm256_add_epi16(vw2, vw3);
         let sum2 = _mm256_add_epi16(vw4, vw5);
