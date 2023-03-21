@@ -369,34 +369,22 @@ impl Evaluator {
         let (idxh0, idxh1) = unpack_idx(idx0);
         let (idxh2, idxh3) = unpack_idx(idx1);
         let (idxh4, idxh5) = unpack_idx(idx2);
-        unsafe fn add_offset(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
-            _mm256_add_epi32(
+        unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
+            let offset = _mm256_add_epi32(
                 idx,
                 _mm256_loadu_si256(&param.offsets[start] as *const u32 as *const __m256i),
-            )
+            );
+            _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
         }
-        let ofs0 = add_offset(param, idxh0, 0);
-        let ofs1 = add_offset(param, idxh1, 8);
-        let ofs2 = add_offset(param, idxh2, 16);
-        let ofs3 = add_offset(param, idxh3, 24);
-        let ofs4 = add_offset(param, idxh4, 32);
-        let ofs5 = add_offset(param, idxh5, 40);
-        unsafe fn gather_weight(param: &Parameters, offset: __m256i) -> __m256i {
-            let vmask = _mm256_set1_epi32(0x0000ffff);
-            _mm256_and_si256(
-                vmask,
-                _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2),
-            )
-        }
-        let vw0 = gather_weight(param, ofs0);
-        let vw1 = gather_weight(param, ofs1);
-        let vw2 = gather_weight(param, ofs2);
-        let vw3 = gather_weight(param, ofs3);
-        let vw4 = gather_weight(param, ofs4);
-        let vw5 = gather_weight(param, ofs5);
-        let sum0 = _mm256_add_epi16(vw0, vw1);
-        let sum1 = _mm256_add_epi16(vw2, vw3);
-        let sum2 = _mm256_add_epi16(vw4, vw5);
+        let vw0 = gather_weight(param, idxh0, 0);
+        let vw1 = gather_weight(param, idxh1, 8);
+        let vw2 = gather_weight(param, idxh2, 16);
+        let vw3 = gather_weight(param, idxh3, 24);
+        let vw4 = gather_weight(param, idxh4, 32);
+        let vw5 = gather_weight(param, idxh5, 40);
+        let sum0 = _mm256_blend_epi16(vw0, _mm256_slli_epi32(vw1, 16), 0b10101010);
+        let sum1 = _mm256_blend_epi16(vw2, _mm256_slli_epi32(vw3, 16), 0b10101010);
+        let sum2 = _mm256_blend_epi16(vw4, _mm256_slli_epi32(vw5, 16), 0b10101010);
         let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
         let sum_h = _mm256_hadd_epi16(sum, _mm256_setzero_si256());
         let sum_h = _mm256_hadd_epi16(sum_h, _mm256_setzero_si256());
