@@ -243,7 +243,6 @@ impl Evaluator {
                 }
             }
         }
-        eprintln!("{}", result.len());
         result
     }
 
