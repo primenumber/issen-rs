@@ -369,39 +369,27 @@ impl Evaluator {
         let mut score = score as i32;
         const MM_PERM_ACBD: i32 = 0b11011000;
         let (idx0, idx1, idx2) = self.feature_indices(board);
-        let idx0_p = _mm256_permute4x64_epi64(idx0, MM_PERM_ACBD);
-        let idx1_p = _mm256_permute4x64_epi64(idx1, MM_PERM_ACBD);
-        let idx2_p = _mm256_permute4x64_epi64(idx2, MM_PERM_ACBD);
-        let idxh0 = _mm256_unpacklo_epi16(idx0_p, _mm256_setzero_si256());
-        let idxh1 = _mm256_unpackhi_epi16(idx0_p, _mm256_setzero_si256());
-        let idxh2 = _mm256_unpacklo_epi16(idx1_p, _mm256_setzero_si256());
-        let idxh3 = _mm256_unpackhi_epi16(idx1_p, _mm256_setzero_si256());
-        let idxh4 = _mm256_unpacklo_epi16(idx2_p, _mm256_setzero_si256());
-        let idxh5 = _mm256_unpackhi_epi16(idx2_p, _mm256_setzero_si256());
-        let ofs0 = _mm256_add_epi32(
-            idxh0,
-            _mm256_loadu_si256(&param.offsets[0] as *const u32 as *const __m256i),
-        );
-        let ofs1 = _mm256_add_epi32(
-            idxh1,
-            _mm256_loadu_si256(&param.offsets[8] as *const u32 as *const __m256i),
-        );
-        let ofs2 = _mm256_add_epi32(
-            idxh2,
-            _mm256_loadu_si256(&param.offsets[16] as *const u32 as *const __m256i),
-        );
-        let ofs3 = _mm256_add_epi32(
-            idxh3,
-            _mm256_loadu_si256(&param.offsets[24] as *const u32 as *const __m256i),
-        );
-        let ofs4 = _mm256_add_epi32(
-            idxh4,
-            _mm256_loadu_si256(&param.offsets[32] as *const u32 as *const __m256i),
-        );
-        let ofs5 = _mm256_add_epi32(
-            idxh5,
-            _mm256_loadu_si256(&param.offsets[40] as *const u32 as *const __m256i),
-        );
+        unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
+            let permed = _mm256_permute4x64_epi64(idx, MM_PERM_ACBD);
+            let lo = _mm256_unpacklo_epi16(permed, _mm256_setzero_si256());
+            let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
+            (lo, hi)
+        }
+        let (idxh0, idxh1) = unpack_idx(idx0);
+        let (idxh2, idxh3) = unpack_idx(idx1);
+        let (idxh4, idxh5) = unpack_idx(idx2);
+        unsafe fn add_offset(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
+            _mm256_add_epi32(
+                idx,
+                _mm256_loadu_si256(&param.offsets[start] as *const u32 as *const __m256i),
+            )
+        }
+        let ofs0 = add_offset(param, idxh0, 0);
+        let ofs1 = add_offset(param, idxh1, 8);
+        let ofs2 = add_offset(param, idxh2, 16);
+        let ofs3 = add_offset(param, idxh3, 24);
+        let ofs4 = add_offset(param, idxh4, 32);
+        let ofs5 = add_offset(param, idxh5, 40);
         let vw0 = Self::gather_weight(param, ofs0);
         let vw1 = Self::gather_weight(param, ofs1);
         let vw2 = Self::gather_weight(param, ofs2);
