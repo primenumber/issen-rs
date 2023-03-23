@@ -64,6 +64,7 @@ impl Parameters {
         }
         indices
     }
+
     fn expand_weights_by_d4(
         weights: &[i16],
         pattern: u64,
@@ -153,26 +154,12 @@ impl Parameters {
         }
         self.parity_score = 0;
     }
-
-    fn eval(&self, board: Board, b3conv: &[usize]) -> i16 {
-        let mut result = self.constant_score;
-        for (i, &pattern) in self.patterns.iter().enumerate() {
-            let pidx = pext(board.player, pattern) as usize;
-            let oidx = pext(board.opponent, pattern) as usize;
-            let windex = b3conv[pidx] + b3conv[oidx] * 2;
-            result += self.pattern_weights[windex + self.offsets[i] as usize];
-        }
-        result += self.p_mobility_score * popcnt(board.mobility_bits()) as i16;
-        result += self.o_mobility_score * popcnt(board.pass().mobility_bits()) as i16;
-        result
-    }
 }
 
 pub struct Evaluator {
     stones_range: RangeInclusive<i8>,
     params: Vec<Parameters>,
     line_to_indices: Vec<u16>,
-    base3: Vec<usize>,
 }
 
 fn pow3(x: i8) -> usize {
@@ -191,7 +178,7 @@ impl Evaluator {
     fn load_weight(path: &Path, length: usize) -> Option<Vec<i16>> {
         let mut value_file = File::open(path).ok()?;
         let mut buf = vec![0u8; length * 8];
-        value_file.read(&mut buf).ok()?;
+        value_file.read_exact(&mut buf).ok()?;
         let mut v = Vec::with_capacity(length);
         for i in 0usize..length {
             let mut ary: [u8; 8] = Default::default();
@@ -255,7 +242,7 @@ impl Evaluator {
         let mut length: usize = 0;
         let mut max_bits = 0;
         for pattern_str in config.masks.iter() {
-            let bits = u64::from_str_radix(&pattern_str, 2).unwrap();
+            let bits = u64::from_str_radix(pattern_str, 2).unwrap();
             patterns.push(bits);
             offsets.push(length);
             length += pow3(popcnt(bits));
@@ -273,14 +260,14 @@ impl Evaluator {
         let smoothed_weights = Self::smooth_weight(&weights, length, 1);
 
         let mut base3 = vec![0; 1 << max_bits];
-        for i in 0usize..(1usize << max_bits) {
+        for (i, item) in base3.iter_mut().enumerate() {
             let mut sum = 0;
             for j in 0..max_bits {
                 if ((i >> j) & 1) != 0 {
                     sum += pow3(j);
                 }
             }
-            base3[i] = sum;
+            *item = sum;
         }
 
         let params: Vec<_> = smoothed_weights
@@ -300,7 +287,6 @@ impl Evaluator {
             stones_range: config.stones_range,
             params,
             line_to_indices,
-            base3,
         }
     }
 
@@ -354,7 +340,7 @@ impl Evaluator {
             .min(*self.stones_range.end() as usize);
         let param_index = stones - *self.stones_range.start() as usize;
         let param = &self.params[param_index];
-        let mut score = param.constant_score as i16;
+        let mut score = param.constant_score;
         score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
         score += param.o_mobility_score * popcnt(board.pass().mobility_bits()) as i16;
         let mut score = score as i32;
