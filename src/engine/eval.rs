@@ -386,11 +386,14 @@ impl Evaluator {
         let sum1 = _mm256_blend_epi16(vw2, _mm256_slli_epi32(vw3, 16), 0b10101010);
         let sum2 = _mm256_blend_epi16(vw4, _mm256_slli_epi32(vw5, 16), 0b10101010);
         let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
-        let sum_h = _mm256_hadd_epi16(sum, _mm256_setzero_si256());
-        let sum_h = _mm256_hadd_epi16(sum_h, _mm256_setzero_si256());
-        let sum_h = _mm256_hadd_epi16(sum_h, _mm256_setzero_si256());
-        score += _mm256_extract_epi16(sum_h, 0) as u16 as i16 as i32;
-        score += _mm256_extract_epi16(sum_h, 8) as u16 as i16 as i32;
+        let sum = _mm_add_epi16(
+            _mm256_castsi256_si128(sum),
+            _mm256_extracti128_si256(sum, 1),
+        );
+        let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+        let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+        let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+        score += _mm_cvtsi128_si32(sum) as u16 as i16 as i32;
         score
     }
 
