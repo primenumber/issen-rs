@@ -153,8 +153,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
             let nps = (searcher.node_count as f64 / secs) as u64;
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}, NPS: {}",
-                score, depth, searcher.node_count,
-                nps
+                score, depth, searcher.node_count, nps
             );
             best
         } else {
