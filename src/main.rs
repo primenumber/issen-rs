@@ -11,6 +11,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::last_flip_cache::*;
 use crate::engine::remote::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
@@ -81,6 +82,7 @@ fn solve_ffo(
     evaluator: Arc<Evaluator>,
     res_cache: &mut ResCacheTable,
     eval_cache: &mut EvalCacheTable,
+    last_flip_cache: Arc<LastFlipCache>,
 ) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
@@ -98,6 +100,7 @@ fn solve_ffo(
                     res_cache.clone(),
                     eval_cache.clone(),
                     evaluator.clone(),
+                    last_flip_cache.clone(),
                     search_params.clone(),
                 );
                 let (res, best, stat) = solve(
@@ -176,6 +179,7 @@ fn ffo_benchmark() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
     let mut index: usize = 1;
     let mut stats = Vec::new();
     //stats.extend(solve_ffo(
@@ -201,6 +205,7 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
+        last_flip_cache.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
@@ -209,6 +214,7 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
+        last_flip_cache.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
@@ -217,6 +223,7 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
+        last_flip_cache.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
@@ -225,6 +232,7 @@ fn ffo_benchmark() {
         evaluator.clone(),
         &mut res_cache,
         &mut eval_cache,
+        last_flip_cache.clone(),
     ));
     report_stats(&stats);
 }

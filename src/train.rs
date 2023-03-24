@@ -2,6 +2,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::last_flip_cache::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
@@ -210,6 +211,7 @@ pub fn update_record(matches: &ArgMatches) {
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
     let evaluator = Arc::new(Evaluator::new("table"));
+    let last_flip_cache = Arc::new(LastFlipCache::new());
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 10,
@@ -231,6 +233,7 @@ pub fn update_record(matches: &ArgMatches) {
             res_cache.clone(),
             eval_cache.clone(),
             evaluator.clone(),
+            last_flip_cache.clone(),
             search_params.clone(),
         );
         let mut input_line = String::new();

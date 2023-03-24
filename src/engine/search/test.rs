@@ -136,6 +136,7 @@ fn test_solve_inner() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 256);
     let eval_cache = EvalCacheTable::new(256, 256);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 0,
@@ -158,6 +159,7 @@ fn test_solve_inner() {
                     res_cache.clone(),
                     eval_cache.clone(),
                     evaluator.clone(),
+                    last_flip_cache.clone(),
                     search_params.clone(),
                 );
                 let (res, _stat) = solve_inner(

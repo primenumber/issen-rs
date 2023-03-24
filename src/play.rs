@@ -2,6 +2,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::last_flip_cache::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
@@ -39,6 +40,7 @@ pub fn play(matches: &ArgMatches) -> Board {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -84,6 +86,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                     res_cache.clone(),
                     eval_cache.clone(),
                     evaluator.clone(),
+                    last_flip_cache.clone(),
                     search_params.clone(),
                 );
                 let sem = Arc::new(Semaphore::new(1024));
@@ -125,6 +128,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -161,6 +165,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 res_cache.clone(),
                 eval_cache.clone(),
                 evaluator.clone(),
+                last_flip_cache.clone(),
                 search_params.clone(),
             );
             let sem = Arc::new(Semaphore::new(1024));
@@ -303,7 +308,14 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
-    let obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
+    let obj = SolveObj::new(
+        res_cache,
+        eval_cache,
+        evaluator,
+        last_flip_cache,
+        search_params,
+    );
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -349,6 +361,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let mut res_cache = ResCacheTable::new(256, 65536);
     let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
@@ -427,6 +440,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 res_cache.clone(),
                 eval_cache.clone(),
                 evaluator.clone(),
+                last_flip_cache.clone(),
                 search_params.clone(),
             );
             let sem = Arc::new(Semaphore::new(1024));

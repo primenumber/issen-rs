@@ -1,5 +1,6 @@
 use crate::engine::board::*;
 use crate::engine::eval::*;
+use crate::engine::last_flip_cache::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;
@@ -71,7 +72,14 @@ async fn worker_body() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = ResCacheTable::new(256, 65536);
     let eval_cache = EvalCacheTable::new(256, 65536);
-    let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
+    let last_flip_cache = Arc::new(LastFlipCache::new());
+    let solve_obj = SolveObj::new(
+        res_cache,
+        eval_cache,
+        evaluator,
+        last_flip_cache,
+        search_params,
+    );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 7733));
 

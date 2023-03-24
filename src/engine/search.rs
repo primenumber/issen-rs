@@ -4,6 +4,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::last_flip_cache::*;
 use crate::engine::remote::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
@@ -40,6 +41,7 @@ pub struct SolveObj {
     pub res_cache: ResCacheTable,
     pub eval_cache: EvalCacheTable,
     pub evaluator: Arc<Evaluator>,
+    pub last_flip_cache: Arc<LastFlipCache>,
     params: SearchParams,
 }
 
@@ -79,33 +81,55 @@ impl SolveObj {
         res_cache: ResCacheTable,
         eval_cache: EvalCacheTable,
         evaluator: Arc<Evaluator>,
+        last_flip_cache: Arc<LastFlipCache>,
         params: SearchParams,
     ) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
+            last_flip_cache,
             params,
         }
     }
 }
 
-fn near_leaf(board: Board) -> (i8, SolveStat) {
-    let bit = board.empty();
-    let pos = bit.tzcnt() as usize;
-    match board.play(pos) {
-        Ok(next) => (-next.score(), SolveStat::one()),
-        Err(_) => (
-            match board.pass().play(pos) {
-                Ok(next) => next.score(),
-                Err(_) => board.score(),
-            },
-            SolveStat {
-                node_count: 2,
-                st_cut_count: 0,
-            },
-        ),
-    }
+fn near_leaf(solve_obj: &SolveObj, board: Board) -> (i8, SolveStat) {
+    let flip_count = solve_obj.last_flip_cache.flip_count(board);
+    let pcnt = popcnt(board.player);
+    let ocnt = popcnt(board.opponent);
+    let (final_p, final_o, stat) = if flip_count > 0 {
+        (pcnt + flip_count + 1, ocnt - flip_count, SolveStat::one())
+    } else {
+        let flip_count = solve_obj.last_flip_cache.flip_count(board.pass());
+        if flip_count == 0 {
+            (
+                pcnt,
+                ocnt,
+                SolveStat {
+                    node_count: 2,
+                    st_cut_count: 0,
+                },
+            )
+        } else {
+            (
+                pcnt - flip_count,
+                ocnt + flip_count + 1,
+                SolveStat {
+                    node_count: 2,
+                    st_cut_count: 0,
+                },
+            )
+        }
+    };
+    let score = if final_p == final_o {
+        0
+    } else if final_p > final_o {
+        64 - 2 * final_o
+    } else {
+        2 * final_p - 64
+    };
+    (score, stat)
 }
 
 fn naive(
@@ -561,7 +585,7 @@ pub fn solve_inner(
     if rem == 0 {
         (board.score(), SolveStat::zero())
     } else if rem == 1 {
-        near_leaf(board)
+        near_leaf(solve_obj, board)
     } else if rem < solve_obj.params.static_ordering_limit {
         naive(solve_obj, board, alpha, beta, passed)
     } else if rem < solve_obj.params.ffs_ordering_limit {

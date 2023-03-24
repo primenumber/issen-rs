@@ -2,6 +2,7 @@ pub mod bits;
 pub mod board;
 pub mod eval;
 pub mod hand;
+pub mod last_flip_cache;
 pub mod remote;
 pub mod search;
 pub mod table;
