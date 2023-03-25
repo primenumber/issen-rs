@@ -95,32 +95,29 @@ impl SolveObj {
 }
 
 fn near_leaf(solve_obj: &SolveObj, board: Board) -> (i8, SolveStat) {
-    let flip_count = solve_obj.last_flip_cache.flip_count(board);
+    let (flip_p, flip_o) = solve_obj.last_flip_cache.flip_count(board);
     let pcnt = popcnt(board.player);
     let ocnt = popcnt(board.opponent);
-    let (final_p, final_o, stat) = if flip_count > 0 {
-        (pcnt + flip_count + 1, ocnt - flip_count, SolveStat::one())
+    let (final_p, final_o, stat) = if flip_p > 0 {
+        (pcnt + flip_p + 1, ocnt - flip_p, SolveStat::one())
+    } else if flip_o == 0 {
+        (
+            pcnt,
+            ocnt,
+            SolveStat {
+                node_count: 2,
+                st_cut_count: 0,
+            },
+        )
     } else {
-        let flip_count = solve_obj.last_flip_cache.flip_count(board.pass());
-        if flip_count == 0 {
-            (
-                pcnt,
-                ocnt,
-                SolveStat {
-                    node_count: 2,
-                    st_cut_count: 0,
-                },
-            )
-        } else {
-            (
-                pcnt - flip_count,
-                ocnt + flip_count + 1,
-                SolveStat {
-                    node_count: 2,
-                    st_cut_count: 0,
-                },
-            )
-        }
+        (
+            pcnt - flip_o,
+            ocnt + flip_o + 1,
+            SolveStat {
+                node_count: 2,
+                st_cut_count: 0,
+            },
+        )
     };
     let score = if final_p == final_o {
         0
