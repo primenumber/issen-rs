@@ -138,8 +138,8 @@ pub fn load_records(input_path: &str) -> Vec<Vec<Board>> {
 }
 
 pub fn clean_record(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let in_f = File::open(input_path).unwrap();
     let mut reader = BufReader::new(in_f);
@@ -196,9 +196,9 @@ pub async fn create_record_by_solve(
 }
 
 pub fn update_record(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let depth = matches.value_of("DEPTH").unwrap().parse().unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let depth = *matches.get_one::<usize>("DEPTH").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let in_f = File::open(input_path).unwrap();
     let mut reader = BufReader::new(in_f);
@@ -273,9 +273,9 @@ pub fn update_record(matches: &ArgMatches) {
 }
 
 pub fn gen_dataset(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
-    let max_output = matches.value_of("MAX_OUT").unwrap().parse().unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let max_output = *matches.get_one::<usize>("MAX_OUT").unwrap();
 
     eprintln!("Parse input...");
     let in_f = File::open(input_path).unwrap();
@@ -471,11 +471,11 @@ const PATTERNS_LARGE: [u64; 10] = [
 ];
 
 pub fn train(matches: &ArgMatches) -> Option<()> {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
-    let range_min = matches.value_of("from").unwrap().parse::<i8>().unwrap();
-    let range_max = matches.value_of("to").unwrap().parse::<i8>().unwrap();
-    let width = matches.value_of("width").unwrap().parse::<i8>().unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let range_min = *matches.get_one::<i8>("from").unwrap();
+    let range_max = *matches.get_one::<i8>("to").unwrap();
+    let width = matches.get_one::<i8>("width").unwrap();
 
     let in_f = File::open(input_path).ok()?;
     let mut reader = BufReader::new(in_f);
@@ -527,8 +527,8 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
 }
 
 pub fn binarize_weights(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let in_f = File::open(input_path).unwrap();
     let mut reader = BufReader::new(in_f);
@@ -549,8 +549,8 @@ pub fn binarize_weights(matches: &ArgMatches) {
 }
 
 pub fn pack_weights(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let in_f = File::open(input_path).unwrap();
     let mut reader = BufReader::new(in_f);
@@ -593,7 +593,7 @@ pub fn pack_weights(matches: &ArgMatches) {
 }
 
 pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
-    let input_path = matches.value_of("INPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
 
     let in_f = File::open(input_path).ok()?;
     let mut reader = BufReader::new(in_f);

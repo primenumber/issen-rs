@@ -105,7 +105,7 @@ pub fn compress(data: &[i16]) -> Vec<bool> {
 }
 
 pub fn gen_last_table(matches: &ArgMatches) {
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
@@ -130,7 +130,7 @@ pub fn gen_last_table(matches: &ArgMatches) {
 }
 
 pub fn gen_last_mask(matches: &ArgMatches) {
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);

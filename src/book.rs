@@ -194,8 +194,8 @@ fn minimax_record_body(boards_set: &Vec<HashSet<Board>>) -> HashMap<Board, (i8, 
 }
 
 pub fn minimax_record(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let boards_set = load_records_from_file(input_path);
     let boards_with_results_all = minimax_record_body(&boards_set);
@@ -218,8 +218,8 @@ pub fn minimax_record(matches: &ArgMatches) {
 }
 
 pub fn iterative_update_book(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let mut boards_set = load_records_from_file(input_path);
 
@@ -300,9 +300,9 @@ pub fn iterative_update_book(matches: &ArgMatches) {
 }
 
 pub fn gen_book(matches: &ArgMatches) -> Option<()> {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
-    let max_count = matches.value_of("MAX_COUNT").unwrap().parse().unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let max_count = *matches.get_one::<i8>("MAX_COUNT").unwrap();
 
     let in_f = File::open(input_path).ok()?;
     let mut reader = BufReader::new(in_f);
@@ -349,8 +349,8 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
 }
 
 pub fn pack_book(matches: &ArgMatches) {
-    let input_path = matches.value_of("INPUT").unwrap();
-    let output_path = matches.value_of("OUTPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let in_f = File::open(input_path).unwrap();
     let reader = BufReader::new(in_f);

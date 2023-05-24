@@ -21,7 +21,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
 pub fn play(matches: &ArgMatches) -> Board {
-    let player_turn = matches.value_of("player").unwrap() == "B";
+    let player_turn = matches.get_one::<String>("player").unwrap() == "B";
 
     let search_params = SearchParams {
         reduce: false,
@@ -280,9 +280,9 @@ fn generate_depth_n(
 }
 
 pub fn parallel_self_play(matches: &ArgMatches) {
-    let output_path = matches.value_of("OUTPUT").unwrap();
-    let random_depth = matches.value_of("DEPTH").unwrap().parse().unwrap();
-    let take_count = matches.value_of("COUNT").unwrap().parse().unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let random_depth = *matches.get_one::<usize>("DEPTH").unwrap();
+    let take_count = *matches.get_one::<usize>("COUNT").unwrap();
 
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);

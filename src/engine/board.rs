@@ -566,7 +566,7 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
 }
 
 pub fn parse_board(matches: &ArgMatches) {
-    let s = matches.value_of("str").unwrap();
+    let s = matches.get_one::<String>("str").unwrap();
 
     let data: Vec<&str> = s.split(' ').collect();
     let player = u64::from_str_radix(data[0], 16).unwrap();

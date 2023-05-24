@@ -276,40 +276,21 @@ fn send_query(_matches: &ArgMatches) {
 }
 
 fn main() {
-    let arg_input_file = Arg::new("INPUT")
-        .short('i')
-        .required(true)
-        .takes_value(true);
-    let arg_output_file = Arg::new("OUTPUT")
-        .short('o')
-        .required(true)
-        .takes_value(true);
+    let arg_input_file = Arg::new("INPUT").short('i').required(true);
+    let arg_output_file = Arg::new("OUTPUT").short('o').required(true);
     let matches = Command::new("Issen-rs")
         .subcommand(Command::new("ffobench").about("Run FFO benchmark 1-79"))
         .subcommand(
-            Command::new("play").about("Interactive play").arg(
-                Arg::new("player")
-                    .short('i')
-                    .required(true)
-                    .takes_value(true),
-            ),
+            Command::new("play")
+                .about("Interactive play")
+                .arg(Arg::new("player").short('i').required(true)),
         )
         .subcommand(Command::new("self-play").about("Automatic self play"))
         .subcommand(
             Command::new("gen-record")
                 .about("Generate record")
-                .arg(
-                    Arg::new("DEPTH")
-                        .short('d')
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("COUNT")
-                        .short('n')
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(Arg::new("DEPTH").short('d').required(true))
+                .arg(Arg::new("COUNT").short('n').required(true))
                 .arg(arg_output_file.clone()),
         )
         .subcommand(
@@ -322,12 +303,7 @@ fn main() {
             Command::new("update-record")
                 .about("Update record by end-game search")
                 .arg(arg_input_file.clone())
-                .arg(
-                    Arg::new("DEPTH")
-                        .short('d')
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(Arg::new("DEPTH").short('d').required(true))
                 .arg(arg_output_file.clone()),
         )
         .subcommand(
@@ -341,21 +317,16 @@ fn main() {
                 .about("Generate training dataset")
                 .arg(arg_input_file.clone())
                 .arg(arg_output_file.clone())
-                .arg(
-                    Arg::new("MAX_OUT")
-                        .short('n')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(Arg::new("MAX_OUT").short('n').required(true)),
         )
         .subcommand(
             Command::new("train")
                 .about("Train weights")
                 .arg(arg_input_file.clone())
                 .arg(arg_output_file.clone())
-                .arg(Arg::new("from").required(true).takes_value(true))
-                .arg(Arg::new("to").required(true).takes_value(true))
-                .arg(Arg::new("width").required(true).takes_value(true)),
+                .arg(Arg::new("from").required(true))
+                .arg(Arg::new("to").required(true))
+                .arg(Arg::new("width").required(true)),
         )
         .subcommand(
             Command::new("update-record-v2")
@@ -368,12 +339,7 @@ fn main() {
                 .about("Generate book")
                 .arg(arg_input_file.clone())
                 .arg(arg_output_file.clone())
-                .arg(
-                    Arg::new("MAX_COUNT")
-                        .short('c')
-                        .required(true)
-                        .takes_value(true),
-                ),
+                .arg(Arg::new("MAX_COUNT").short('c').required(true)),
         )
         .subcommand(
             Command::new("binarize")
@@ -406,7 +372,7 @@ fn main() {
         .subcommand(
             Command::new("parse-board")
                 .about("Parse board")
-                .arg(Arg::new("str").short('b').required(true).takes_value(true)),
+                .arg(Arg::new("str").short('b').required(true)),
         )
         .subcommand(
             Command::new("eval-stats")
