@@ -5,6 +5,7 @@ use crc64::Crc64;
 use spin::Mutex;
 use std::io::Write;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 
 pub trait CacheElement: Clone + Default {
@@ -156,11 +157,10 @@ impl<T: CacheElement> CacheArray<T> {
     }
 }
 
-#[derive(Clone)]
 pub struct CacheTable<T: CacheElement> {
-    arrays: Arc<Vec<Mutex<CacheArray<T>>>>,
+    arrays: Vec<Mutex<CacheArray<T>>>,
     buckets: u64,
-    pub gen: u16,
+    pub gen: AtomicU16,
 }
 
 impl<T: CacheElement> CacheTable<T> {
@@ -170,13 +170,13 @@ impl<T: CacheElement> CacheTable<T> {
             vec.push(Mutex::new(CacheArray::<T>::new(capacity_per_bucket)));
         }
         CacheTable::<T> {
-            arrays: Arc::new(vec),
+            arrays: vec,
             buckets: buckets as u64,
-            gen: 1,
+            gen: 1.into(),
         }
     }
 
-    pub fn get(&mut self, board: Board) -> Option<T> {
+    pub fn get(&self, board: Board) -> Option<T> {
         let mut crc64 = Crc64::new();
         crc64.write(&board.player.to_le_bytes()).unwrap();
         crc64.write(&board.opponent.to_le_bytes()).unwrap();
@@ -186,7 +186,7 @@ impl<T: CacheElement> CacheTable<T> {
         self.arrays[bucket_id].lock().get(board, bucket_hash)
     }
 
-    pub fn update(&mut self, cache: T) {
+    pub fn update(&self, cache: T) {
         let mut crc64 = Crc64::new();
         let board = cache.get_key();
         crc64.write(&board.player.to_le_bytes()).unwrap();
@@ -196,11 +196,11 @@ impl<T: CacheElement> CacheTable<T> {
         let bucket_hash = hash / self.buckets;
         self.arrays[bucket_id]
             .lock()
-            .update(&cache, bucket_hash, self.gen);
+            .update(&cache, bucket_hash, self.gen.load(Ordering::SeqCst));
     }
 
-    pub fn inc_gen(&mut self) {
-        self.gen += 1;
+    pub fn inc_gen(&self) {
+        self.gen.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -234,7 +234,7 @@ fn make_record(
 }
 
 pub fn update_table(
-    res_cache: &mut ResCacheTable,
+    res_cache: Arc<ResCacheTable>,
     board: Board,
     res: i8,
     best: Option<Hand>,
@@ -242,6 +242,14 @@ pub fn update_table(
     beta: i8,
     range: (i8, i8),
 ) {
-    let record = make_record(res_cache.gen, board, res, best, alpha, beta, range);
+    let record = make_record(
+        res_cache.gen.load(Ordering::SeqCst),
+        board,
+        res,
+        best,
+        alpha,
+        beta,
+        range,
+    );
     res_cache.update(record);
 }

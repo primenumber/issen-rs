@@ -207,8 +207,8 @@ pub fn update_record(matches: &ArgMatches) {
     reader.read_line(&mut input_line).unwrap();
     let num_records = input_line.trim().parse().unwrap();
 
-    let res_cache = ResCacheTable::new(256, 65536);
-    let eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let evaluator = Arc::new(Evaluator::new("table"));
     let search_params = SearchParams {
         reduce: false,
@@ -622,14 +622,14 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
     let dataset: Vec<_> = dataset.into_iter().take(8192).collect();
 
     eprintln!("Computing...");
-    let eval_cache = EvalCacheTable::new(256, 65536);
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let evaluator = Arc::new(Evaluator::new("table-single"));
     let depth_max = 8;
     let scores: Vec<_> = dataset
         .par_iter()
         .map(|&(board, _)| {
             let mut scores = Vec::new();
-            let mut eval_cache = eval_cache.clone();
+            let eval_cache = eval_cache.clone();
             let mut searcher = Searcher {
                 evaluator: evaluator.clone(),
                 cache: eval_cache.clone(),

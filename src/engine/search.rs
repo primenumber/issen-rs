@@ -37,8 +37,8 @@ pub struct SearchParams {
 
 #[derive(Clone)]
 pub struct SolveObj {
-    pub res_cache: ResCacheTable,
-    pub eval_cache: EvalCacheTable,
+    pub res_cache: Arc<ResCacheTable>,
+    pub eval_cache: Arc<EvalCacheTable>,
     pub evaluator: Arc<Evaluator>,
     params: SearchParams,
 }
@@ -76,8 +76,8 @@ impl SolveStat {
 
 impl SolveObj {
     pub fn new(
-        res_cache: ResCacheTable,
-        eval_cache: EvalCacheTable,
+        res_cache: Arc<ResCacheTable>,
+        eval_cache: Arc<EvalCacheTable>,
         evaluator: Arc<Evaluator>,
         params: SearchParams,
     ) -> SolveObj {
@@ -599,7 +599,7 @@ pub fn solve_inner(
             };
             let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed);
             update_table(
-                &mut solve_obj.res_cache,
+                solve_obj.res_cache.clone(),
                 board,
                 res,
                 None,
@@ -618,7 +618,7 @@ pub fn solve_inner(
                 move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best);
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
-                    &mut solve_obj.res_cache,
+                    solve_obj.res_cache.clone(),
                     board,
                     res,
                     best,
@@ -725,7 +725,7 @@ pub fn solve_outer(
             .await;
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
-                    &mut solve_obj.res_cache,
+                    solve_obj.res_cache,
                     board,
                     res,
                     best,

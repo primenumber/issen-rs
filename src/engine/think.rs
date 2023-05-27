@@ -20,7 +20,7 @@ impl Timer {
 
 pub struct Searcher {
     pub evaluator: Arc<Evaluator>,
-    pub cache: EvalCacheTable,
+    pub cache: Arc<EvalCacheTable>,
     pub timer: Option<Timer>,
     pub node_count: usize,
 }
@@ -230,7 +230,7 @@ impl Searcher {
                     board,
                     lower: range.0,
                     upper: range.1,
-                    gen: self.cache.gen,
+                    gen: self.cache.gen.load(std::sync::atomic::Ordering::SeqCst),
                     best: Some(best),
                     depth,
                 };

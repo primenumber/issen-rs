@@ -79,8 +79,8 @@ fn solve_ffo(
     index: &mut usize,
     search_params: &SearchParams,
     evaluator: Arc<Evaluator>,
-    res_cache: &mut ResCacheTable,
-    eval_cache: &mut EvalCacheTable,
+    res_cache: Arc<ResCacheTable>,
+    eval_cache: Arc<EvalCacheTable>,
 ) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
@@ -174,8 +174,8 @@ fn ffo_benchmark() {
         use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let mut res_cache = ResCacheTable::new(256, 65536);
-    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let mut index: usize = 1;
     let mut stats = Vec::new();
     //stats.extend(solve_ffo(
@@ -199,32 +199,32 @@ fn ffo_benchmark() {
         &mut index,
         &search_params,
         evaluator.clone(),
-        &mut res_cache,
-        &mut eval_cache,
+        res_cache.clone(),
+        eval_cache.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
         &mut index,
         &search_params,
         evaluator.clone(),
-        &mut res_cache,
-        &mut eval_cache,
+        res_cache.clone(),
+        eval_cache.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
         &mut index,
         &search_params,
         evaluator.clone(),
-        &mut res_cache,
-        &mut eval_cache,
+        res_cache.clone(),
+        eval_cache.clone(),
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
         &mut index,
         &search_params,
         evaluator.clone(),
-        &mut res_cache,
-        &mut eval_cache,
+        res_cache.clone(),
+        eval_cache.clone(),
     ));
     report_stats(&stats);
 }

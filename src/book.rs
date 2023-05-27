@@ -230,8 +230,8 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         opponent: 0x0000001008000000,
         is_black: true,
     };
-    let res_cache = ResCacheTable::new(256, 65536);
-    let eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let search_params = SearchParams {
         reduce: false,

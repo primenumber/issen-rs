@@ -37,8 +37,8 @@ pub fn play(matches: &ArgMatches) -> Board {
         use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let mut res_cache = ResCacheTable::new(256, 65536);
-    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -123,8 +123,8 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
         use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let mut res_cache = ResCacheTable::new(256, 65536);
-    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -184,7 +184,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     board
 }
 
-fn self_play_worker(mut solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8) {
+fn self_play_worker(solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8) {
     use std::fmt::Write;
     let mut board = Board {
         player: 0x0000000810000000,
@@ -301,8 +301,8 @@ pub fn parallel_self_play(matches: &ArgMatches) {
         use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = ResCacheTable::new(256, 65536);
-    let eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
     let initial_board = Board {
         player: 0x0000000810000000,
@@ -347,8 +347,8 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let mut res_cache = ResCacheTable::new(256, 65536);
-    let mut eval_cache = EvalCacheTable::new(256, 65536);
+    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
+    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
