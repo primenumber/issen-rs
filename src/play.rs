@@ -74,8 +74,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                     timer: Some(timer),
                     node_count: 0,
                 };
-                let (score, best, depth) =
-                    searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+                let (score, best, depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
                 let scaled_score = score as f64 / SCALE as f64;
                 eprintln!("Estimated result: {}, Depth: {}", scaled_score, depth);
                 best
@@ -147,8 +146,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) =
-                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (score, best, depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             let secs = start.elapsed().as_secs_f64();
             let nps = (searcher.node_count as f64 / secs) as u64;
             eprintln!(
@@ -218,8 +216,7 @@ fn self_play_worker(solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (_score, best, _depth) =
-                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (_score, best, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             best
         } else {
             let mut obj = solve_obj.clone();
@@ -250,12 +247,7 @@ fn self_play_worker(solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8
     (record_str, result)
 }
 
-fn generate_depth_n(
-    board: Board,
-    depth: usize,
-    prev_passed: bool,
-    record: &mut Vec<Hand>,
-) -> Vec<Vec<Hand>> {
+fn generate_depth_n(board: Board, depth: usize, prev_passed: bool, record: &mut Vec<Hand>) -> Vec<Vec<Hand>> {
     if depth == 0 {
         return vec![record.clone()];
     }
@@ -415,8 +407,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) =
-                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (score, best, depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}",
                 score, depth, searcher.node_count

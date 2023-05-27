@@ -216,8 +216,7 @@ impl Searcher {
                     Some((lower, old_best))
                 };
             }
-            let (res, best) =
-                self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
+            let (res, best) = self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
             if depth >= min_cache_depth {
                 let range = if res <= new_alpha {
                     (EVAL_SCORE_MIN, res)
@@ -275,13 +274,7 @@ impl Searcher {
         }
     }
 
-    pub fn iterative_think(
-        &mut self,
-        board: Board,
-        alpha: i16,
-        beta: i16,
-        passed: bool,
-    ) -> (i16, Hand, i8) {
+    pub fn iterative_think(&mut self, board: Board, alpha: i16, beta: i16, passed: bool) -> (i16, Hand, i8) {
         let min_depth = 3;
         let mut current_depth = min_depth;
 

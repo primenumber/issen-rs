@@ -65,11 +65,7 @@ impl Parameters {
         indices
     }
 
-    fn expand_weights_by_d4(
-        weights: &[i16],
-        pattern: u64,
-        b3conv: &[usize],
-    ) -> Vec<(u64, Vec<i16>)> {
+    fn expand_weights_by_d4(weights: &[i16], pattern: u64, b3conv: &[usize]) -> Vec<(u64, Vec<i16>)> {
         let mut permuted_weights = vec![vec![0; weights.len()]; 8];
         let perm = Self::permute_indices(pattern);
         let pattern_size = pattern.count_ones();
@@ -280,8 +276,7 @@ impl Evaluator {
             })
             .collect();
 
-        let line_to_indices =
-            Self::generate_indices_table(&params.first().unwrap().patterns, &base3);
+        let line_to_indices = Self::generate_indices_table(&params.first().unwrap().patterns, &base3);
 
         Evaluator {
             stones_range: config.stones_range,
@@ -308,24 +303,18 @@ impl Evaluator {
         for row in 0..8 {
             let pidx = ((board.player >> (row * 8)) & 0xff) as usize;
             let oidx = ((board.opponent >> (row * 8)) & 0xff) as usize;
-            let vp0 = _mm256_loadu_si256(
-                &self.line_to_indices[48 * (pidx + 256 * row)] as *const u16 as *const __m256i,
-            );
-            let vp1 = _mm256_loadu_si256(
-                &self.line_to_indices[48 * (pidx + 256 * row) + 16] as *const u16 as *const __m256i,
-            );
-            let vp2 = _mm256_loadu_si256(
-                &self.line_to_indices[48 * (pidx + 256 * row) + 32] as *const u16 as *const __m256i,
-            );
-            let vo0 = _mm256_loadu_si256(
-                &self.line_to_indices[48 * (oidx + 256 * row)] as *const u16 as *const __m256i,
-            );
-            let vo1 = _mm256_loadu_si256(
-                &self.line_to_indices[48 * (oidx + 256 * row) + 16] as *const u16 as *const __m256i,
-            );
-            let vo2 = _mm256_loadu_si256(
-                &self.line_to_indices[48 * (oidx + 256 * row) + 32] as *const u16 as *const __m256i,
-            );
+            let vp0 =
+                _mm256_loadu_si256(&self.line_to_indices[48 * (pidx + 256 * row)] as *const u16 as *const __m256i);
+            let vp1 =
+                _mm256_loadu_si256(&self.line_to_indices[48 * (pidx + 256 * row) + 16] as *const u16 as *const __m256i);
+            let vp2 =
+                _mm256_loadu_si256(&self.line_to_indices[48 * (pidx + 256 * row) + 32] as *const u16 as *const __m256i);
+            let vo0 =
+                _mm256_loadu_si256(&self.line_to_indices[48 * (oidx + 256 * row)] as *const u16 as *const __m256i);
+            let vo1 =
+                _mm256_loadu_si256(&self.line_to_indices[48 * (oidx + 256 * row) + 16] as *const u16 as *const __m256i);
+            let vo2 =
+                _mm256_loadu_si256(&self.line_to_indices[48 * (oidx + 256 * row) + 32] as *const u16 as *const __m256i);
             idx0 = _mm256_add_epi16(_mm256_add_epi16(idx0, vp0), _mm256_add_epi16(vo0, vo0));
             idx1 = _mm256_add_epi16(_mm256_add_epi16(idx1, vp1), _mm256_add_epi16(vo1, vo1));
             idx2 = _mm256_add_epi16(_mm256_add_epi16(idx2, vp2), _mm256_add_epi16(vo2, vo2));

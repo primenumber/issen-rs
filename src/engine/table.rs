@@ -27,10 +27,7 @@ pub struct EvalCache {
 impl Default for EvalCache {
     fn default() -> Self {
         Self {
-            board: Board::from_str(
-                "---------------------------------------------------------------- X;",
-            )
-            .unwrap(),
+            board: Board::from_str("---------------------------------------------------------------- X;").unwrap(),
             lower: 0,
             upper: 0,
             gen: 0,
@@ -86,10 +83,7 @@ pub struct ResCache {
 impl Default for ResCache {
     fn default() -> Self {
         Self {
-            board: Board::from_str(
-                "---------------------------------------------------------------- X;",
-            )
-            .unwrap(),
+            board: Board::from_str("---------------------------------------------------------------- X;").unwrap(),
             lower: 0,
             upper: 0,
             gen: 0,

@@ -7,12 +7,7 @@ pub struct SparseMat {
 }
 
 impl SparseMat {
-    pub fn new(
-        weight: Vec<f64>,
-        col_size: usize,
-        row_starts: Vec<usize>,
-        cols: Vec<u32>,
-    ) -> SparseMat {
+    pub fn new(weight: Vec<f64>, col_size: usize, row_starts: Vec<usize>, cols: Vec<u32>) -> SparseMat {
         SparseMat {
             weight,
             col_size,
