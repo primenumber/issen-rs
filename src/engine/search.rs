@@ -4,7 +4,6 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
-use crate::engine::remote::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use bitintr::Tzcnt;
@@ -19,6 +18,21 @@ use std::mem::{swap, MaybeUninit};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SolveRequest {
+    pub board: String,
+    pub alpha: i8,
+    pub beta: i8,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SolveResponse {
+    pub result: i8,
+    pub node_count: usize,
+    pub st_cut_count: usize,
+}
 
 #[derive(Clone)]
 pub struct SearchParams {

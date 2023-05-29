@@ -1,9 +1,6 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
-use crate::engine::eval::*;
 use crate::engine::hand::*;
-use crate::engine::search::*;
-use crate::engine::table::*;
 use crate::playout::*;
 use crate::setup::*;
 use crate::serialize::*;

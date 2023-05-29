@@ -5,24 +5,9 @@ use crate::engine::table::*;
 use clap::ArgMatches;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server};
-use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SolveRequest {
-    pub board: String,
-    pub alpha: i8,
-    pub beta: i8,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SolveResponse {
-    pub result: i8,
-    pub node_count: usize,
-    pub st_cut_count: usize,
-}
 
 async fn worker_impl(
     solve_obj: SolveObj,
