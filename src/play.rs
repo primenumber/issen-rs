@@ -5,6 +5,7 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
+use crate::setup::*;
 use crate::train::*;
 use clap::ArgMatches;
 use rand::prelude::*;
@@ -23,22 +24,7 @@ use tokio::sync::Semaphore;
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.get_one::<String>("player").unwrap() == "B";
 
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 12,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 16,
-        eval_ordering_limit: 15,
-        res_cache_limit: 11,
-        stability_cut_limit: 8,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
+    let solve_obj = setup_default();
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -69,8 +55,8 @@ pub fn play(matches: &ArgMatches) -> Board {
                     time_limit,
                 };
                 let mut searcher = Searcher {
-                    evaluator: evaluator.clone(),
-                    cache: eval_cache.clone(),
+                    evaluator: solve_obj.evaluator.clone(),
+                    cache: solve_obj.eval_cache.clone(),
                     timer: Some(timer),
                     node_count: 0,
                 };
@@ -79,19 +65,14 @@ pub fn play(matches: &ArgMatches) -> Board {
                 eprintln!("Estimated result: {}, Depth: {}", scaled_score, depth);
                 best
             } else {
-                let mut obj = SolveObj::new(
-                    res_cache.clone(),
-                    eval_cache.clone(),
-                    evaluator.clone(),
-                    search_params.clone(),
-                );
+                let mut solve_obj = solve_obj.clone();
                 let sem = Arc::new(Semaphore::new(1024));
                 Runtime::new()
                     .unwrap()
-                    .block_on(solve_with_move(board, &mut obj, sem))
+                    .block_on(solve_with_move(board, &mut solve_obj, sem))
             };
-            eval_cache.inc_gen();
-            res_cache.inc_gen();
+            solve_obj.eval_cache.inc_gen();
+            solve_obj.res_cache.inc_gen();
             best
         };
         match hand {
@@ -108,22 +89,7 @@ pub fn play(matches: &ArgMatches) -> Board {
 }
 
 pub fn self_play(_matches: &ArgMatches) -> Board {
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 12,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 16,
-        eval_ordering_limit: 15,
-        res_cache_limit: 11,
-        stability_cut_limit: 8,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
+    let solve_obj = setup_default();
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -141,8 +107,8 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
                 time_limit,
             };
             let mut searcher = Searcher {
-                evaluator: evaluator.clone(),
-                cache: eval_cache.clone(),
+                evaluator: solve_obj.evaluator.clone(),
+                cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
             };
@@ -155,19 +121,14 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
             );
             best
         } else {
-            let mut obj = SolveObj::new(
-                res_cache.clone(),
-                eval_cache.clone(),
-                evaluator.clone(),
-                search_params.clone(),
-            );
+            let mut solve_obj = solve_obj.clone();
             let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj, sem))
+                .block_on(solve_with_move(board, &mut solve_obj, sem))
         };
-        eval_cache.inc_gen();
-        res_cache.inc_gen();
+        solve_obj.eval_cache.inc_gen();
+        solve_obj.res_cache.inc_gen();
         let hand = best;
         match hand {
             Hand::Pass => board = board.pass(),
@@ -279,23 +240,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
 
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 12,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 64,
-        eval_ordering_limit: 15,
-        res_cache_limit: 11,
-        stability_cut_limit: 8,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
-    let obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
+    let solve_obj = setup_default();
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -311,7 +256,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let mut results = Vec::new();
     initial_records
         .par_iter()
-        .map(|r| self_play_worker(obj.clone(), r))
+        .map(|r| self_play_worker(solve_obj.clone(), r))
         .collect_into_vec(&mut results);
     for (record, score) in results {
         writeln!(writer, "{} {}", record, score).unwrap();
@@ -325,22 +270,7 @@ macro_rules! parse_input {
 }
 
 pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 12,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 16,
-        eval_ordering_limit: 15,
-        res_cache_limit: 11,
-        stability_cut_limit: 8,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
+    let solve_obj = setup_default();
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
@@ -402,8 +332,8 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 time_limit,
             };
             let mut searcher = Searcher {
-                evaluator: evaluator.clone(),
-                cache: eval_cache.clone(),
+                evaluator: solve_obj.evaluator.clone(),
+                cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
             };
@@ -414,19 +344,14 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             );
             best
         } else {
-            let mut obj = SolveObj::new(
-                res_cache.clone(),
-                eval_cache.clone(),
-                evaluator.clone(),
-                search_params.clone(),
-            );
+            let mut solve_obj = solve_obj.clone();
             let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj, sem))
+                .block_on(solve_with_move(board, &mut solve_obj, sem))
         };
-        eval_cache.inc_gen();
-        res_cache.inc_gen();
+        solve_obj.eval_cache.inc_gen();
+        solve_obj.res_cache.inc_gen();
         match best {
             Hand::Play(pos) => {
                 println!("{}", pos_to_str(pos).to_ascii_lowercase());

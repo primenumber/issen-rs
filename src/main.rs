@@ -3,19 +3,19 @@ mod engine;
 mod play;
 mod playout;
 mod serialize;
+mod setup;
 mod sparse_mat;
 mod train;
 
 use crate::book::*;
 use crate::engine::bits::*;
 use crate::engine::board::*;
-use crate::engine::eval::*;
 use crate::engine::hand::*;
 use crate::engine::remote::*;
 use crate::engine::search::*;
-use crate::engine::table::*;
 use crate::play::*;
 use crate::serialize::*;
+use crate::setup::*;
 use crate::train::*;
 use clap::{Arg, ArgMatches, Command};
 use std::fs::File;
@@ -23,7 +23,6 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::str;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Instant;
 
 fn to_si(x: usize) -> String {
@@ -74,14 +73,7 @@ struct Stat {
     correct: bool,
 }
 
-fn solve_ffo(
-    name: &str,
-    index: &mut usize,
-    search_params: &SearchParams,
-    evaluator: Arc<Evaluator>,
-    res_cache: Arc<ResCacheTable>,
-    eval_cache: Arc<EvalCacheTable>,
-) -> Vec<Stat> {
+fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     println!("|No.|empties|result|answer|move|nodes|time|NPS|");
@@ -94,14 +86,8 @@ fn solve_ffo(
             Ok(board) => {
                 let rem = popcnt(board.empty());
                 let start = Instant::now();
-                let mut obj = SolveObj::new(
-                    res_cache.clone(),
-                    eval_cache.clone(),
-                    evaluator.clone(),
-                    search_params.clone(),
-                );
                 let (res, best, stat) = solve(
-                    &mut obj,
+                    solve_obj,
                     board,
                     -(BOARD_SIZE as i8),
                     BOARD_SIZE as i8,
@@ -123,8 +109,8 @@ fn solve_ffo(
                     end.subsec_millis(),
                     nodes_per_sec / 1_000_000
                 );
-                eval_cache.inc_gen();
-                res_cache.inc_gen();
+                solve_obj.eval_cache.inc_gen();
+                solve_obj.res_cache.inc_gen();
                 stats.push(Stat {
                     nodes: stat.node_count,
                     elapsed: end.as_secs_f64(),
@@ -160,22 +146,7 @@ fn report_stats(stats: &[Stat]) {
 }
 
 fn ffo_benchmark() {
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 12,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 18,
-        eval_ordering_limit: 15,
-        res_cache_limit: 11,
-        stability_cut_limit: 8,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
+    let mut solve_obj = setup_default();
     let mut index: usize = 1;
     let mut stats = Vec::new();
     //stats.extend(solve_ffo(
@@ -197,34 +168,22 @@ fn ffo_benchmark() {
     stats.extend(solve_ffo(
         "problem/fforum-1-19.obf",
         &mut index,
-        &search_params,
-        evaluator.clone(),
-        res_cache.clone(),
-        eval_cache.clone(),
+        &mut solve_obj,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
         &mut index,
-        &search_params,
-        evaluator.clone(),
-        res_cache.clone(),
-        eval_cache.clone(),
+        &mut solve_obj,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
         &mut index,
-        &search_params,
-        evaluator.clone(),
-        res_cache.clone(),
-        eval_cache.clone(),
+        &mut solve_obj,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
         &mut index,
-        &search_params,
-        evaluator.clone(),
-        res_cache.clone(),
-        eval_cache.clone(),
+        &mut solve_obj,
     ));
     report_stats(&stats);
 }

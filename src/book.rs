@@ -5,6 +5,7 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::playout::*;
+use crate::setup::*;
 use crate::serialize::*;
 use crate::train::*;
 use clap::ArgMatches;
@@ -230,22 +231,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         opponent: 0x0000001008000000,
         is_black: true,
     };
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 10,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 17,
-        eval_ordering_limit: 16,
-        res_cache_limit: 11,
-        stability_cut_limit: 8,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
+    let solve_obj = setup_default();
     let depth = 18;
     for _ in 0..100 {
         let boards_with_results_all = minimax_record_body(&boards_set);
@@ -256,12 +242,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         let mut handles = Vec::new();
         let finished = Arc::new(AtomicUsize::new(0));
         for record in best_records {
-            let mut solve_obj = SolveObj::new(
-                res_cache.clone(),
-                eval_cache.clone(),
-                evaluator.clone(),
-                search_params.clone(),
-            );
+            let mut solve_obj = solve_obj.clone();
             let finished = finished.clone();
 
             handles.push(tokio::task::spawn(async move {
