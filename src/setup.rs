@@ -17,7 +17,7 @@ pub fn setup_default() -> SolveObj {
         res_cache_limit: 11,
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
+        static_ordering_limit: 5,
         use_worker: false,
     };
     SolveObj::new(res_cache, eval_cache, evaluator, search_params)

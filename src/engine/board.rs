@@ -224,7 +224,7 @@ impl Board {
 
     pub fn next_iter(&self) -> PlayIterator {
         let e = self.empty();
-        let remain = if popcnt(e) > 16 {
+        let remain = if popcnt(e) > 4 {
             self.mobility_bits()
         } else {
             e

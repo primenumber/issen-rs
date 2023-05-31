@@ -169,11 +169,12 @@ fn static_order(
         0x3C3C_FFFF_FFFF_3C3C, // Normal
         0x42C3_0000_0000_C342, // C + X
     ];
+    let mobility_bits = board.mobility_bits();
     for mask in MASKS.iter() {
-        let mut empties = board.empty() & mask;
-        while empties != 0 {
-            let pos = empties.tzcnt() as usize;
-            empties = empties & (empties - 1);
+        let mut remain = mobility_bits & mask;
+        while remain != 0 {
+            let pos = remain.tzcnt() as usize;
+            remain = remain & (remain - 1);
             if let Ok(next) = board.play(pos) {
                 pass = false;
                 let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
