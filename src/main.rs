@@ -1,3 +1,4 @@
+#![feature(test)]
 mod book;
 mod engine;
 mod play;

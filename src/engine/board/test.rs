@@ -1,4 +1,9 @@
+extern crate test;
 use super::*;
+use rand::{Rng, SeedableRng};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use test::Bencher;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -220,4 +225,120 @@ fn test_base81() {
     let board = Board::from_base81(TEST_BASE81).unwrap();
     let encoded = board.to_base81();
     assert_eq!(TEST_BASE81, encoded)
+}
+
+fn upper_bit_naive(x: [u64; 4]) -> [u64; 4] {
+    let mut res = [0, 0, 0, 0];
+    for i in 0..4 {
+        let y = x[i];
+        let mut ans = 0;
+        for j in 0..64 {
+            let bit = 1 << j;
+            if (y & bit) != 0 {
+                ans = bit;
+            }
+        }
+        res[i] = ans;
+    }
+    res
+}
+
+fn iszero_naive(x: [u64; 4]) -> [u64; 4] {
+    let mut res = [0, 0, 0, 0];
+    for i in 0..4 {
+        let y = x[i];
+        let ans = if y == 0 { 0xffffffffffffffff } else { 0 };
+        res[i] = ans;
+    }
+    res
+}
+
+unsafe fn upper_bit_wrapper(x: [u64; 4]) -> [u64; 4] {
+    let x = _mm256_loadu_si256(&x as *const u64 as *const __m256i);
+    let y = upper_bit(x);
+    let mut z = [0; 4];
+    _mm256_storeu_si256(&mut z as *mut u64 as *mut __m256i, y);
+    z
+}
+
+unsafe fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
+    let x = _mm256_loadu_si256(&x as *const u64 as *const __m256i);
+    let y = iszero(x);
+    let mut z = [0; 4];
+    _mm256_storeu_si256(&mut z as *mut u64 as *mut __m256i, y);
+    z
+}
+
+#[test]
+fn test_simd_ops() {
+    // gen data
+    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+    const LENGTH: usize = 256;
+    let mut ary = [0u64; LENGTH];
+    for i in 0..LENGTH {
+        ary[i] = rng.gen::<u64>();
+    }
+    // upper_bit
+    for i in 0..=(LENGTH - 4) {
+        let a = &ary[i..(i + 4)];
+        assert_eq!(
+            unsafe { upper_bit_wrapper(a.try_into().unwrap()) },
+            upper_bit_naive(a.try_into().unwrap())
+        );
+    }
+    // iszero
+    for i in 0..=(LENGTH - 4) {
+        let a = &ary[i..(i + 4)];
+        assert_eq!(
+            unsafe { iszero_wrapper(a.try_into().unwrap()) },
+            iszero_naive(a.try_into().unwrap())
+        );
+    }
+}
+
+#[bench]
+fn bench_flip(b: &mut Bencher) {
+    let name = "problem/stress_test_54_1k.b81r";
+    let file = File::open(name).unwrap();
+    let reader = BufReader::new(file);
+    let mut boards = Vec::new();
+    for (_idx, line) in reader.lines().enumerate() {
+        let line_str = line.unwrap();
+        match Board::from_base81(&line_str[..16]) {
+            Ok(board) => boards.push(board),
+            Err(_) => panic!(),
+        }
+    }
+    b.iter(|| {
+        boards
+            .iter()
+            .map(|board| {
+                board
+                    .next_iter()
+                    .map(|(next, _pos)| next.player)
+                    .sum::<u64>()
+            })
+            .sum::<u64>()
+    });
+}
+
+#[bench]
+fn bench_mobility(b: &mut Bencher) {
+    let name = "problem/stress_test_54_1k.b81r";
+    let file = File::open(name).unwrap();
+    let reader = BufReader::new(file);
+    let mut boards = Vec::new();
+    for (_idx, line) in reader.lines().enumerate() {
+        let line_str = line.unwrap();
+        match Board::from_base81(&line_str[..16]) {
+            Ok(board) => boards.push(board),
+            Err(_) => panic!(),
+        }
+    }
+    b.iter(|| {
+        boards
+            .iter()
+            .map(|board| board.mobility_bits())
+            .sum::<u64>()
+    });
 }

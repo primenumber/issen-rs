@@ -1,7 +1,7 @@
 use super::*;
+use crate::setup::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::sync::Arc;
 
 #[test]
 fn test_lookup_result() {
@@ -133,33 +133,13 @@ fn test_solve_inner() {
     let name = "problem/stress_test_54_1k.b81r";
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
-    let evaluator = Arc::new(Evaluator::new("table-220710"));
-    let res_cache = ResCacheTable::new(256, 256);
-    let eval_cache = EvalCacheTable::new(256, 256);
-    let search_params = SearchParams {
-        reduce: false,
-        ybwc_depth_limit: 0,
-        ybwc_elder_add: 1,
-        ybwc_younger_add: 2,
-        ybwc_empties_limit: 64,
-        eval_ordering_limit: 64,
-        res_cache_limit: 9,
-        stability_cut_limit: 7,
-        ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
-        use_worker: false,
-    };
+    let solve_obj = setup_default();
     for (_idx, line) in reader.lines().enumerate() {
         let line_str = line.unwrap();
         let desired: i8 = line_str[17..].parse().unwrap();
         match Board::from_base81(&line_str[..16]) {
             Ok(board) => {
-                let mut obj = SolveObj::new(
-                    res_cache.clone(),
-                    eval_cache.clone(),
-                    evaluator.clone(),
-                    search_params.clone(),
-                );
+                let mut obj = solve_obj.clone();
                 let (res, _stat) = solve_inner(
                     &mut obj,
                     board,
