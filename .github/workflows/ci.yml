@@ -17,6 +17,9 @@ jobs:
       - name: Build Binary
         run: cargo build --release
 
+      - name: Download weight table
+        run: wget https://poyo.me/reversi/table220710.tar.gz && tar xf table220710.tar.gz
+
       - name: Run Test
         run: cargo test --release
 
