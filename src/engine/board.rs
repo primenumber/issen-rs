@@ -29,6 +29,14 @@ pub struct PlayIterator {
 
 pub const BOARD_SIZE: usize = 64;
 
+unsafe fn smart_upper_bit(mut x: __m256i) -> __m256i {
+    x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9)));
+    x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(16, 2, 14, 18)));
+    x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(32, 4, 28, 36)));
+    let lowers = _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9));
+    _mm256_andnot_si256(lowers, x)
+}
+
 unsafe fn upper_bit(mut x: __m256i) -> __m256i {
     x = _mm256_or_si256(x, _mm256_srli_epi64(x, 1));
     x = _mm256_or_si256(x, _mm256_srli_epi64(x, 2));
