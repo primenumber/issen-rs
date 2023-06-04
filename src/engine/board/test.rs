@@ -288,7 +288,6 @@ fn test_upper_bit() {
     // upper_bit
     for i in 0..(LENGTH / 4) {
         let a = &ary[(4 * i)..(4 * i + 4)];
-        eprintln!("{:x} {:x} {:x} {:x}", a[0], a[1], a[2], a[3]);
         assert_eq!(
             unsafe { upper_bit_wrapper(a.try_into().unwrap()) },
             upper_bit_naive(a.try_into().unwrap())
