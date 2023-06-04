@@ -37,6 +37,7 @@ unsafe fn smart_upper_bit(mut x: __m256i) -> __m256i {
     _mm256_andnot_si256(lowers, x)
 }
 
+#[allow(dead_code)]
 unsafe fn upper_bit(mut x: __m256i) -> __m256i {
     x = _mm256_or_si256(x, _mm256_srli_epi64(x, 1));
     x = _mm256_or_si256(x, _mm256_srli_epi64(x, 2));
