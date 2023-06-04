@@ -271,21 +271,39 @@ unsafe fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
 }
 
 #[test]
-fn test_simd_ops() {
+fn test_upper_bit() {
+    // gen data
+    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+    let mask = [
+        0x0101_0101_0101_0100,
+        0x0000_0000_0000_00fe,
+        0x0102_0408_1020_4080,
+        0x8040_2010_0804_0200,
+    ];
+    const LENGTH: usize = 256;
+    let mut ary = [0u64; LENGTH];
+    for i in 0..LENGTH {
+        ary[i] = rng.gen::<u64>() & (mask[i % 4] << rng.gen_range(0..64));
+    }
+    // upper_bit
+    for i in 0..(LENGTH / 4) {
+        let a = &ary[(4 * i)..(4 * i + 4)];
+        eprintln!("{:x} {:x} {:x} {:x}", a[0], a[1], a[2], a[3]);
+        assert_eq!(
+            unsafe { upper_bit_wrapper(a.try_into().unwrap()) },
+            upper_bit_naive(a.try_into().unwrap())
+        );
+    }
+}
+
+#[test]
+fn test_iszero() {
     // gen data
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
     const LENGTH: usize = 256;
     let mut ary = [0u64; LENGTH];
     for i in 0..LENGTH {
         ary[i] = rng.gen::<u64>();
-    }
-    // upper_bit
-    for i in 0..=(LENGTH - 4) {
-        let a = &ary[i..(i + 4)];
-        assert_eq!(
-            unsafe { upper_bit_wrapper(a.try_into().unwrap()) },
-            upper_bit_naive(a.try_into().unwrap())
-        );
     }
     // iszero
     for i in 0..=(LENGTH - 4) {
