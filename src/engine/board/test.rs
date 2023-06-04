@@ -3,6 +3,7 @@ use super::*;
 use rand::{Rng, SeedableRng};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::num::Wrapping;
 use test::Bencher;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -315,10 +316,10 @@ fn bench_flip(b: &mut Bencher) {
             .map(|board| {
                 board
                     .next_iter()
-                    .map(|(next, _pos)| next.player)
-                    .sum::<u64>()
+                    .map(|(next, _pos)| Wrapping(next.player))
+                    .sum::<Wrapping<u64>>()
             })
-            .sum::<u64>()
+            .sum::<Wrapping<u64>>()
     });
 }
 
@@ -338,7 +339,7 @@ fn bench_mobility(b: &mut Bencher) {
     b.iter(|| {
         boards
             .iter()
-            .map(|board| board.mobility_bits())
-            .sum::<u64>()
+            .map(|board| Wrapping(board.mobility_bits()))
+            .sum::<Wrapping<u64>>()
     });
 }
