@@ -189,3 +189,19 @@ fn bench_solve_inner(b: &mut Bencher) {
         }
     });
 }
+
+#[bench]
+fn bench_move_ordering(b: &mut Bencher) {
+    let solve_obj = setup_default();
+    let dataset = load_stress_test_set();
+
+    b.iter(|| {
+        let mut sum = 0;
+        for &(board, _desired) in dataset.iter() {
+            let mut obj = solve_obj.clone();
+            let nexts = move_ordering_impl(&mut obj, board, None);
+            sum += nexts.len();
+        }
+        sum
+    });
+}
