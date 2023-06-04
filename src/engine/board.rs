@@ -92,7 +92,7 @@ impl Board {
             0x0040201008040201u64 as i64,
         );
         let mut mask = _mm256_srlv_epi64(mask1, _mm256_set1_epi64x((63 - pos) as i64));
-        let mut outflank = _mm256_and_si256(upper_bit(_mm256_andnot_si256(om, mask)), p);
+        let mut outflank = _mm256_and_si256(smart_upper_bit(_mm256_andnot_si256(om, mask)), p);
         let mut flipped = _mm256_and_si256(
             _mm256_slli_epi64(_mm256_sub_epi64(_mm256_setzero_si256(), outflank), 1),
             mask,
