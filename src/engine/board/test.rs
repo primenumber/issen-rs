@@ -315,23 +315,34 @@ fn test_iszero() {
     }
 }
 
-#[bench]
-fn bench_flip(b: &mut Bencher) {
+fn load_stress_test_set() -> Vec<(Board, i8)> {
     let name = "problem/stress_test_54_1k.b81r";
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
-    let mut boards = Vec::new();
+    let mut dataset = Vec::new();
     for (_idx, line) in reader.lines().enumerate() {
         let line_str = line.unwrap();
+        let desired: i8 = line_str[17..].parse().unwrap();
         match Board::from_base81(&line_str[..16]) {
-            Ok(board) => boards.push(board),
-            Err(_) => panic!(),
+            Ok(board) => {
+                dataset.push((board, desired));
+            }
+            Err(_) => {
+                panic!();
+            }
         }
     }
+    dataset
+}
+
+#[bench]
+fn bench_flip(b: &mut Bencher) {
+    let dataset = load_stress_test_set();
+
     b.iter(|| {
-        boards
+        dataset
             .iter()
-            .map(|board| {
+            .map(|(board, _)| {
                 board
                     .next_iter()
                     .map(|(next, _pos)| Wrapping(next.player))
@@ -343,21 +354,12 @@ fn bench_flip(b: &mut Bencher) {
 
 #[bench]
 fn bench_mobility(b: &mut Bencher) {
-    let name = "problem/stress_test_54_1k.b81r";
-    let file = File::open(name).unwrap();
-    let reader = BufReader::new(file);
-    let mut boards = Vec::new();
-    for (_idx, line) in reader.lines().enumerate() {
-        let line_str = line.unwrap();
-        match Board::from_base81(&line_str[..16]) {
-            Ok(board) => boards.push(board),
-            Err(_) => panic!(),
-        }
-    }
+    let dataset = load_stress_test_set();
+
     b.iter(|| {
-        boards
+        dataset
             .iter()
-            .map(|board| Wrapping(board.mobility_bits()))
+            .map(|(board, _)| Wrapping(board.mobility_bits()))
             .sum::<Wrapping<u64>>()
     });
 }
