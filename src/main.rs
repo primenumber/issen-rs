@@ -17,9 +17,11 @@ use crate::engine::search::*;
 use crate::play::*;
 use crate::remote::*;
 use crate::serialize::*;
+use std::sync::Arc;
 use crate::setup::*;
 use crate::train::*;
 use clap::{Arg, ArgMatches, Command};
+use reqwest::Client;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -190,50 +192,58 @@ fn ffo_benchmark() {
     report_stats(&stats);
 }
 
-fn send_query(_matches: &ArgMatches) {
-    //let name = "problem/stress_test_54_10k.b81r";
-    //let file = File::open(name).unwrap();
-    //let reader = BufReader::new(file);
-    //let client: Client = surf::Config::new()
-    //    .set_base_url(Url::parse("http://localhost:7733").unwrap())
-    //    .try_into()
-    //    .unwrap();
-    //let mut futures = Vec::new();
-    //for (_idx, line) in reader.lines().enumerate() {
-    //    let client = client.clone();
-    //    futures.push(
-    //        tokio::task::spawn(async move {
-    //            let line_str = line.unwrap();
-    //            let desired: i8 = line_str[17..].parse().unwrap();
-    //            match Board::from_base81(&line_str[..16]) {
-    //                Ok(board) => {
-    //                    let data = SolveRequest {
-    //                        board: board.to_base81(),
-    //                        alpha: -(BOARD_SIZE as i8),
-    //                        beta: BOARD_SIZE as i8,
-    //                    };
-    //                    let data_str = serde_json::json!(data);
-    //                    let solve_res: SolveResponse = client
-    //                        .post("/")
-    //                        .body(http_types::Body::from_json(&data_str).unwrap())
-    //                        .recv_json()
-    //                        .await
-    //                        .unwrap();
-    //                    let res = solve_res.result;
-    //                    if res != desired {
-    //                        board.print();
-    //                    }
-    //                    assert_eq!(res, desired);
-    //                }
-    //                Err(_) => {
-    //                    panic!();
-    //                }
-    //            }
-    //        })
-    //        .unwrap(),
-    //    );
-    //}
-    //executor::block_on(future::join_all(futures));
+async fn send_query_impl(board: Board, client: &Client) -> i8 {
+    let data = engine::search::SolveRequest {
+        board: board.to_base81(),
+        alpha: -64,
+        beta: 64,
+    };
+    let mut crc64 = crc64::Crc64::new();
+    crc64.write(&board.player.to_le_bytes()).unwrap();
+    crc64.write(&board.opponent.to_le_bytes()).unwrap();
+    let data_json = serde_json::json!(data);
+    let suffix = 192 + crc64.get() % 4;
+    let uri = format!("http://192.168.10.{}:7733", suffix);
+    let resp = match client.post(uri).json(&data_json).send().await {
+        Ok(resp) => resp,
+        Err(e) => {
+            eprintln!("{:?}", e);
+            panic!();
+        }
+    };
+    let res = resp.json::<SolveResponse>().await.unwrap();
+    res.result
+}
+
+fn load_stress_test_set() -> Vec<(Board, i8)> {
+    let name = "problem/stress_test_54_1k.b81r";
+    let file = File::open(name).unwrap();
+    let reader = BufReader::new(file);
+    let mut dataset = Vec::new();
+    for (_idx, line) in reader.lines().enumerate() {
+        let line_str = line.unwrap();
+        let desired: i8 = line_str[17..].parse().unwrap();
+        match Board::from_base81(&line_str[..16]) {
+            Ok(board) => {
+                dataset.push((board, desired));
+            }
+            Err(_) => {
+                panic!();
+            }
+        }
+    }
+    dataset
+}
+
+#[tokio::main]
+async fn send_query(_matches: &ArgMatches)  {
+    let dataset = load_stress_test_set();
+    let client = Arc::new(Client::new());
+    let fut = futures::future::join_all(dataset.into_iter().map(|(board, _)| { let client = client.clone(); (board, client) }).map(|(board, client)| async move {
+        let result = send_query_impl(board, &client).await;
+        println!("{}", result);
+    }));
+    let _ = tokio::spawn(fut).await;
 }
 
 fn main() {
