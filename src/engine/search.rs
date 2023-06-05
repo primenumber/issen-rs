@@ -12,9 +12,9 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::StreamExt;
 use reqwest::Client;
 use std::cmp::{max, min};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use crc64::Crc64;
 use std::mem::{swap, MaybeUninit};
+use std::io::Write;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
@@ -664,10 +664,10 @@ async fn solve_remote(
         alpha,
         beta,
     };
-    let mut hasher = DefaultHasher::new();
-    board.player.hash(&mut hasher);
-    board.opponent.hash(&mut hasher);
-    let suffix = 192 + hasher.finish() % 4;
+    let mut hasher = Crc64::new();
+    hasher.write(&board.player.to_le_bytes()).unwrap();
+    hasher.write(&board.opponent.to_le_bytes()).unwrap();
+    let suffix = 192 + hasher.get() % 4;
     let data_json = serde_json::json!(data);
     let uri = format!("http://192.168.10.{}:7733", suffix);
     let permit = sem.clone().acquire_owned().await.unwrap();
