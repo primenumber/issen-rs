@@ -54,6 +54,7 @@ pub struct SolveObj {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
     pub evaluator: Arc<Evaluator>,
+    pub client: Arc<Client>,
     params: SearchParams,
 }
 
@@ -93,12 +94,14 @@ impl SolveObj {
         res_cache: Arc<ResCacheTable>,
         eval_cache: Arc<EvalCacheTable>,
         evaluator: Arc<Evaluator>,
+        client: Arc<Client>,
         params: SearchParams,
     ) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
+            client,
             params,
         }
     }
@@ -648,7 +651,7 @@ pub fn solve_inner(
 }
 
 async fn solve_remote(
-    _solve_obj: &mut SolveObj,
+    solve_obj: &mut SolveObj,
     sem: Arc<Semaphore>,
     board: Board,
     alpha: i8,
@@ -667,9 +670,8 @@ async fn solve_remote(
     let suffix = 192 + hasher.finish() % 4;
     let data_json = serde_json::json!(data);
     let uri = format!("http://192.168.10.{}:7733", suffix);
-    let client = Client::new();
     let permit = sem.clone().acquire_owned().await.unwrap();
-    let resp = client.post(uri).json(&data_json).send().await.unwrap();
+    let resp = solve_obj.client.post(uri).json(&data_json).send().await.unwrap();
     let res = resp.json::<SolveResponse>().await.unwrap();
     drop(permit);
     let stat = SolveStat {

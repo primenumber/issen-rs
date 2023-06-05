@@ -1,12 +1,14 @@
 use crate::engine::eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
+use reqwest::Client;
 use std::sync::Arc;
 
 pub fn setup_default() -> SolveObj {
     let res_cache = Arc::new(ResCacheTable::new(256, 65536));
     let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let evaluator = Arc::new(Evaluator::new("table-220710"));
+    let client = Arc::new(Client::new());
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 12,
@@ -20,5 +22,5 @@ pub fn setup_default() -> SolveObj {
         static_ordering_limit: 5,
         use_worker: false,
     };
-    SolveObj::new(res_cache, eval_cache, evaluator, search_params)
+    SolveObj::new(res_cache, eval_cache, evaluator, client, search_params)
 }
