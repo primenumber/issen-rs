@@ -5,10 +5,58 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use futures::channel::mpsc;
+use futures::channel::mpsc::UnboundedSender;
 use futures::future::{BoxFuture, FutureExt};
 use futures::StreamExt;
 use std::cmp::max;
 use std::sync::Arc;
+
+struct YBWCContext {
+    tx: UnboundedSender<((i8, Option<Hand>), SolveStat)>,
+    next: Board,
+    pos: Hand,
+    alpha: i8,
+    beta: i8,
+    res: i8,
+    best: Option<Hand>,
+}
+
+async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, depth: i8, mut cxt: YBWCContext) {
+    let mut stat = SolveStat::zero();
+    let next_depth = depth + solve_obj.params.ybwc_younger_add;
+    let child_future = solve_outer(
+        &mut solve_obj,
+        &sub_solver,
+        cxt.next,
+        -cxt.alpha - 1,
+        -cxt.alpha,
+        false,
+        next_depth,
+    );
+    let (child_res, _child_best, child_stat) = child_future.await;
+    stat.merge(child_stat);
+    let mut tmp = -child_res;
+    if cxt.alpha < tmp && tmp < cxt.beta {
+        let child_future = solve_outer(
+            &mut solve_obj,
+            &sub_solver,
+            cxt.next,
+            -cxt.beta,
+            -tmp,
+            false,
+            next_depth,
+        );
+        let (child_res, _child_best, child_stat) = child_future.await;
+        stat.merge(child_stat);
+        tmp = -child_res;
+    }
+    if tmp > cxt.res {
+        cxt.best = Some(cxt.pos);
+        cxt.res = tmp;
+    }
+    let res_tuple = (cxt.res, cxt.best);
+    let _ = cxt.tx.unbounded_send((res_tuple, stat));
+}
 
 async fn ybwc(
     solve_obj: &mut SolveObj,
@@ -60,44 +108,21 @@ async fn ybwc(
             }
         } else if depth < solve_obj.params.ybwc_depth_limit {
             let tx = tx.clone();
-            let mut child_obj = solve_obj.clone();
-            let child_sub_solver = sub_solver.clone();
-            let mut stat = SolveStat::zero();
-            handles.push(tokio::task::spawn(async move {
-                let next_depth = depth + child_obj.params.ybwc_younger_add;
-                let child_future = solve_outer(
-                    &mut child_obj,
-                    &child_sub_solver,
-                    next,
-                    -alpha - 1,
-                    -alpha,
-                    false,
-                    next_depth,
-                );
-                let (child_res, _child_best, child_stat) = child_future.await;
-                stat.merge(child_stat);
-                let mut tmp = -child_res;
-                if alpha < tmp && tmp < beta {
-                    let child_future = solve_outer(
-                        &mut child_obj,
-                        &child_sub_solver,
-                        next,
-                        -beta,
-                        -tmp,
-                        false,
-                        next_depth,
-                    );
-                    let (child_res, _child_best, child_stat) = child_future.await;
-                    stat.merge(child_stat);
-                    tmp = -child_res;
-                }
-                if tmp > res {
-                    best = Some(pos);
-                    res = tmp;
-                }
-                let res_tuple = (res, best);
-                let _ = tx.unbounded_send((res_tuple, stat));
-            }));
+            let context = YBWCContext {
+                tx,
+                next,
+                pos,
+                alpha,
+                beta,
+                res,
+                best,
+            };
+            handles.push(tokio::task::spawn(ybwc_child(
+                solve_obj.clone(),
+                sub_solver.clone(),
+                depth,
+                context,
+            )));
         } else {
             let (child_res, _child_best, child_stat) = solve_outer(
                 solve_obj,
@@ -161,59 +186,40 @@ pub fn solve_outer(
             } else {
                 sub_solver.solve_remote(board, alpha, beta).await.unwrap()
             };
-            (res, None, stat)
-        } else {
-            match stability_cut(board, alpha, beta) {
-                CutType::NoCut => (),
-                CutType::MoreThanBeta(v) => {
-                    return (
-                        v,
-                        None,
-                        SolveStat {
-                            node_count: 1,
-                            st_cut_count: 1,
-                        },
-                    )
-                }
-                CutType::LessThanAlpha(v) => {
-                    return (
-                        v,
-                        None,
-                        SolveStat {
-                            node_count: 1,
-                            st_cut_count: 1,
-                        },
-                    )
-                }
-            }
-            let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
-                CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
-                CacheLookupResult::NoCut(l, u, b) => (l, u, b),
-            };
-            let (res, best, stat) = ybwc(
-                &mut solve_obj,
-                &sub_solver,
+            return (res, None, stat);
+        }
+        match stability_cut(board, alpha, beta) {
+            CutType::NoCut => (),
+            CutType::MoreThanBeta(v) => return (v, None, SolveStat::one_stcut()),
+            CutType::LessThanAlpha(v) => return (v, None, SolveStat::one_stcut()),
+        }
+        let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
+            CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
+            CacheLookupResult::NoCut(l, u, b) => (l, u, b),
+        };
+        let (res, best, stat) = ybwc(
+            &mut solve_obj,
+            &sub_solver,
+            board,
+            alpha,
+            beta,
+            passed,
+            old_best,
+            depth,
+        )
+        .await;
+        if rem >= solve_obj.params.res_cache_limit {
+            update_table(
+                solve_obj.res_cache,
                 board,
+                res,
+                best,
                 alpha,
                 beta,
-                passed,
-                old_best,
-                depth,
-            )
-            .await;
-            if rem >= solve_obj.params.res_cache_limit {
-                update_table(
-                    solve_obj.res_cache,
-                    board,
-                    res,
-                    best,
-                    alpha,
-                    beta,
-                    (lower, upper),
-                );
-            }
-            (res, best, stat)
+                (lower, upper),
+            );
         }
+        (res, best, stat)
     }
     .boxed()
 }

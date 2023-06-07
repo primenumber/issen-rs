@@ -89,6 +89,12 @@ impl SolveStat {
             st_cut_count: 0,
         }
     }
+    pub fn one_stcut() -> SolveStat {
+        SolveStat {
+            node_count: 1,
+            st_cut_count: 1,
+        }
+    }
     pub fn zero() -> SolveStat {
         SolveStat {
             node_count: 0,
