@@ -35,8 +35,7 @@ fn test_solve_inner() {
         let (res, _stat) = solve_inner(
             &mut obj,
             board,
-            -(BOARD_SIZE as i8),
-            BOARD_SIZE as i8,
+            (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
             false,
         );
         if res != desired {
@@ -57,8 +56,7 @@ fn bench_solve_inner(b: &mut Bencher) {
             let (_res, _stat) = solve_inner(
                 &mut obj,
                 board,
-                -(BOARD_SIZE as i8),
-                BOARD_SIZE as i8,
+                (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
                 false,
             );
         }
