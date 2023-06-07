@@ -2,8 +2,8 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::hand::*;
 use crate::playout::*;
-use crate::setup::*;
 use crate::serialize::*;
+use crate::setup::*;
 use crate::train::*;
 use clap::ArgMatches;
 use rayon::prelude::*;
@@ -60,11 +60,7 @@ fn minimax_record_impl<W: Write>(
     }
 }
 
-fn get_best_records(
-    board: Board,
-    tree: &HashMap<Board, (i8, Vec<Hand>)>,
-    current: &mut Vec<Hand>,
-) -> Vec<Vec<Hand>> {
+fn get_best_records(board: Board, tree: &HashMap<Board, (i8, Vec<Hand>)>, current: &mut Vec<Hand>) -> Vec<Vec<Hand>> {
     let mut result = Vec::new();
     let board_2 = if board.mobility_bits() == 0 {
         if board.pass().mobility_bits() == 0 {

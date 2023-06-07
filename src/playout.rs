@@ -58,8 +58,7 @@ pub async fn playout(
             if board.mobility_bits() == 0 {
                 board = board.pass();
             }
-            let (_score, hand, _depth) =
-                searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             if let Hand::Play(pos) = hand {
                 board = board.play(pos).unwrap();
                 updated_record += &pos_to_str(pos);

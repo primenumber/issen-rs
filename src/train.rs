@@ -6,8 +6,8 @@ use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::playout::*;
-use crate::setup::*;
 use crate::serialize::*;
+use crate::setup::*;
 use crate::sparse_mat::*;
 use clap::ArgMatches;
 use rayon::prelude::*;
@@ -369,8 +369,7 @@ impl WeightedPattern {
         for (idx, pattern) in self.patterns.iter().enumerate() {
             let pbit = pext(board.player, *pattern) as usize;
             let obit = pext(board.opponent, *pattern) as usize;
-            let pattern_index =
-                self.base3_converter.to_base3(pbit, obit) + self.pattern_starts[idx];
+            let pattern_index = self.base3_converter.to_base3(pbit, obit) + self.pattern_starts[idx];
             indices.push(pattern_index as u32);
         }
         indices

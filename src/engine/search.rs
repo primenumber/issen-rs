@@ -4,19 +4,19 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::midgame::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
-use crate::engine::midgame::*;
-use reqwest::Client;
-use std::cmp::{max, min};
-use crc64::Crc64;
-use std::mem::swap;
-use std::io::Write;
 use anyhow::Result;
+use crc64::Crc64;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::cmp::{max, min};
+use std::io::Write;
+use std::mem::swap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SolveRequest {
@@ -108,12 +108,7 @@ pub struct SubSolver {
 }
 
 impl SubSolver {
-    pub async fn solve_remote(
-        &self,
-        board: Board,
-        alpha: i8,
-        beta: i8,
-    ) -> Result<(i8, SolveStat)> {
+    pub async fn solve_remote(&self, board: Board, alpha: i8, beta: i8) -> Result<(i8, SolveStat)> {
         let data = SolveRequest {
             board: board.to_base81(),
             alpha,
@@ -196,11 +191,7 @@ fn calc_max_depth(rem: i8) -> i8 {
     max_depth
 }
 
-pub fn move_ordering_impl(
-    solve_obj: &mut SolveObj,
-    board: Board,
-    _old_best: Option<Hand>,
-) -> Vec<(Hand, Board)> {
+pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Option<Hand>) -> Vec<(Hand, Board)> {
     let mut nexts = Vec::with_capacity(32);
     for (next, pos) in board.next_iter() {
         nexts.push((0, pos, next));

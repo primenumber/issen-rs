@@ -1,14 +1,14 @@
 use crate::engine::bits::*;
-use futures::future::{BoxFuture, FutureExt};
-use futures::StreamExt;
-use crate::engine::endgame::*;
-use std::cmp::max;
-use futures::channel::mpsc;
-use std::sync::Arc;
 use crate::engine::board::*;
+use crate::engine::endgame::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
+use futures::channel::mpsc;
+use futures::future::{BoxFuture, FutureExt};
+use futures::StreamExt;
+use std::cmp::max;
+use std::sync::Arc;
 
 async fn ybwc(
     solve_obj: &mut SolveObj,
@@ -48,13 +48,7 @@ async fn ybwc(
         if i == 0 {
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
             let (child_res, _child_best, child_stat) = solve_outer(
-                solve_obj,
-                sub_solver,
-                next,
-                -beta,
-                -alpha,
-                false,
-                next_depth,
+                solve_obj, sub_solver, next, -beta, -alpha, false, next_depth,
             )
             .await;
             stat.merge(child_stat);
@@ -192,11 +186,10 @@ pub fn solve_outer(
                     )
                 }
             }
-            let (lower, upper, old_best) =
-                match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
-                    CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
-                    CacheLookupResult::NoCut(l, u, b) => (l, u, b),
-                };
+            let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
+                CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
+                CacheLookupResult::NoCut(l, u, b) => (l, u, b),
+            };
             let (res, best, stat) = ybwc(
                 &mut solve_obj,
                 &sub_solver,

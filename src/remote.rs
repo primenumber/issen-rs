@@ -1,6 +1,6 @@
 use crate::engine::board::*;
-use crate::engine::eval::*;
 use crate::engine::endgame::*;
+use crate::engine::eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;
@@ -10,13 +10,9 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-async fn worker_impl(
-    solve_obj: SolveObj,
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+async fn worker_impl(solve_obj: SolveObj, req: Request<Body>) -> Result<Response<Body>, Infallible> {
     let bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
-    let query: SolveRequest =
-        serde_json::from_str(&String::from_utf8(bytes.to_vec()).unwrap()).unwrap();
+    let query: SolveRequest = serde_json::from_str(&String::from_utf8(bytes.to_vec()).unwrap()).unwrap();
     let board = Board::from_base81(&query.board).unwrap();
     let result = solve_inner(
         &mut solve_obj.clone(),

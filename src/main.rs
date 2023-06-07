@@ -17,16 +17,16 @@ use crate::engine::search::*;
 use crate::play::*;
 use crate::remote::*;
 use crate::serialize::*;
-use std::sync::Arc;
 use crate::setup::*;
 use crate::train::*;
-use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
+use clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reqwest::Client;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::str;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Instant;
 
 fn to_si(x: usize) -> String {
@@ -156,7 +156,7 @@ fn ffo_benchmark(matches: &ArgMatches) {
     let mut stats = Vec::new();
     let worker_urls = match matches.get_many("workers") {
         Some(w) => w.cloned().collect::<Vec<String>>(),
-        None => Vec::new()
+        None => Vec::new(),
     };
     let sub_solver = Arc::new(setup_sub_solver(&worker_urls));
     //stats.extend(solve_ffo(
@@ -246,20 +246,31 @@ fn load_stress_test_set() -> Vec<(Board, i8)> {
 }
 
 #[tokio::main]
-async fn send_query(_matches: &ArgMatches)  {
+async fn send_query(_matches: &ArgMatches) {
     let dataset = load_stress_test_set();
     let client = Arc::new(Client::new());
-    let fut = futures::future::join_all(dataset.into_iter().map(|(board, _)| { let client = client.clone(); (board, client) }).map(|(board, client)| async move {
-        let result = send_query_impl(board, &client).await;
-        println!("{}", result);
-    }));
+    let fut = futures::future::join_all(
+        dataset
+            .into_iter()
+            .map(|(board, _)| {
+                let client = client.clone();
+                (board, client)
+            })
+            .map(|(board, client)| async move {
+                let result = send_query_impl(board, &client).await;
+                println!("{}", result);
+            }),
+    );
     let _ = tokio::spawn(fut).await;
 }
 
 fn main() {
     let arg_input_file = Arg::new("INPUT").short('i').required(true);
     let arg_output_file = Arg::new("OUTPUT").short('o').required(true);
-    let arg_worker_urls = Arg::new("workers").short('w').action(ArgAction::Append).value_parser(value_parser!(String));
+    let arg_worker_urls = Arg::new("workers")
+        .short('w')
+        .action(ArgAction::Append)
+        .value_parser(value_parser!(String));
     let matches = Command::new("Issen-rs")
         .subcommand(
             Command::new("ffobench")
@@ -271,7 +282,11 @@ fn main() {
                 .about("Interactive play")
                 .arg(Arg::new("player").short('i').required(true)),
         )
-        .subcommand(Command::new("self-play").about("Automatic self play").arg(arg_worker_urls.clone()))
+        .subcommand(
+            Command::new("self-play")
+                .about("Automatic self play")
+                .arg(arg_worker_urls.clone()),
+        )
         .subcommand(
             Command::new("gen-record")
                 .about("Generate record")
