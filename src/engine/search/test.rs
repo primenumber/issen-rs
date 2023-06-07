@@ -150,46 +150,6 @@ fn load_stress_test_set() -> Vec<(Board, i8)> {
     dataset
 }
 
-#[test]
-fn test_solve_inner() {
-    let solve_obj = setup_default();
-    let dataset = load_stress_test_set();
-
-    for &(board, desired) in dataset.iter() {
-        let mut obj = solve_obj.clone();
-        let (res, _stat) = solve_inner(
-            &mut obj,
-            board,
-            -(BOARD_SIZE as i8),
-            BOARD_SIZE as i8,
-            false,
-        );
-        if res != desired {
-            board.print();
-        }
-        assert_eq!(res, desired);
-    }
-}
-
-#[bench]
-fn bench_solve_inner(b: &mut Bencher) {
-    let solve_obj = setup_default();
-    let dataset = load_stress_test_set();
-
-    b.iter(|| {
-        for &(board, _desired) in dataset.iter() {
-            let mut obj = solve_obj.clone();
-            let (_res, _stat) = solve_inner(
-                &mut obj,
-                board,
-                -(BOARD_SIZE as i8),
-                BOARD_SIZE as i8,
-                false,
-            );
-        }
-    });
-}
-
 #[bench]
 fn bench_move_ordering(b: &mut Bencher) {
     let solve_obj = setup_default();
