@@ -15,6 +15,7 @@ use std::cmp::{max, min};
 use crc64::Crc64;
 use std::mem::{swap, MaybeUninit};
 use std::io::Write;
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
@@ -46,7 +47,6 @@ pub struct SearchParams {
     pub stability_cut_limit: i8,
     pub ffs_ordering_limit: i8,
     pub static_ordering_limit: i8,
-    pub use_worker: bool,
 }
 
 #[derive(Clone)]
@@ -54,7 +54,6 @@ pub struct SolveObj {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
     pub evaluator: Arc<Evaluator>,
-    pub client: Arc<Client>,
     params: SearchParams,
 }
 
@@ -94,16 +93,50 @@ impl SolveObj {
         res_cache: Arc<ResCacheTable>,
         eval_cache: Arc<EvalCacheTable>,
         evaluator: Arc<Evaluator>,
-        client: Arc<Client>,
         params: SearchParams,
     ) -> SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
             evaluator,
-            client,
             params,
         }
+    }
+}
+
+pub struct SubSolver {
+    pub client: Client,
+    pub sem: Semaphore,
+    pub workers: Vec<String>,
+}
+
+impl SubSolver {
+    async fn solve_remote(
+        &self,
+        board: Board,
+        alpha: i8,
+        beta: i8,
+    ) -> Result<(i8, SolveStat)> {
+        let data = SolveRequest {
+            board: board.to_base81(),
+            alpha,
+            beta,
+        };
+        let mut hasher = Crc64::new();
+        hasher.write(&board.player.to_le_bytes())?;
+        hasher.write(&board.opponent.to_le_bytes())?;
+        let data_json = serde_json::json!(data);
+        let worker_id = hasher.get() as usize % self.workers.len();
+        let url = &self.workers[worker_id];
+        let permit = self.sem.acquire().await?;
+        let resp = self.client.post(url).json(&data_json).send().await?;
+        let res = resp.json::<SolveResponse>().await?;
+        drop(permit);
+        let stat = SolveStat {
+            node_count: res.node_count,
+            st_cut_count: res.st_cut_count,
+        };
+        Ok((res.result, stat))
     }
 }
 
@@ -380,7 +413,7 @@ fn move_ordering_by_eval(
 
 async fn ybwc(
     solve_obj: &mut SolveObj,
-    sem: Arc<Semaphore>,
+    sub_solver: &Arc<SubSolver>,
     board: Board,
     mut alpha: i8,
     beta: i8,
@@ -396,7 +429,7 @@ async fn ybwc(
         } else {
             let (child_res, _child_best, child_stat) = solve_outer(
                 solve_obj,
-                sem.clone(),
+                sub_solver,
                 board.pass(),
                 -beta,
                 -alpha,
@@ -417,7 +450,7 @@ async fn ybwc(
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
             let (child_res, _child_best, child_stat) = solve_outer(
                 solve_obj,
-                sem.clone(),
+                sub_solver,
                 next,
                 -beta,
                 -alpha,
@@ -435,13 +468,13 @@ async fn ybwc(
         } else if depth < solve_obj.params.ybwc_depth_limit {
             let tx = tx.clone();
             let mut child_obj = solve_obj.clone();
+            let child_sub_solver = sub_solver.clone();
             let mut stat = SolveStat::zero();
-            let sem = sem.clone();
             handles.push(tokio::task::spawn(async move {
                 let next_depth = depth + child_obj.params.ybwc_younger_add;
                 let child_future = solve_outer(
                     &mut child_obj,
-                    sem.clone(),
+                    &child_sub_solver,
                     next,
                     -alpha - 1,
                     -alpha,
@@ -454,7 +487,7 @@ async fn ybwc(
                 if alpha < tmp && tmp < beta {
                     let child_future = solve_outer(
                         &mut child_obj,
-                        sem.clone(),
+                        &child_sub_solver,
                         next,
                         -beta,
                         -tmp,
@@ -475,7 +508,7 @@ async fn ybwc(
         } else {
             let (child_res, _child_best, child_stat) = solve_outer(
                 solve_obj,
-                sem.clone(),
+                sub_solver,
                 next,
                 -alpha - 1,
                 -alpha,
@@ -487,7 +520,7 @@ async fn ybwc(
             let mut tmp = -child_res;
             if alpha < tmp && tmp < beta {
                 let (child_res, _child_best, child_stat) =
-                    solve_outer(solve_obj, sem.clone(), next, -beta, -tmp, false, depth).await;
+                    solve_outer(solve_obj, sub_solver, next, -beta, -tmp, false, depth).await;
                 stat.merge(child_stat);
                 tmp = -child_res;
             }
@@ -650,40 +683,9 @@ pub fn solve_inner(
     }
 }
 
-async fn solve_remote(
-    solve_obj: &mut SolveObj,
-    sem: Arc<Semaphore>,
-    board: Board,
-    alpha: i8,
-    beta: i8,
-    _passed: bool,
-    _depth: i8,
-) -> (i8, Option<Hand>, SolveStat) {
-    let data = SolveRequest {
-        board: board.to_base81(),
-        alpha,
-        beta,
-    };
-    let mut hasher = Crc64::new();
-    hasher.write(&board.player.to_le_bytes()).unwrap();
-    hasher.write(&board.opponent.to_le_bytes()).unwrap();
-    let suffix = 192 + hasher.get() % 4;
-    let data_json = serde_json::json!(data);
-    let uri = format!("http://192.168.10.{}:7733", suffix);
-    let permit = sem.clone().acquire_owned().await.unwrap();
-    let resp = solve_obj.client.post(uri).json(&data_json).send().await.unwrap();
-    let res = resp.json::<SolveResponse>().await.unwrap();
-    drop(permit);
-    let stat = SolveStat {
-        node_count: res.node_count,
-        st_cut_count: res.st_cut_count,
-    };
-    (res.result, None, stat)
-}
-
 pub fn solve_outer(
     solve_obj: &mut SolveObj,
-    sem: Arc<Semaphore>,
+    sub_solver: &Arc<SubSolver>,
     board: Board,
     mut alpha: i8,
     mut beta: i8,
@@ -691,15 +693,16 @@ pub fn solve_outer(
     depth: i8,
 ) -> BoxFuture<'static, (i8, Option<Hand>, SolveStat)> {
     let mut solve_obj = solve_obj.clone();
+    let sub_solver = sub_solver.clone();
     async move {
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
-            if solve_obj.params.use_worker {
-                solve_remote(&mut solve_obj, sem, board, alpha, beta, passed, depth).await
+            let (res, stat) = if sub_solver.workers.is_empty() {
+                solve_inner(&mut solve_obj, board, alpha, beta, passed)
             } else {
-                let (res, stat) = solve_inner(&mut solve_obj, board, alpha, beta, passed);
-                (res, None, stat)
-            }
+                sub_solver.solve_remote(board, alpha, beta).await.unwrap()
+            };
+            (res, None, stat)
         } else {
             match stability_cut(board, alpha, beta) {
                 CutType::NoCut => (),
@@ -731,7 +734,7 @@ pub fn solve_outer(
                 };
             let (res, best, stat) = ybwc(
                 &mut solve_obj,
-                sem,
+                &sub_solver,
                 board,
                 alpha,
                 beta,
@@ -759,6 +762,7 @@ pub fn solve_outer(
 
 pub fn solve(
     solve_obj: &mut SolveObj,
+    sub_solver: &Arc<SubSolver>,
     board: Board,
     alpha: i8,
     beta: i8,
@@ -766,16 +770,15 @@ pub fn solve(
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
     let rt = Runtime::new().unwrap();
-    let sem = Arc::new(Semaphore::new(512));
     rt.block_on(solve_outer(
-        solve_obj, sem, board, alpha, beta, passed, depth,
+        solve_obj, sub_solver, board, alpha, beta, passed, depth,
     ))
 }
 
-pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sem: Arc<Semaphore>) -> Hand {
+pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
     match solve_outer(
         solve_obj,
-        sem.clone(),
+        sub_solver,
         board,
         -(BOARD_SIZE as i8),
         BOARD_SIZE as i8,
@@ -793,7 +796,7 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sem: Arc<Se
                 let next = board.play(pos).unwrap();
                 let res = -solve_outer(
                     solve_obj,
-                    sem.clone(),
+                    sub_solver,
                     next,
                     -(BOARD_SIZE as i8),
                     -result,

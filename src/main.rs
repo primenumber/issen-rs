@@ -20,7 +20,7 @@ use crate::serialize::*;
 use std::sync::Arc;
 use crate::setup::*;
 use crate::train::*;
-use clap::{Arg, ArgMatches, Command};
+use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use reqwest::Client;
 use std::fs::File;
 use std::io::prelude::*;
@@ -77,7 +77,7 @@ struct Stat {
     correct: bool,
 }
 
-fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj) -> Vec<Stat> {
+fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     println!("|No.|empties|result|answer|move|nodes|time|NPS|");
@@ -92,6 +92,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj) -> Vec<Sta
                 let start = Instant::now();
                 let (res, best, stat) = solve(
                     solve_obj,
+                    sub_solver,
                     board,
                     -(BOARD_SIZE as i8),
                     BOARD_SIZE as i8,
@@ -149,10 +150,15 @@ fn report_stats(stats: &[Stat]) {
     );
 }
 
-fn ffo_benchmark() {
+fn ffo_benchmark(matches: &ArgMatches) {
     let mut solve_obj = setup_default();
     let mut index: usize = 1;
     let mut stats = Vec::new();
+    let worker_urls = match matches.get_many("workers") {
+        Some(w) => w.cloned().collect::<Vec<String>>(),
+        None => Vec::new()
+    };
+    let sub_solver = Arc::new(setup_sub_solver(&worker_urls));
     //stats.extend(solve_ffo(
     //    "problem/hard-20.obf",
     //    &mut index,
@@ -173,21 +179,25 @@ fn ffo_benchmark() {
         "problem/fforum-1-19.obf",
         &mut index,
         &mut solve_obj,
+        &sub_solver,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
         &mut index,
         &mut solve_obj,
+        &sub_solver,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
         &mut index,
         &mut solve_obj,
+        &sub_solver,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
         &mut index,
         &mut solve_obj,
+        &sub_solver,
     ));
     report_stats(&stats);
 }
@@ -249,14 +259,19 @@ async fn send_query(_matches: &ArgMatches)  {
 fn main() {
     let arg_input_file = Arg::new("INPUT").short('i').required(true);
     let arg_output_file = Arg::new("OUTPUT").short('o').required(true);
+    let arg_worker_urls = Arg::new("workers").short('w').action(ArgAction::Append).value_parser(value_parser!(String));
     let matches = Command::new("Issen-rs")
-        .subcommand(Command::new("ffobench").about("Run FFO benchmark 1-79"))
+        .subcommand(
+            Command::new("ffobench")
+                .about("Run FFO benchmark 1-79")
+                .arg(arg_worker_urls.clone()),
+        )
         .subcommand(
             Command::new("play")
                 .about("Interactive play")
                 .arg(Arg::new("player").short('i').required(true)),
         )
-        .subcommand(Command::new("self-play").about("Automatic self play"))
+        .subcommand(Command::new("self-play").about("Automatic self play").arg(arg_worker_urls.clone()))
         .subcommand(
             Command::new("gen-record")
                 .about("Generate record")
@@ -355,8 +370,8 @@ fn main() {
         .subcommand(Command::new("query").about("query mode"))
         .get_matches();
     match matches.subcommand() {
-        Some(("ffobench", _matches)) => {
-            ffo_benchmark();
+        Some(("ffobench", matches)) => {
+            ffo_benchmark(matches);
         }
         Some(("play", matches)) => {
             play(matches);

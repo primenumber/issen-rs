@@ -229,6 +229,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         is_black: true,
     };
     let solve_obj = setup_default();
+    let sub_solver = Arc::new(setup_sub_solver(&[]));
     let depth = 18;
     for _ in 0..100 {
         let boards_with_results_all = minimax_record_body(&boards_set);
@@ -240,6 +241,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         let finished = Arc::new(AtomicUsize::new(0));
         for record in best_records {
             let mut solve_obj = solve_obj.clone();
+            let sub_solver = sub_solver.clone();
             let finished = finished.clone();
 
             handles.push(tokio::task::spawn(async move {
@@ -252,7 +254,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
                             _ => panic!(),
                         })
                         .collect();
-                    let updated = playout(&sub_record, &mut solve_obj, 200, depth).await;
+                    let updated = playout(&sub_record, &mut solve_obj, &sub_solver, 200, depth).await;
                     let count = finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     if count % 1000 == 0 {
                         eprintln!("{}", count);

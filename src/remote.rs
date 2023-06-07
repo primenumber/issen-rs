@@ -4,7 +4,6 @@ use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;
 use hyper::service::{make_service_fn, service_fn};
-use reqwest::Client;
 use hyper::{Body, Request, Response, Server};
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -52,13 +51,11 @@ async fn worker_body() {
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 3,
-        use_worker: false,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = Arc::new(ResCacheTable::new(256, 65536));
     let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
-    let client = Arc::new(Client::new());
-    let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, client, search_params);
+    let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 7733));
 

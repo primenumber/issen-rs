@@ -18,12 +18,12 @@ use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Runtime;
-use tokio::sync::Semaphore;
 
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.get_one::<String>("player").unwrap() == "B";
 
     let solve_obj = setup_default();
+    let sub_solver = Arc::new(setup_sub_solver(&[]));
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -65,10 +65,9 @@ pub fn play(matches: &ArgMatches) -> Board {
                 best
             } else {
                 let mut solve_obj = solve_obj.clone();
-                let sem = Arc::new(Semaphore::new(1024));
                 Runtime::new()
                     .unwrap()
-                    .block_on(solve_with_move(board, &mut solve_obj, sem))
+                    .block_on(solve_with_move(board, &mut solve_obj, &sub_solver))
             };
             solve_obj.eval_cache.inc_gen();
             solve_obj.res_cache.inc_gen();
@@ -87,8 +86,14 @@ pub fn play(matches: &ArgMatches) -> Board {
     board
 }
 
-pub fn self_play(_matches: &ArgMatches) -> Board {
+pub fn self_play(matches: &ArgMatches) -> Board {
     let solve_obj = setup_default();
+    let worker_urls = matches
+        .get_many("workers")
+        .unwrap()
+        .cloned()
+        .collect::<Vec<String>>();
+    let sub_solver = Arc::new(setup_sub_solver(&worker_urls));
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -121,10 +126,9 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
             best
         } else {
             let mut solve_obj = solve_obj.clone();
-            let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut solve_obj, sem))
+                .block_on(solve_with_move(board, &mut solve_obj, &sub_solver))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
@@ -142,7 +146,7 @@ pub fn self_play(_matches: &ArgMatches) -> Board {
     board
 }
 
-fn self_play_worker(solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8) {
+fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_record: &[Hand]) -> (String, i8) {
     use std::fmt::Write;
     let mut board = Board {
         player: 0x0000000810000000,
@@ -180,10 +184,9 @@ fn self_play_worker(solve_obj: SolveObj, initial_record: &[Hand]) -> (String, i8
             best
         } else {
             let mut obj = solve_obj.clone();
-            let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj, sem))
+                .block_on(solve_with_move(board, &mut obj, &sub_solver))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
@@ -240,6 +243,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let mut writer = BufWriter::new(out_f);
 
     let solve_obj = setup_default();
+    let sub_solver = Arc::new(setup_sub_solver(&[]));
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -255,7 +259,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let mut results = Vec::new();
     initial_records
         .par_iter()
-        .map(|r| self_play_worker(solve_obj.clone(), r))
+        .map(|r| self_play_worker(solve_obj.clone(), sub_solver.clone(), r))
         .collect_into_vec(&mut results);
     for (record, score) in results {
         writeln!(writer, "{} {}", record, score).unwrap();
@@ -270,6 +274,7 @@ macro_rules! parse_input {
 
 pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let solve_obj = setup_default();
+    let sub_solver = Arc::new(setup_sub_solver(&[]));
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states
@@ -344,10 +349,9 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             best
         } else {
             let mut solve_obj = solve_obj.clone();
-            let sem = Arc::new(Semaphore::new(1024));
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut solve_obj, sem))
+                .block_on(solve_with_move(board, &mut solve_obj, &sub_solver))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();

@@ -19,7 +19,6 @@ use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
-use tokio::sync::Semaphore;
 
 const PACKED_SCALE: i32 = 256;
 
@@ -181,11 +180,11 @@ pub fn pos_to_str(pos: usize) -> String {
 pub async fn create_record_by_solve(
     mut board: Board,
     solve_obj: &mut SolveObj,
-    sem: Arc<Semaphore>,
+    sub_solver: &Arc<SubSolver>,
 ) -> (String, Board) {
     let mut result = String::new();
     while !board.is_gameover() {
-        let pos = solve_with_move(board, solve_obj, sem.clone()).await;
+        let pos = solve_with_move(board, solve_obj, sub_solver).await;
         if let Hand::Play(pos) = pos {
             result += &pos_to_str(pos);
             board = board.play(pos).unwrap();
@@ -209,6 +208,7 @@ pub fn update_record(matches: &ArgMatches) {
     let num_records = input_line.trim().parse().unwrap();
 
     let solve_obj = setup_default();
+    let sub_solver = Arc::new(setup_sub_solver(&[]));
 
     let mut handles = Vec::new();
     let finished = Arc::new(AtomicUsize::new(0));
@@ -218,6 +218,7 @@ pub fn update_record(matches: &ArgMatches) {
         let finished = finished.clone();
 
         let mut solve_obj = solve_obj.clone();
+        let sub_solver = sub_solver.clone();
         handles.push(tokio::task::spawn(async move {
             let record = parse_record(&input_line);
             let mut updateds = Vec::new();
@@ -225,7 +226,7 @@ pub fn update_record(matches: &ArgMatches) {
                 let sub_record = record.clone();
                 let sub_record = &sub_record[0..=idx];
                 //let updated = update_record_impl(&record, &mut solve_obj, depth).await;
-                let updated = playout(sub_record, &mut solve_obj, 100, depth).await;
+                let updated = playout(sub_record, &mut solve_obj, &sub_solver, 100, depth).await;
                 let count = finished.fetch_add(1, Ordering::SeqCst);
                 if count % 1000 == 0 {
                     eprintln!("{}", count);
