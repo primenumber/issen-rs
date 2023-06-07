@@ -94,8 +94,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, sub_solver
                     solve_obj,
                     sub_solver,
                     board,
-                    -(BOARD_SIZE as i8),
-                    BOARD_SIZE as i8,
+                    (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
                     false,
                     0,
                 );

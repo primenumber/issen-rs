@@ -206,8 +206,7 @@ fn make_record(
     board: Board,
     mut res: i8,
     best: Option<Hand>,
-    alpha: i8,
-    beta: i8,
+    (alpha, beta): (i8, i8),
     range: (i8, i8),
 ) -> ResCache {
     res = res.clamp(range.0, range.1);
@@ -232,8 +231,7 @@ pub fn update_table(
     board: Board,
     res: i8,
     best: Option<Hand>,
-    alpha: i8,
-    beta: i8,
+    (alpha, beta): (i8, i8),
     range: (i8, i8),
 ) {
     let record = make_record(
@@ -241,8 +239,7 @@ pub fn update_table(
         board,
         res,
         best,
-        alpha,
-        beta,
+        (alpha, beta),
         range,
     );
     res_cache.update(record);

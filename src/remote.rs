@@ -17,8 +17,7 @@ async fn worker_impl(solve_obj: SolveObj, req: Request<Body>) -> Result<Response
     let result = solve_inner(
         &mut solve_obj.clone(),
         board,
-        query.alpha,
-        query.beta,
+        (query.alpha, query.beta),
         false,
     );
     let res_str = serde_json::to_string(&serde_json::json!(SolveResponse {

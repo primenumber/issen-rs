@@ -114,7 +114,7 @@ pub struct SubSolver {
 }
 
 impl SubSolver {
-    pub async fn solve_remote(&self, board: Board, alpha: i8, beta: i8) -> Result<(i8, SolveStat)> {
+    pub async fn solve_remote(&self, board: Board, (alpha, beta): (i8, i8)) -> Result<(i8, SolveStat)> {
         let data = SolveRequest {
             board: board.to_base81(),
             alpha,
@@ -144,7 +144,7 @@ pub enum CacheLookupResult {
     NoCut(i8, i8, Option<Hand>),
 }
 
-pub fn make_lookup_result(res_cache: Option<ResCache>, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
+pub fn make_lookup_result(res_cache: Option<ResCache>, (alpha, beta): (&mut i8, &mut i8)) -> CacheLookupResult {
     let (lower, upper, old_best) = match res_cache {
         Some(cache) => (cache.lower, cache.upper, cache.best),
         None => (-(BOARD_SIZE as i8), BOARD_SIZE as i8, None),
@@ -163,12 +163,12 @@ pub fn make_lookup_result(res_cache: Option<ResCache>, alpha: &mut i8, beta: &mu
     }
 }
 
-pub fn lookup_table(solve_obj: &mut SolveObj, board: Board, alpha: &mut i8, beta: &mut i8) -> CacheLookupResult {
+pub fn lookup_table(solve_obj: &mut SolveObj, board: Board, (alpha, beta): (&mut i8, &mut i8)) -> CacheLookupResult {
     let res_cache = solve_obj.res_cache.get(board);
-    make_lookup_result(res_cache, alpha, beta)
+    make_lookup_result(res_cache, (alpha, beta))
 }
 
-pub fn stability_cut(board: Board, alpha: i8, beta: i8) -> CutType {
+pub fn stability_cut(board: Board, (alpha, beta): (i8, i8)) -> CutType {
     let (bits_me, bits_op) = board.stable_partial();
     let lower = 2 * popcnt(bits_me) - BOARD_SIZE as i8;
     let upper = (BOARD_SIZE as i8) - 2 * popcnt(bits_op);
@@ -255,14 +255,18 @@ pub fn solve(
     solve_obj: &mut SolveObj,
     sub_solver: &Arc<SubSolver>,
     board: Board,
-    alpha: i8,
-    beta: i8,
+    (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
     let rt = Runtime::new().unwrap();
     rt.block_on(solve_outer(
-        solve_obj, sub_solver, board, alpha, beta, passed, depth,
+        solve_obj,
+        sub_solver,
+        board,
+        (alpha, beta),
+        passed,
+        depth,
     ))
 }
 
@@ -271,8 +275,7 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver:
         solve_obj,
         sub_solver,
         board,
-        -(BOARD_SIZE as i8),
-        BOARD_SIZE as i8,
+        (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
         false,
         0,
     )
@@ -289,8 +292,7 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver:
                     solve_obj,
                     sub_solver,
                     next,
-                    -(BOARD_SIZE as i8),
-                    -result,
+                    (-(BOARD_SIZE as i8), -result),
                     false,
                     0,
                 )

@@ -28,8 +28,7 @@ async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, depth: 
         &mut solve_obj,
         &sub_solver,
         cxt.next,
-        -cxt.alpha - 1,
-        -cxt.alpha,
+        (-cxt.alpha - 1, -cxt.alpha),
         false,
         next_depth,
     );
@@ -41,8 +40,7 @@ async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, depth: 
             &mut solve_obj,
             &sub_solver,
             cxt.next,
-            -cxt.beta,
-            -tmp,
+            (-cxt.beta, -tmp),
             false,
             next_depth,
         );
@@ -62,8 +60,7 @@ async fn ybwc(
     solve_obj: &mut SolveObj,
     sub_solver: &Arc<SubSolver>,
     board: Board,
-    mut alpha: i8,
-    beta: i8,
+    (mut alpha, beta): (i8, i8),
     passed: bool,
     old_best: Option<Hand>,
     depth: i8,
@@ -78,8 +75,7 @@ async fn ybwc(
                 solve_obj,
                 sub_solver,
                 board.pass(),
-                -beta,
-                -alpha,
+                (-beta, -alpha),
                 true,
                 depth,
             )
@@ -96,7 +92,12 @@ async fn ybwc(
         if i == 0 {
             let next_depth = depth + solve_obj.params.ybwc_elder_add;
             let (child_res, _child_best, child_stat) = solve_outer(
-                solve_obj, sub_solver, next, -beta, -alpha, false, next_depth,
+                solve_obj,
+                sub_solver,
+                next,
+                (-beta, -alpha),
+                false,
+                next_depth,
             )
             .await;
             stat.merge(child_stat);
@@ -128,8 +129,7 @@ async fn ybwc(
                 solve_obj,
                 sub_solver,
                 next,
-                -alpha - 1,
-                -alpha,
+                (-alpha - 1, -alpha),
                 false,
                 depth,
             )
@@ -138,7 +138,7 @@ async fn ybwc(
             let mut tmp = -child_res;
             if alpha < tmp && tmp < beta {
                 let (child_res, _child_best, child_stat) =
-                    solve_outer(solve_obj, sub_solver, next, -beta, -tmp, false, depth).await;
+                    solve_outer(solve_obj, sub_solver, next, (-beta, -tmp), false, depth).await;
                 stat.merge(child_stat);
                 tmp = -child_res;
             }
@@ -171,8 +171,7 @@ pub fn solve_outer(
     solve_obj: &mut SolveObj,
     sub_solver: &Arc<SubSolver>,
     board: Board,
-    mut alpha: i8,
-    mut beta: i8,
+    (mut alpha, mut beta): (i8, i8),
     passed: bool,
     depth: i8,
 ) -> BoxFuture<'static, (i8, Option<Hand>, SolveStat)> {
@@ -182,18 +181,18 @@ pub fn solve_outer(
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
             let (res, stat) = if sub_solver.workers.is_empty() {
-                solve_inner(&mut solve_obj, board, alpha, beta, passed)
+                solve_inner(&mut solve_obj, board, (alpha, beta), passed)
             } else {
-                sub_solver.solve_remote(board, alpha, beta).await.unwrap()
+                sub_solver.solve_remote(board, (alpha, beta)).await.unwrap()
             };
             return (res, None, stat);
         }
-        match stability_cut(board, alpha, beta) {
+        match stability_cut(board, (alpha, beta)) {
             CutType::NoCut => (),
             CutType::MoreThanBeta(v) => return (v, None, SolveStat::one_stcut()),
             CutType::LessThanAlpha(v) => return (v, None, SolveStat::one_stcut()),
         }
-        let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, &mut alpha, &mut beta) {
+        let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, (&mut alpha, &mut beta)) {
             CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
             CacheLookupResult::NoCut(l, u, b) => (l, u, b),
         };
@@ -201,8 +200,7 @@ pub fn solve_outer(
             &mut solve_obj,
             &sub_solver,
             board,
-            alpha,
-            beta,
+            (alpha, beta),
             passed,
             old_best,
             depth,
@@ -214,8 +212,7 @@ pub fn solve_outer(
                 board,
                 res,
                 best,
-                alpha,
-                beta,
+                (alpha, beta),
                 (lower, upper),
             );
         }

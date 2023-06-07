@@ -25,13 +25,13 @@ fn near_leaf(board: Board) -> (i8, SolveStat) {
     }
 }
 
-fn naive(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool) -> (i8, SolveStat) {
+fn naive(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
     let mut pass = true;
     let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
     for (next, _pos) in board.next_iter() {
         pass = false;
-        let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
+        let (child_res, child_stat) = solve_inner(solve_obj, next, (-beta, -alpha), false);
         res = max(res, -child_res);
         stat.merge(child_stat);
         alpha = max(alpha, res);
@@ -43,7 +43,7 @@ fn naive(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -51,7 +51,7 @@ fn naive(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed
     (res, stat)
 }
 
-fn static_order(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool) -> (i8, SolveStat) {
+fn static_order(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
     let mut pass = true;
     let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
@@ -68,7 +68,7 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8,
             remain = remain & (remain - 1);
             if let Ok(next) = board.play(pos) {
                 pass = false;
-                let (child_res, child_stat) = solve_inner(solve_obj, next, -beta, -alpha, false);
+                let (child_res, child_stat) = solve_inner(solve_obj, next, (-beta, -alpha), false);
                 res = max(res, -child_res);
                 stat.merge(child_stat);
                 alpha = max(alpha, res);
@@ -82,7 +82,7 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8,
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -90,17 +90,17 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8,
     (res, stat)
 }
 
-fn negascout_impl(solve_obj: &mut SolveObj, next: Board, alpha: i8, beta: i8, is_first: bool) -> (i8, SolveStat) {
+fn negascout_impl(solve_obj: &mut SolveObj, next: Board, (alpha, beta): (i8, i8), is_first: bool) -> (i8, SolveStat) {
     if is_first {
-        solve_inner(solve_obj, next, -beta, -alpha, false)
+        solve_inner(solve_obj, next, (-beta, -alpha), false)
     } else {
-        let (res, mut stat) = solve_inner(solve_obj, next, -alpha - 1, -alpha, false);
+        let (res, mut stat) = solve_inner(solve_obj, next, (-alpha - 1, -alpha), false);
         let mut neg_result = -res;
         if neg_result >= beta {
             return (res, stat);
         }
         if neg_result > alpha {
-            let (res2, stat2) = solve_inner(solve_obj, next, -beta, -neg_result, false);
+            let (res2, stat2) = solve_inner(solve_obj, next, (-beta, -neg_result), false);
             stat.merge(stat2);
             neg_result = -res2;
         }
@@ -108,7 +108,7 @@ fn negascout_impl(solve_obj: &mut SolveObj, next: Board, alpha: i8, beta: i8, is
     }
 }
 
-fn fastest_first(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8, passed: bool) -> (i8, SolveStat) {
+fn fastest_first(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
     const MAX_FFS_NEXT: usize = 20;
     let nexts = MaybeUninit::<[(i8, Board); MAX_FFS_NEXT]>::uninit();
     let mut nexts = unsafe { nexts.assume_init() };
@@ -123,7 +123,7 @@ fn fastest_first(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8
     let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
     for (i, &(_, next)) in nexts[0..count].iter().enumerate() {
-        let (child_res, child_stat) = negascout_impl(solve_obj, next, alpha, beta, i == 0);
+        let (child_res, child_stat) = negascout_impl(solve_obj, next, (alpha, beta), i == 0);
         res = max(res, -child_res);
         stat.merge(child_stat);
         alpha = max(alpha, res);
@@ -135,7 +135,7 @@ fn fastest_first(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_result, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
+            let (child_result, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_result, stat);
         }
@@ -146,8 +146,7 @@ fn fastest_first(solve_obj: &mut SolveObj, board: Board, mut alpha: i8, beta: i8
 fn move_ordering_by_eval(
     solve_obj: &mut SolveObj,
     board: Board,
-    mut alpha: i8,
-    beta: i8,
+    (mut alpha, beta): (i8, i8),
     passed: bool,
     old_best: Option<Hand>,
 ) -> (i8, Option<Hand>, SolveStat) {
@@ -156,7 +155,7 @@ fn move_ordering_by_eval(
     let mut best = None;
     let mut stat = SolveStat::one();
     for (i, &(pos, next)) in v.iter().enumerate() {
-        let (child_res, child_stat) = negascout_impl(solve_obj, next, alpha, beta, i == 0);
+        let (child_res, child_stat) = negascout_impl(solve_obj, next, (alpha, beta), i == 0);
         if -child_res > res {
             res = -child_res;
             best = Some(pos);
@@ -171,7 +170,7 @@ fn move_ordering_by_eval(
         if passed {
             return (board.score(), Some(Hand::Pass), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), -beta, -alpha, true);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_res, Some(Hand::Pass), stat);
         }
@@ -182,8 +181,7 @@ fn move_ordering_by_eval(
 pub fn solve_inner(
     solve_obj: &mut SolveObj,
     board: Board,
-    mut alpha: i8,
-    mut beta: i8,
+    (mut alpha, mut beta): (i8, i8),
     passed: bool,
 ) -> (i8, SolveStat) {
     let rem = popcnt(board.empty());
@@ -192,65 +190,47 @@ pub fn solve_inner(
     } else if rem == 1 {
         near_leaf(board)
     } else if rem < solve_obj.params.static_ordering_limit {
-        naive(solve_obj, board, alpha, beta, passed)
+        naive(solve_obj, board, (alpha, beta), passed)
     } else if rem < solve_obj.params.ffs_ordering_limit {
-        static_order(solve_obj, board, alpha, beta, passed)
+        static_order(solve_obj, board, (alpha, beta), passed)
     } else {
         if rem >= solve_obj.params.stability_cut_limit {
-            match stability_cut(board, alpha, beta) {
+            match stability_cut(board, (alpha, beta)) {
                 CutType::NoCut => (),
-                CutType::MoreThanBeta(v) => {
-                    return (
-                        v,
-                        SolveStat {
-                            node_count: 1,
-                            st_cut_count: 1,
-                        },
-                    )
-                }
-                CutType::LessThanAlpha(v) => {
-                    return (
-                        v,
-                        SolveStat {
-                            node_count: 1,
-                            st_cut_count: 1,
-                        },
-                    )
-                }
+                CutType::MoreThanBeta(v) => return (v, SolveStat::one_stcut()),
+                CutType::LessThanAlpha(v) => return (v, SolveStat::one_stcut()),
             }
         }
         if rem < solve_obj.params.res_cache_limit {
-            fastest_first(solve_obj, board, alpha, beta, passed)
+            fastest_first(solve_obj, board, (alpha, beta), passed)
         } else if rem < solve_obj.params.eval_ordering_limit {
-            let (lower, upper) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
+            let (lower, upper) = match lookup_table(solve_obj, board, (&mut alpha, &mut beta)) {
                 CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
                 CacheLookupResult::NoCut(l, u, _) => (l, u),
             };
-            let (res, stat) = fastest_first(solve_obj, board, alpha, beta, passed);
+            let (res, stat) = fastest_first(solve_obj, board, (alpha, beta), passed);
             update_table(
                 solve_obj.res_cache.clone(),
                 board,
                 res,
                 None,
-                alpha,
-                beta,
+                (alpha, beta),
                 (lower, upper),
             );
             (res, stat)
         } else {
-            let (lower, upper, old_best) = match lookup_table(solve_obj, board, &mut alpha, &mut beta) {
+            let (lower, upper, old_best) = match lookup_table(solve_obj, board, (&mut alpha, &mut beta)) {
                 CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
                 CacheLookupResult::NoCut(l, u, b) => (l, u, b),
             };
-            let (res, best, stat) = move_ordering_by_eval(solve_obj, board, alpha, beta, passed, old_best);
+            let (res, best, stat) = move_ordering_by_eval(solve_obj, board, (alpha, beta), passed, old_best);
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
                     solve_obj.res_cache.clone(),
                     board,
                     res,
                     best,
-                    alpha,
-                    beta,
+                    (alpha, beta),
                     (lower, upper),
                 );
             }
