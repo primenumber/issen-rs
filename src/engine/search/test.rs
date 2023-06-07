@@ -20,7 +20,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -12;
         let mut beta = 4;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(
             result,
             CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
@@ -32,7 +32,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -30;
         let mut beta = 20;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(
             result,
             CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
@@ -44,7 +44,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -32;
         let mut beta = 8;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(
             result,
             CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
@@ -56,7 +56,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -6;
         let mut beta = 26;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(
             result,
             CacheLookupResult::NoCut(res_cache.lower, res_cache.upper, res_cache.best)
@@ -68,7 +68,7 @@ fn test_lookup_result() {
     {
         let mut alpha = 22;
         let mut beta = 46;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(result, CacheLookupResult::Cut(res_cache.upper));
         assert_eq!(alpha, 22);
         assert_eq!(beta, res_cache.upper);
@@ -77,7 +77,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -42;
         let mut beta = -24;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(result, CacheLookupResult::Cut(res_cache.lower));
         assert_eq!(alpha, res_cache.lower);
         assert_eq!(beta, -24);
@@ -86,7 +86,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -6;
         let mut beta = 26;
-        let result = make_lookup_result(None, &mut alpha, &mut beta);
+        let result = make_lookup_result(None, (&mut alpha, &mut beta));
         assert_eq!(
             result,
             CacheLookupResult::NoCut(-(BOARD_SIZE as i8), BOARD_SIZE as i8, None)
@@ -98,7 +98,7 @@ fn test_lookup_result() {
     {
         let mut alpha = 16;
         let mut beta = 26;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(result, CacheLookupResult::Cut(res_cache.upper));
         assert_eq!(alpha, 16);
         assert_eq!(beta, 16);
@@ -107,7 +107,7 @@ fn test_lookup_result() {
     {
         let mut alpha = -38;
         let mut beta = -24;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(result, CacheLookupResult::Cut(res_cache.lower));
         assert_eq!(alpha, res_cache.lower);
         assert_eq!(beta, -24);
@@ -123,7 +123,7 @@ fn test_lookup_result() {
         };
         let mut alpha = -38;
         let mut beta = 30;
-        let result = make_lookup_result(Some(res_cache.clone()), &mut alpha, &mut beta);
+        let result = make_lookup_result(Some(res_cache.clone()), (&mut alpha, &mut beta));
         assert_eq!(result, CacheLookupResult::Cut(res_cache.lower));
         assert_eq!(alpha, res_cache.lower);
         assert_eq!(beta, res_cache.lower);
