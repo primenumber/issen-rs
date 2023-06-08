@@ -271,7 +271,7 @@ pub fn solve(
 }
 
 pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
-    match solve_outer(
+    if let Some(best) = solve_outer(
         solve_obj,
         sub_solver,
         board,
@@ -282,32 +282,30 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver:
     .await
     .1
     {
-        Some(best) => best,
-        None => {
-            let mut best_pos = None;
-            let mut result = -65;
-            for pos in board.mobility() {
-                let next = board.play(pos).unwrap();
-                let res = -solve_outer(
-                    solve_obj,
-                    sub_solver,
-                    next,
-                    (-(BOARD_SIZE as i8), -result),
-                    false,
-                    0,
-                )
-                .await
-                .0;
-                if res > result {
-                    result = res;
-                    best_pos = Some(pos);
-                }
-            }
-            if let Some(pos) = best_pos {
-                Hand::Play(pos)
-            } else {
-                Hand::Pass
-            }
+        return best;
+    }
+    let mut best_pos = None;
+    let mut result = -65;
+    for pos in board.mobility() {
+        let next = board.play(pos).unwrap();
+        let res = -solve_outer(
+            solve_obj,
+            sub_solver,
+            next,
+            (-(BOARD_SIZE as i8), -result),
+            false,
+            0,
+        )
+        .await
+        .0;
+        if res > result {
+            result = res;
+            best_pos = Some(pos);
         }
+    }
+    if let Some(pos) = best_pos {
+        Hand::Play(pos)
+    } else {
+        Hand::Pass
     }
 }
