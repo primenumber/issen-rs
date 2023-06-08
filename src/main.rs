@@ -77,7 +77,7 @@ struct Stat {
     correct: bool,
 }
 
-fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Vec<Stat> {
+fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &[String]) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     println!("|No.|empties|result|answer|move|nodes|time|NPS|");
@@ -92,7 +92,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, sub_solver
                 let start = Instant::now();
                 let (res, best, stat) = solve(
                     solve_obj,
-                    sub_solver,
+                    workers,
                     board,
                     (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
                     false,
@@ -157,7 +157,6 @@ fn ffo_benchmark(matches: &ArgMatches) {
         Some(w) => w.cloned().collect::<Vec<String>>(),
         None => Vec::new(),
     };
-    let sub_solver = Arc::new(setup_sub_solver(&worker_urls));
     //stats.extend(solve_ffo(
     //    "problem/hard-20.obf",
     //    &mut index,
@@ -178,25 +177,25 @@ fn ffo_benchmark(matches: &ArgMatches) {
         "problem/fforum-1-19.obf",
         &mut index,
         &mut solve_obj,
-        &sub_solver,
+        &worker_urls,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-20-39.obf",
         &mut index,
         &mut solve_obj,
-        &sub_solver,
+        &worker_urls,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-40-59.obf",
         &mut index,
         &mut solve_obj,
-        &sub_solver,
+        &worker_urls,
     ));
     stats.extend(solve_ffo(
         "problem/fforum-60-79.obf",
         &mut index,
         &mut solve_obj,
-        &sub_solver,
+        &worker_urls,
     ));
     report_stats(&stats);
 }

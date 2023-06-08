@@ -23,7 +23,7 @@ pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.get_one::<String>("player").unwrap() == "B";
 
     let solve_obj = setup_default();
-    let sub_solver = Arc::new(setup_sub_solver(&[]));
+    let sub_solver = Arc::new(SubSolver::new(&[]));
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -93,7 +93,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
         .unwrap()
         .cloned()
         .collect::<Vec<String>>();
-    let sub_solver = Arc::new(setup_sub_solver(&worker_urls));
+    let sub_solver = Arc::new(SubSolver::new(&worker_urls));
 
     let mut board = Board {
         player: 0x0000000810000000,
@@ -243,7 +243,7 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let mut writer = BufWriter::new(out_f);
 
     let solve_obj = setup_default();
-    let sub_solver = Arc::new(setup_sub_solver(&[]));
+    let sub_solver = Arc::new(SubSolver::new(&[]));
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
@@ -274,7 +274,7 @@ macro_rules! parse_input {
 
 pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let solve_obj = setup_default();
-    let sub_solver = Arc::new(setup_sub_solver(&[]));
+    let sub_solver = Arc::new(SubSolver::new(&[]));
     let mut reader = BufReader::new(std::io::stdin());
 
     // read initial states

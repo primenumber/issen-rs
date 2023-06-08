@@ -107,13 +107,22 @@ impl SolveStat {
     }
 }
 
+#[derive(Clone)]
 pub struct SubSolver {
     pub client: Client,
-    pub sem: Semaphore,
-    pub workers: Vec<String>,
+    pub sem: Arc<Semaphore>,
+    pub workers: Arc<Vec<String>>,
 }
 
 impl SubSolver {
+    pub fn new(worker_urls: &[String]) -> SubSolver {
+        SubSolver {
+            client: Client::new(),
+            sem: Arc::new(Semaphore::new(128)),
+            workers: Arc::new(worker_urls.to_vec()),
+        }
+    }
+
     pub async fn solve_remote(&self, board: Board, (alpha, beta): (i8, i8)) -> Result<(i8, SolveStat)> {
         let data = SolveRequest {
             board: board.to_base81(),
@@ -253,21 +262,17 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
 
 pub fn solve(
     solve_obj: &mut SolveObj,
-    sub_solver: &Arc<SubSolver>,
+    worker_urls: &[String],
     board: Board,
     (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
     let rt = Runtime::new().unwrap();
-    rt.block_on(solve_outer(
-        solve_obj,
-        sub_solver,
-        board,
-        (alpha, beta),
-        passed,
-        depth,
-    ))
+    rt.block_on(async move {
+        let sub_solver = SubSolver::new(worker_urls);
+        solve_outer(solve_obj, &sub_solver, board, (alpha, beta), passed, depth).await
+    })
 }
 
 pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
