@@ -158,6 +158,9 @@ async fn ybwc(
             res = child_res;
             best = child_best;
             if res >= beta {
+                for handle in &handles {
+                    handle.abort();
+                }
                 rx.close();
                 return (res, best, stat);
             }
