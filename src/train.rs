@@ -208,7 +208,7 @@ pub fn update_record(matches: &ArgMatches) {
     let num_records = input_line.trim().parse().unwrap();
 
     let solve_obj = setup_default();
-    let sub_solver = Arc::new(setup_sub_solver(&[]));
+    let sub_solver = Arc::new(SubSolver::new(&[]));
 
     let mut handles = Vec::new();
     let finished = Arc::new(AtomicUsize::new(0));

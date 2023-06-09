@@ -1,9 +1,7 @@
 use crate::engine::eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
-use reqwest::Client;
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 pub fn setup_default() -> SolveObj {
     let res_cache = Arc::new(ResCacheTable::new(256, 65536));
@@ -22,13 +20,4 @@ pub fn setup_default() -> SolveObj {
         static_ordering_limit: 5,
     };
     SolveObj::new(res_cache, eval_cache, evaluator, search_params)
-}
-
-pub fn setup_sub_solver(worker_urls: &[String]) -> SubSolver {
-    eprintln!("{:?}", worker_urls);
-    SubSolver {
-        client: Client::new(),
-        sem: Semaphore::new(128),
-        workers: worker_urls.to_vec(),
-    }
 }

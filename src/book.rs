@@ -1,6 +1,7 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::hand::*;
+use crate::engine::search::*;
 use crate::playout::*;
 use crate::serialize::*;
 use crate::setup::*;
@@ -225,7 +226,7 @@ pub fn iterative_update_book(matches: &ArgMatches) {
         is_black: true,
     };
     let solve_obj = setup_default();
-    let sub_solver = Arc::new(setup_sub_solver(&[]));
+    let sub_solver = Arc::new(SubSolver::new(&[]));
     let depth = 18;
     for _ in 0..100 {
         let boards_with_results_all = minimax_record_body(&boards_set);

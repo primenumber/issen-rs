@@ -9,7 +9,6 @@ use futures::channel::mpsc::UnboundedSender;
 use futures::future::{BoxFuture, FutureExt};
 use futures::StreamExt;
 use std::cmp::max;
-use std::sync::Arc;
 
 struct YBWCContext {
     tx: UnboundedSender<((i8, Option<Hand>), SolveStat)>,
@@ -21,7 +20,7 @@ struct YBWCContext {
     best: Option<Hand>,
 }
 
-async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, depth: i8, mut cxt: YBWCContext) {
+async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: SubSolver, depth: i8, mut cxt: YBWCContext) {
     let mut stat = SolveStat::zero();
     let next_depth = depth + solve_obj.params.ybwc_younger_add;
     let child_future = solve_outer(
@@ -58,7 +57,7 @@ async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, depth: 
 
 async fn ybwc(
     solve_obj: &mut SolveObj,
-    sub_solver: &Arc<SubSolver>,
+    sub_solver: &SubSolver,
     board: Board,
     (mut alpha, beta): (i8, i8),
     passed: bool,
@@ -159,6 +158,9 @@ async fn ybwc(
             res = child_res;
             best = child_best;
             if res >= beta {
+                for handle in &handles {
+                    handle.abort();
+                }
                 rx.close();
                 return (res, best, stat);
             }
@@ -167,21 +169,23 @@ async fn ybwc(
     (res, best, stat)
 }
 
-pub fn solve_outer(
-    solve_obj: &mut SolveObj,
-    sub_solver: &Arc<SubSolver>,
+pub fn solve_outer<'a, 'b, 'c>(
+    solve_obj: &'a mut SolveObj,
+    sub_solver: &'b SubSolver,
     board: Board,
     (mut alpha, mut beta): (i8, i8),
     passed: bool,
     depth: i8,
-) -> BoxFuture<'static, (i8, Option<Hand>, SolveStat)> {
-    let mut solve_obj = solve_obj.clone();
-    let sub_solver = sub_solver.clone();
+) -> BoxFuture<'c, (i8, Option<Hand>, SolveStat)>
+where
+    'a: 'c,
+    'b: 'c,
+{
     async move {
         let rem = popcnt(board.empty());
         if rem < solve_obj.params.ybwc_empties_limit {
             let (res, stat) = if sub_solver.workers.is_empty() {
-                solve_inner(&mut solve_obj, board, (alpha, beta), passed)
+                solve_inner(solve_obj, board, (alpha, beta), passed)
             } else {
                 sub_solver.solve_remote(board, (alpha, beta)).await.unwrap()
             };
@@ -192,13 +196,13 @@ pub fn solve_outer(
             CutType::MoreThanBeta(v) => return (v, None, SolveStat::one_stcut()),
             CutType::LessThanAlpha(v) => return (v, None, SolveStat::one_stcut()),
         }
-        let (lower, upper, old_best) = match lookup_table(&mut solve_obj, board, (&mut alpha, &mut beta)) {
+        let (lower, upper, old_best) = match lookup_table(solve_obj, board, (&mut alpha, &mut beta)) {
             CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
             CacheLookupResult::NoCut(l, u, b) => (l, u, b),
         };
         let (res, best, stat) = ybwc(
-            &mut solve_obj,
-            &sub_solver,
+            solve_obj,
+            sub_solver,
             board,
             (alpha, beta),
             passed,
@@ -208,7 +212,7 @@ pub fn solve_outer(
         .await;
         if rem >= solve_obj.params.res_cache_limit {
             update_table(
-                solve_obj.res_cache,
+                solve_obj.res_cache.clone(),
                 board,
                 res,
                 best,
