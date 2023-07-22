@@ -10,7 +10,6 @@ mod sparse_mat;
 mod train;
 
 use crate::book::*;
-use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
@@ -88,7 +87,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
         let desired: i8 = line_str[71..].split(';').next().unwrap().parse().unwrap();
         match Board::from_str(&line_str) {
             Ok(board) => {
-                let rem = popcnt(board.empty());
+                let rem = board.empty().count_ones();
                 let start = Instant::now();
                 let (res, best, stat) = solve(
                     solve_obj,
