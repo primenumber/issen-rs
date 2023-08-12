@@ -62,7 +62,7 @@ pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
             if !board.mobility().is_empty() {
                 None
             } else {
-                match board.pass().play(pos) {
+                match board.pass_unchecked().play(pos) {
                     Ok(next) => Some(next),
                     Err(_) => None,
                 }
@@ -78,7 +78,7 @@ pub fn step_by_pos_with_color(board: &BoardWithColor, pos: usize) -> Option<Boar
             if !board.board.mobility().is_empty() {
                 None
             } else {
-                match board.pass().play(pos) {
+                match board.pass_unchecked().play(pos) {
                     Ok(next) => Some(next),
                     Err(_) => None,
                 }
@@ -113,7 +113,7 @@ fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, H
     match record.first() {
         Some(&first) => {
             let ((mut boards, score), hand) = if board.mobility_bits() == 0 {
-                (boards_from_record_impl(board.pass(), record), Hand::Pass)
+                (boards_from_record_impl(board.pass_unchecked(), record), Hand::Pass)
             } else {
                 (
                     boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
@@ -204,7 +204,7 @@ pub async fn create_record_by_solve(
             result += &pos_to_str(pos);
             board = board.play(pos).unwrap();
         } else {
-            board = board.pass();
+            board = board.pass_unchecked();
         }
     }
     (result, board)
@@ -418,7 +418,7 @@ impl WeightedPattern {
             cols.push(other_params_offset + 0);
             mat_weights.push(popcnt(board.mobility_bits()) as f64);
             cols.push(other_params_offset + 1);
-            mat_weights.push(popcnt(board.pass().mobility_bits()) as f64);
+            mat_weights.push(popcnt(board.pass_unchecked().mobility_bits()) as f64);
             cols.push(other_params_offset + 2);
             mat_weights.push((popcnt(board.empty()) % 2) as f64);
             cols.push(other_params_offset + 3);

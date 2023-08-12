@@ -52,7 +52,7 @@ pub async fn playout(
             break;
         } else {
             if board.board.mobility_bits() == 0 {
-                board = board.pass();
+                board = board.pass_unchecked();
             }
             let (_score, hand, _depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             if let Hand::Play(pos) = hand {

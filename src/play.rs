@@ -71,7 +71,7 @@ pub fn play(matches: &ArgMatches) -> Board {
             best
         };
         match hand {
-            Hand::Pass => board = board.pass(),
+            Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(hand) => match board.play(hand) {
                 Ok(next) => board = next,
                 Err(_) => println!("Invalid move"),
@@ -127,7 +127,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
         solve_obj.res_cache.inc_gen();
         let hand = best;
         match hand {
-            Hand::Pass => board = board.pass(),
+            Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(hand) => match board.play(hand) {
                 Ok(next) => board = next,
                 Err(_) => println!("Invalid move"),
@@ -145,7 +145,7 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
     let mut record_str = String::new();
     for hand in initial_record {
         match hand {
-            Hand::Pass => board = board.pass(),
+            Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(pos) => match board.play(*pos) {
                 Ok(next) => {
                     write!(&mut record_str, "{}", hand).unwrap();
@@ -181,7 +181,7 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
         solve_obj.res_cache.inc_gen();
         let hand = best;
         match hand {
-            Hand::Pass => board = board.pass(),
+            Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(pos) => match board.play(pos) {
                 Ok(next) => {
                     write!(&mut record_str, "{}", hand).unwrap();
@@ -212,7 +212,7 @@ fn generate_depth_n(board: Board, depth: usize, prev_passed: bool, record: &mut 
             return vec![];
         } else {
             record.push(Hand::Pass);
-            result = generate_depth_n(board.pass(), depth, true, record);
+            result = generate_depth_n(board.pass_unchecked(), depth, true, record);
             record.pop();
         }
     }

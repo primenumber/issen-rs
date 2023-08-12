@@ -333,7 +333,7 @@ impl Evaluator {
         let param = &self.params[param_index];
         let mut score = param.constant_score;
         score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
-        score += param.o_mobility_score * popcnt(board.pass().mobility_bits()) as i16;
+        score += param.o_mobility_score * popcnt(board.pass_unchecked().mobility_bits()) as i16;
         let mut score = score as i32;
         const MM_PERM_ACBD: i32 = 0b11011000;
         let (idx0, idx1, idx2) = self.feature_indices(board);
