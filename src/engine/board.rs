@@ -5,6 +5,7 @@ use crate::engine::hand::*;
 use clap::ArgMatches;
 use core::arch::x86_64::*;
 use lazy_static::lazy_static;
+use std::cmp::min;
 use std::fmt;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
@@ -461,6 +462,18 @@ impl Board {
             boards.push(tmp.flip_diag());
         }
         boards
+    }
+
+    #[allow(dead_code)]
+    pub fn normalize(&self) -> (Board, usize, bool) {
+        let mut res = (*self, 0, false);
+        let mut tmp = *self;
+        for i in 0..4 {
+            res = min(res, (tmp, i, false));
+            res = min(res, (tmp.flip_diag(), i, true));
+            tmp = tmp.rot90();
+        }
+        res
     }
 }
 
