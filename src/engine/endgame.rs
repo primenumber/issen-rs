@@ -15,7 +15,7 @@ fn near_leaf(board: Board) -> (i8, SolveStat) {
     match board.play(pos) {
         Ok(next) => (-next.score(), SolveStat::one()),
         Err(_) => (
-            match board.pass().play(pos) {
+            match board.pass_unchecked().play(pos) {
                 Ok(next) => next.score(),
                 Err(_) => board.score(),
             },
@@ -45,7 +45,7 @@ fn naive(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), pa
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass_unchecked(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -84,7 +84,7 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, 
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass_unchecked(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_res, stat);
         }
@@ -137,7 +137,7 @@ fn fastest_first(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8,
         if passed {
             return (board.score(), stat);
         } else {
-            let (child_result, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
+            let (child_result, child_stat) = solve_inner(solve_obj, board.pass_unchecked(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_result, stat);
         }
@@ -172,7 +172,7 @@ fn move_ordering_by_eval(
         if passed {
             return (board.score(), Some(Hand::Pass), stat);
         } else {
-            let (child_res, child_stat) = solve_inner(solve_obj, board.pass(), (-beta, -alpha), true);
+            let (child_res, child_stat) = solve_inner(solve_obj, board.pass_unchecked(), (-beta, -alpha), true);
             stat.merge(child_stat);
             return (-child_res, Some(Hand::Pass), stat);
         }

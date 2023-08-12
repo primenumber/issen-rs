@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod test;
+use anyhow::Result;
 use crate::engine::bits::*;
+use thiserror::Error;
 use crate::engine::hand::*;
 use clap::ArgMatches;
 use core::arch::x86_64::*;
@@ -16,10 +18,12 @@ pub struct Board {
     pub opponent: u64,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("Unmovable hand")]
 pub struct UnmovableError;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("Parse error")]
 pub struct BoardParseError;
 
 pub struct PlayIterator {
@@ -136,16 +140,16 @@ impl Board {
         self.flip(pos) != 0
     }
 
-    pub fn play(&self, pos: usize) -> Result<Board, UnmovableError> {
+    pub fn play(&self, pos: usize) -> Result<Board> {
         if pos >= BOARD_SIZE {
-            return Err(UnmovableError {});
+            return Err(UnmovableError {}.into());
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
-            return Err(UnmovableError {});
+            return Err(UnmovableError {}.into());
         }
         let flip_bits = self.flip(pos);
         if flip_bits == 0 {
-            return Err(UnmovableError {});
+            return Err(UnmovableError {}.into());
         }
         Ok(Board {
             player: self.opponent ^ flip_bits,
@@ -153,10 +157,28 @@ impl Board {
         })
     }
 
-    pub fn pass(&self) -> Board {
+    pub fn play_hand(&self, hand: Hand) -> Result<Board> {
+        match hand {
+            Hand::Play(pos) => self.play(pos),
+            Hand::Pass => self.pass(),
+        }
+    }
+
+    pub fn pass_unchecked(&self) -> Board {
         Board {
             player: self.opponent,
             opponent: self.player,
+        }
+    }
+
+    pub fn pass(&self) -> Result<Board> {
+        if self.mobility_bits() != 0 {
+            Ok(Board {
+                player: self.opponent,
+                opponent: self.player,
+            })
+        } else {
+            Err(UnmovableError {}.into())
         }
     }
 
@@ -244,7 +266,7 @@ impl Board {
         if !self.mobility().is_empty() {
             return false;
         }
-        self.pass().mobility().is_empty()
+        self.pass_unchecked().mobility().is_empty()
     }
 
     pub fn score(&self) -> i8 {
@@ -449,7 +471,7 @@ impl BoardWithColor {
         }
     }
 
-    pub fn play(&self, pos: usize) -> Result<BoardWithColor, UnmovableError> {
+    pub fn play(&self, pos: usize) -> Result<BoardWithColor> {
         let board = self.board.play(pos)?;
         Ok(BoardWithColor {
             board,
@@ -457,11 +479,18 @@ impl BoardWithColor {
         })
     }
 
-    pub fn pass(&self) -> BoardWithColor {
+    pub fn pass_unchecked(&self) -> BoardWithColor {
         BoardWithColor {
-            board: self.board.pass(),
+            board: self.board.pass_unchecked(),
             is_black: !self.is_black,
         }
+    }
+
+    pub fn pass(&self) -> Result<BoardWithColor> {
+        Ok(BoardWithColor {
+            board: self.board.pass()?,
+            is_black: !self.is_black,
+        })
     }
 
     pub fn empty(&self) -> u64 {
@@ -615,7 +644,7 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
         res &= stable_bits_8(next, false, memo);
     }
     if !passed {
-        let next = board.pass();
+        let next = board.pass_unchecked();
         res &= stable_bits_8(next, true, memo);
         memo[index] = Some(res);
     }

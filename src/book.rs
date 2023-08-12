@@ -32,11 +32,11 @@ fn minimax_record_impl<W: Write>(
     writer: &mut W,
 ) {
     let board_2 = if board.mobility_bits() == 0 {
-        if board.pass().mobility_bits() == 0 {
+        if board.pass_unchecked().mobility_bits() == 0 {
             write_record(current, writer);
             return;
         }
-        board.pass()
+        board.pass_unchecked()
     } else {
         board
     };
@@ -64,10 +64,10 @@ fn minimax_record_impl<W: Write>(
 fn get_best_records(board: Board, tree: &HashMap<Board, (i8, Vec<Hand>)>, current: &mut Vec<Hand>) -> Vec<Vec<Hand>> {
     let mut result = Vec::new();
     let board_2 = if board.mobility_bits() == 0 {
-        if board.pass().mobility_bits() == 0 {
+        if board.pass_unchecked().mobility_bits() == 0 {
             return vec![current.clone()];
         }
-        board.pass()
+        board.pass_unchecked()
     } else {
         board
     };
@@ -133,7 +133,7 @@ fn minimax_record_body(boards_set: &Vec<HashSet<Board>>) -> HashMap<Board, (i8, 
             let mut mobility = current.mobility_bits();
             let is_pass = mobility == 0;
             if is_pass {
-                current = current.pass();
+                current = current.pass_unchecked();
                 mobility = current.mobility_bits();
                 if mobility == 0 {
                     let s = vec![];

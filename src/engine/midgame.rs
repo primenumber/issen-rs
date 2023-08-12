@@ -73,7 +73,7 @@ async fn ybwc(
             let (child_res, _child_best, child_stat) = solve_outer(
                 solve_obj,
                 sub_solver,
-                board.pass(),
+                board.pass_unchecked(),
                 (-beta, -alpha),
                 true,
                 depth,
