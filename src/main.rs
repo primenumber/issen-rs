@@ -70,14 +70,14 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
     for line in reader.lines() {
         let line_str = line.unwrap();
         let desired: i8 = line_str[71..].split(';').next().unwrap().parse().unwrap();
-        match Board::from_str(&line_str) {
+        match BoardWithColor::from_str(&line_str) {
             Ok(board) => {
                 let rem = board.empty().count_ones();
                 let start = Instant::now();
                 let (res, best, stat) = solve(
                     solve_obj,
                     workers,
-                    board,
+                    board.board,
                     (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
                     false,
                     0,

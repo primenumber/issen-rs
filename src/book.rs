@@ -202,7 +202,6 @@ pub fn minimax_record(matches: &ArgMatches) {
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
-        is_black: true,
     };
     minimax_record_impl(
         initial_board,
@@ -223,7 +222,6 @@ pub fn iterative_update_book(matches: &ArgMatches) {
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
-        is_black: true,
     };
     let solve_obj = setup_default();
     let sub_solver = Arc::new(SubSolver::new(&[]));
@@ -297,7 +295,6 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
         let board = Board {
             player,
             opponent,
-            is_black: true, // dummy
         };
         if BOARD_SIZE as i8 - popcnt(board.empty()) > max_count {
             continue;

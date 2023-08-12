@@ -71,11 +71,26 @@ pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
     }
 }
 
+pub fn step_by_pos_with_color(board: &BoardWithColor, pos: usize) -> Option<BoardWithColor> {
+    match board.play(pos) {
+        Ok(next) => Some(next),
+        Err(_) => {
+            if !board.board.mobility().is_empty() {
+                None
+            } else {
+                match board.pass().play(pos) {
+                    Ok(next) => Some(next),
+                    Err(_) => None,
+                }
+            }
+        }
+    }
+}
+
 pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     let mut board = Board {
         player: 0x0000_0008_1000_0000,
         opponent: 0x0000_0010_0800_0000,
-        is_black: true,
     };
     let mut boards = Vec::with_capacity(70); // enough large
     for &pos in record {
@@ -178,13 +193,13 @@ pub fn pos_to_str(pos: usize) -> String {
 }
 
 pub async fn create_record_by_solve(
-    mut board: Board,
+    mut board: BoardWithColor,
     solve_obj: &mut SolveObj,
     sub_solver: &Arc<SubSolver>,
-) -> (String, Board) {
+) -> (String, BoardWithColor) {
     let mut result = String::new();
     while !board.is_gameover() {
-        let pos = solve_with_move(board, solve_obj, sub_solver).await;
+        let pos = solve_with_move(board.board, solve_obj, sub_solver).await;
         if let Hand::Play(pos) = pos {
             result += &pos_to_str(pos);
             board = board.play(pos).unwrap();
@@ -475,7 +490,6 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         boards.push(Board {
             player,
             opponent,
-            is_black: true, // dummy
         });
         scores.push(data[2].trim().parse().unwrap());
     }
@@ -594,7 +608,6 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
             Board {
                 player,
                 opponent,
-                is_black: true, // dummy
             },
             data[2].trim().parse::<i16>().unwrap(),
         ));

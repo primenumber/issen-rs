@@ -38,9 +38,6 @@ fn test_solve_inner() {
             (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
             false,
         );
-        if res != desired {
-            board.print();
-        }
         assert_eq!(res, desired);
     }
 }

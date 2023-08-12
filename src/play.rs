@@ -25,11 +25,8 @@ pub fn play(matches: &ArgMatches) -> Board {
     let solve_obj = setup_default();
     let sub_solver = Arc::new(SubSolver::new(&[]));
 
-    let mut board = Board {
-        player: 0x0000000810000000,
-        opponent: 0x0000001008000000,
-        is_black: true,
-    };
+    let mut board = BoardWithColor::initial_state();
+
     while !board.is_gameover() {
         board.print_with_sides();
         let hand = if board.is_black == player_turn {
@@ -59,7 +56,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                     timer: Some(timer),
                     node_count: 0,
                 };
-                let (score, best, depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+                let (score, best, depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
                 let scaled_score = score as f64 / SCALE as f64;
                 eprintln!("Estimated result: {}, Depth: {}", scaled_score, depth);
                 best
@@ -67,7 +64,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                 let mut solve_obj = solve_obj.clone();
                 Runtime::new()
                     .unwrap()
-                    .block_on(solve_with_move(board, &mut solve_obj, &sub_solver))
+                    .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
             };
             solve_obj.eval_cache.inc_gen();
             solve_obj.res_cache.inc_gen();
@@ -83,7 +80,7 @@ pub fn play(matches: &ArgMatches) -> Board {
     }
     println!("Game over");
     board.print_with_sides();
-    board
+    board.board
 }
 
 pub fn self_play(matches: &ArgMatches) -> Board {
@@ -95,11 +92,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
         .collect::<Vec<String>>();
     let sub_solver = Arc::new(SubSolver::new(&worker_urls));
 
-    let mut board = Board {
-        player: 0x0000000810000000,
-        opponent: 0x0000001008000000,
-        is_black: true,
-    };
+    let mut board = BoardWithColor::initial_state();
     while !board.is_gameover() {
         board.print_with_sides();
         println!("Thinking...");
@@ -116,7 +109,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (score, best, depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             let secs = start.elapsed().as_secs_f64();
             let nps = (searcher.node_count as f64 / secs) as u64;
             eprintln!(
@@ -128,7 +121,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
             let mut solve_obj = solve_obj.clone();
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut solve_obj, &sub_solver))
+                .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
@@ -143,16 +136,12 @@ pub fn self_play(matches: &ArgMatches) -> Board {
     }
     println!("Game over, score: {}", board.score());
     board.print_with_sides();
-    board
+    board.board
 }
 
 fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_record: &[Hand]) -> (String, i8) {
     use std::fmt::Write;
-    let mut board = Board {
-        player: 0x0000000810000000,
-        opponent: 0x0000001008000000,
-        is_black: true,
-    };
+    let mut board = BoardWithColor::initial_state();
     let mut record_str = String::new();
     for hand in initial_record {
         match hand {
@@ -180,13 +169,13 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (_score, best, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (_score, best, _depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             best
         } else {
             let mut obj = solve_obj.clone();
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut obj, &sub_solver))
+                .block_on(solve_with_move(board.board, &mut obj, &sub_solver))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();
@@ -202,11 +191,7 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
             },
         }
     }
-    let result = if board.is_black {
-        board.score()
-    } else {
-        -board.score()
-    };
+    let result = board.score();
     (record_str, result)
 }
 
@@ -247,7 +232,6 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let initial_board = Board {
         player: 0x0000000810000000,
         opponent: 0x0000001008000000,
-        is_black: true,
     };
     let mut record = Vec::new();
     let initial_records = generate_depth_n(initial_board, random_depth, false, &mut record);
@@ -304,19 +288,14 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 }
             }
         }
-        let board = if id == 0 {
-            Board {
+        let board = 
+            BoardWithColor {
+                board: Board {
                 player: black,
                 opponent: white,
-                is_black: true,
-            }
-        } else {
-            Board {
-                player: white,
-                opponent: black,
-                is_black: false,
-            }
-        };
+                },
+                is_black: id == 0,
+            };
         // read actions
         let actions = {
             let mut buf = String::new();
@@ -341,7 +320,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 timer: Some(timer),
                 node_count: 0,
             };
-            let (score, best, depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            let (score, best, depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}",
                 score, depth, searcher.node_count
@@ -351,7 +330,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             let mut solve_obj = solve_obj.clone();
             Runtime::new()
                 .unwrap()
-                .block_on(solve_with_move(board, &mut solve_obj, &sub_solver))
+                .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
         };
         solve_obj.eval_cache.inc_gen();
         solve_obj.res_cache.inc_gen();

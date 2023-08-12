@@ -16,14 +16,12 @@ enum State {
 #[derive(Clone)]
 struct NaiveBoard {
     data: [State; BOARD_SIZE],
-    is_black: bool,
 }
 
 impl From<Board> for NaiveBoard {
     fn from(board: Board) -> Self {
         let mut res = NaiveBoard {
             data: [State::Empty; BOARD_SIZE],
-            is_black: board.is_black,
         };
         for i in 0..BOARD_SIZE {
             if ((board.player >> i) & 1) == 1 {
@@ -54,7 +52,6 @@ impl From<NaiveBoard> for Board {
         Board {
             player,
             opponent,
-            is_black: naive_board.is_black,
         }
     }
 }
@@ -128,7 +125,6 @@ impl NaiveBoard {
         }
         let mut res = NaiveBoard {
             data: [State::Empty; BOARD_SIZE],
-            is_black: !self.is_black,
         };
         for i in 0..BOARD_SIZE {
             if ((flip_bits >> i) & 1) == 1 {
