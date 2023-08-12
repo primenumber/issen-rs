@@ -5,6 +5,7 @@ use crate::engine::hand::*;
 use clap::ArgMatches;
 use core::arch::x86_64::*;
 use lazy_static::lazy_static;
+use std::cmp::min;
 use std::fmt;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
@@ -13,7 +14,6 @@ use std::str::FromStr;
 pub struct Board {
     pub player: u64,
     pub opponent: u64,
-    pub is_black: bool,
 }
 
 #[derive(Debug)]
@@ -64,7 +64,6 @@ impl Board {
         Board {
             player: 0x00_00_00_08_10_00_00_00,
             opponent: 0x00_00_00_10_08_00_00_00,
-            is_black: true,
         }
     }
 
@@ -72,7 +71,6 @@ impl Board {
         Board {
             player: flip_vertical(self.player),
             opponent: flip_vertical(self.opponent),
-            is_black: self.is_black,
         }
     }
 
@@ -152,7 +150,6 @@ impl Board {
         Ok(Board {
             player: self.opponent ^ flip_bits,
             opponent: (self.player ^ flip_bits) | (1u64 << pos),
-            is_black: !self.is_black,
         })
     }
 
@@ -160,7 +157,6 @@ impl Board {
         Board {
             player: self.opponent,
             opponent: self.player,
-            is_black: !self.is_black,
         }
     }
 
@@ -251,58 +247,6 @@ impl Board {
         self.pass().mobility().is_empty()
     }
 
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        let mut writer = BufWriter::new(std::io::stdout());
-        for i in 0..BOARD_SIZE {
-            if ((self.player >> i) & 1) != 0 {
-                if self.is_black {
-                    write!(writer, "X").unwrap();
-                } else {
-                    write!(writer, "O").unwrap();
-                }
-            } else if ((self.opponent >> i) & 1) != 0 {
-                if self.is_black {
-                    write!(writer, "O").unwrap();
-                } else {
-                    write!(writer, "X").unwrap();
-                }
-            } else {
-                write!(writer, ".").unwrap();
-            }
-            if i % 8 == 7 {
-                writeln!(writer).unwrap();
-            }
-        }
-    }
-
-    pub fn print_with_sides(&self) {
-        let mut writer = BufWriter::new(std::io::stdout());
-        write!(writer, " |abcdefgh\n-+--------\n").unwrap();
-        for r in 0..8 {
-            write!(writer, "{}|", r + 1).unwrap();
-            for c in 0..8 {
-                let i = r * 8 + c;
-                if ((self.player >> i) & 1) != 0 {
-                    if self.is_black {
-                        write!(writer, "X").unwrap();
-                    } else {
-                        write!(writer, "O").unwrap();
-                    }
-                } else if ((self.opponent >> i) & 1) != 0 {
-                    if self.is_black {
-                        write!(writer, "O").unwrap();
-                    } else {
-                        write!(writer, "X").unwrap();
-                    }
-                } else {
-                    write!(writer, ".").unwrap();
-                }
-            }
-            writeln!(writer).unwrap();
-        }
-    }
-
     pub fn score(&self) -> i8 {
         let pcnt = popcnt(self.player);
         let ocnt = popcnt(self.opponent);
@@ -319,7 +263,6 @@ impl Board {
         Board {
             player: flip_diag(self.player),
             opponent: flip_diag(self.opponent),
-            is_black: self.is_black,
         }
     }
 
@@ -327,7 +270,6 @@ impl Board {
         Board {
             player: rot90(self.player),
             opponent: rot90(self.opponent),
-            is_black: self.is_black,
         }
     }
 
@@ -417,7 +359,6 @@ impl Board {
         Ok(Board {
             player,
             opponent,
-            is_black: true,
         })
     }
 
@@ -462,9 +403,113 @@ impl Board {
         }
         boards
     }
+
+    #[allow(dead_code)]
+    pub fn normalize(&self) -> (Board, usize, bool) {
+        let mut res = (*self, 0, false);
+        let mut tmp = *self;
+        for i in 0..4 {
+            res = min(res, (tmp, i, false));
+            res = min(res, (tmp.flip_diag(), i, true));
+            tmp = tmp.rot90();
+        }
+        res
+    }
 }
 
-impl FromStr for Board {
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for i in 0..BOARD_SIZE {
+            if ((self.player >> i) & 1) != 0 {
+                    write!(f, "X")?;
+            } else if ((self.opponent >> i) & 1) != 0 {
+                    write!(f, "O")?;
+            } else {
+                write!(f, ".")?;
+            }
+            if i % 8 == 7 {
+                writeln!(f)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+pub struct BoardWithColor {
+    pub board: Board,
+    pub is_black: bool,
+}
+
+impl BoardWithColor {
+    pub fn initial_state() -> BoardWithColor {
+        BoardWithColor {
+            board: Board::initial_state(),
+            is_black: true,
+        }
+    }
+
+    pub fn play(&self, pos: usize) -> Result<BoardWithColor, UnmovableError> {
+        let board = self.board.play(pos)?;
+        Ok(BoardWithColor {
+            board,
+            is_black: !self.is_black,
+        })
+    }
+
+    pub fn pass(&self) -> BoardWithColor {
+        BoardWithColor {
+            board: self.board.pass(),
+            is_black: !self.is_black,
+        }
+    }
+
+    pub fn empty(&self) -> u64 {
+        self.board.empty()
+    }
+
+    pub fn is_gameover(&self) -> bool {
+        self.board.is_gameover()
+    }
+
+    pub fn score(&self) -> i8 {
+        let raw_score = self.board.score();
+        if self.is_black {
+            raw_score
+        } else {
+            -raw_score
+        }
+    }
+
+    pub fn print_with_sides(&self) {
+        let mut writer = BufWriter::new(std::io::stdout());
+        write!(writer, " |abcdefgh\n-+--------\n").unwrap();
+        for r in 0..8 {
+            write!(writer, "{}|", r + 1).unwrap();
+            for c in 0..8 {
+                let i = r * 8 + c;
+                if ((self.board.player >> i) & 1) != 0 {
+                    if self.is_black {
+                        write!(writer, "X").unwrap();
+                    } else {
+                        write!(writer, "O").unwrap();
+                    }
+                } else if ((self.board.opponent >> i) & 1) != 0 {
+                    if self.is_black {
+                        write!(writer, "O").unwrap();
+                    } else {
+                        write!(writer, "X").unwrap();
+                    }
+                } else {
+                    write!(writer, ".").unwrap();
+                }
+            }
+            writeln!(writer).unwrap();
+        }
+    }
+}
+
+impl FromStr for BoardWithColor {
     type Err = BoardParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -481,46 +526,24 @@ impl FromStr for Board {
             }
         }
         if s.chars().nth(65) == Some('X') {
-            Ok(Board {
+            Ok(BoardWithColor {
+                board: Board {
                 player: black,
                 opponent: white,
+                },
                 is_black: true,
             })
         } else if s.chars().nth(65) == Some('O') {
-            Ok(Board {
+            Ok(BoardWithColor {
+                board: Board {
                 player: white,
                 opponent: black,
+                },
                 is_black: false,
             })
         } else {
             Err(BoardParseError {})
         }
-    }
-}
-
-impl fmt::Display for Board {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for i in 0..BOARD_SIZE {
-            if ((self.player >> i) & 1) != 0 {
-                if self.is_black {
-                    write!(f, "X")?;
-                } else {
-                    write!(f, "O")?;
-                }
-            } else if ((self.opponent >> i) & 1) != 0 {
-                if self.is_black {
-                    write!(f, "O")?;
-                } else {
-                    write!(f, "X")?;
-                }
-            } else {
-                write!(f, ".")?;
-            }
-            if i % 8 == 7 {
-                writeln!(f)?;
-            }
-        }
-        Ok(())
     }
 }
 
@@ -536,6 +559,32 @@ impl Iterator for PlayIterator {
             }
         }
         None
+    }
+}
+
+impl fmt::Display for BoardWithColor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for i in 0..BOARD_SIZE {
+            if ((self.board.player >> i) & 1) != 0 {
+                if self.is_black {
+                    write!(f, "X")?;
+                } else {
+                    write!(f, "O")?;
+                }
+            } else if ((self.board.opponent >> i) & 1) != 0 {
+                if self.is_black {
+                    write!(f, "O")?;
+                } else {
+                    write!(f, "X")?;
+                }
+            } else {
+                write!(f, ".")?;
+            }
+            if i % 8 == 7 {
+                writeln!(f)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -560,7 +609,6 @@ fn stable_bits_8(board: Board, passed: bool, memo: &mut [Option<u64>]) -> u64 {
         let next = Board {
             player: board.opponent ^ flip,
             opponent: (board.player ^ flip) | pos_bit,
-            is_black: !board.is_black,
         };
         res &= !flip;
         res &= !pos_bit;
@@ -583,7 +631,6 @@ pub fn parse_board(matches: &ArgMatches) {
     let board = Board {
         player,
         opponent,
-        is_black: true,
     };
     println!("{}", board);
 }
@@ -607,7 +654,6 @@ lazy_static! {
             let board = Board {
                 player: me,
                 opponent: op,
-                is_black: true,
             };
             stable_bits_8(board, false, &mut memo);
         }

@@ -116,7 +116,6 @@ pub fn gen_last_table(matches: &ArgMatches) {
             let board = Board {
                 player: bits,
                 opponent: !(bits | (1 << pos)),
-                is_black: true,
             };
             let fcnt = popcnt(board.flip(pos));
             v.push(fcnt);

@@ -4,7 +4,6 @@ use crate::engine::hand::*;
 use crc64::Crc64;
 use spin::Mutex;
 use std::io::Write;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 
@@ -27,7 +26,7 @@ pub struct EvalCache {
 impl Default for EvalCache {
     fn default() -> Self {
         Self {
-            board: Board::from_str("---------------------------------------------------------------- X;").unwrap(),
+            board: Board{ player: 0, opponent: 0},
             lower: 0,
             upper: 0,
             gen: 0,
@@ -83,7 +82,7 @@ pub struct ResCache {
 impl Default for ResCache {
     fn default() -> Self {
         Self {
-            board: Board::from_str("---------------------------------------------------------------- X;").unwrap(),
+            board: Board{ player: 0, opponent: 0},
             lower: 0,
             upper: 0,
             gen: 0,

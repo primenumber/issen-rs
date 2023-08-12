@@ -10,9 +10,7 @@ mod sparse_mat;
 mod train;
 
 use crate::book::*;
-use crate::engine::bits::*;
 use crate::engine::board::*;
-use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::play::*;
 use crate::remote::*;
@@ -57,20 +55,6 @@ fn to_si(x: usize) -> String {
     }
 }
 
-fn hand_to_string(hand: Hand) -> String {
-    match hand {
-        Hand::Pass => "ps".to_string(),
-        Hand::Play(hand) => {
-            let row = hand as u8 / 8;
-            let col = hand as u8 % 8;
-            let row_char = b'1' + row;
-            let col_char = b'A' + col;
-            let s = [col_char, row_char];
-            str::from_utf8(&s).unwrap().to_string()
-        }
-    }
-}
-
 struct Stat {
     nodes: usize,
     elapsed: f64,
@@ -86,14 +70,14 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
     for line in reader.lines() {
         let line_str = line.unwrap();
         let desired: i8 = line_str[71..].split(';').next().unwrap().parse().unwrap();
-        match Board::from_str(&line_str) {
+        match BoardWithColor::from_str(&line_str) {
             Ok(board) => {
-                let rem = popcnt(board.empty());
+                let rem = board.empty().count_ones();
                 let start = Instant::now();
                 let (res, best, stat) = solve(
                     solve_obj,
                     workers,
-                    board,
+                    board.board,
                     (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
                     false,
                     0,
@@ -107,7 +91,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
                     rem,
                     res,
                     desired,
-                    best.map_or("XX".to_string(), hand_to_string),
+                    best.map_or("XX".to_string(), |hand| format!("{}", hand)),
                     to_si(stat.node_count),
                     end.as_secs(),
                     end.subsec_millis(),
