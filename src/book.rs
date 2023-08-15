@@ -1,12 +1,17 @@
 use crate::engine::bits::*;
+use crate::engine::eval::*;
 use crate::engine::board::*;
 use crate::engine::hand::*;
+use crate::engine::think::*;
 use crate::engine::search::*;
 use crate::playout::*;
 use crate::serialize::*;
+use crate::record::*;
 use crate::setup::*;
 use crate::train::*;
 use clap::ArgMatches;
+use std::time::Instant;
+use anyhow::Result;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -15,6 +20,145 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
+use std::path::Path;
+use std::cmp::max;
+use rand::rngs::SmallRng;
+use rand::prelude::*;
+
+struct Book {
+    records: Vec<Record>,
+    minimax_map: HashMap<Board, (Hand, i16)>,
+}
+
+impl Book {
+    fn new() -> Book {
+        Book {
+            records: Vec::new(),
+            minimax_map: HashMap::new(),
+        }
+    }
+
+    fn import(path: &Path) -> Result<Book> {
+        let f = File::open(path)?;
+        let reader = BufReader::new(f);
+        let mut book = Book::new();
+        for line in reader.lines() {
+            book.append(Record::parse(&line?)?)?;
+        }
+        Ok(book)
+    }
+
+    fn export(&self, path: &Path) -> Result<()> {
+        let f = File::create(path)?;
+        let mut writer = BufWriter::new(f);
+        for record in &self.records {
+            writeln!(writer, "{}", record)?;
+        }
+        Ok(())
+    }
+
+    fn lookup(&self, board: Board) -> Option<(Hand, i16)> {
+        self.minimax_map.get(&board).copied()
+    }
+
+    fn append(&mut self, record: Record) -> Result<()> {
+        let mut timeline = record.timeline()?;
+        self.records.push(record);
+        timeline.reverse();
+        for (board, hand, score) in timeline {
+            let mut best_hand = hand;
+            let mut best_score = -(BOARD_SIZE as i16);
+            if board.is_gameover() {
+                best_score = score;
+            } else if board.mobility_bits() == 0 {
+                let next = board.pass_unchecked();
+                if let Some((_, next_score)) = self.lookup(next) {
+                    best_score = max(best_score, -next_score);
+                }
+            } else {
+                for (next, h) in board.next_iter() {
+                    if let Some((_, next_score)) = self.lookup(next) {
+                        if -next_score > best_score {
+                            best_score =  -next_score;
+                            best_hand = h;
+                        }
+                    }
+                }
+            }
+            self.minimax_map.insert(board, (best_hand, best_score));
+        }
+        Ok(())
+    }
+}
+
+fn grow_book(in_book_path: &Path, out_book_path:&Path, repeat: usize) -> Result<()> {
+    let book = Arc::new(Mutex::new(Book::import(in_book_path)?));
+    let mut solve_obj = setup_default();
+    solve_obj.params.ybwc_empties_limit = 64;
+    let rt = Runtime::new().unwrap();
+    (0..repeat).into_par_iter().for_each(|i| {
+        let mut rng = rand::thread_rng();
+        let think_time_limit = 1 << rng.gen_range(7..=12);
+        eprintln!("i={}, tl={}", i, think_time_limit);
+        let mut board = Board::initial_state();
+        let mut hands = Vec::new();
+        let initial_hand = "F5".parse().unwrap();
+        hands.push(initial_hand);
+        board = board.play_hand(initial_hand).unwrap();
+        while !board.is_gameover() {
+            if let Some((hand, score)) = book.lock().unwrap().lookup(board) {
+                let from_book = if score > 0 {
+                    true
+                } else if score == 0 {
+                    rng.gen_bool(0.5)
+                } else {
+                    false
+                };
+                if from_book {
+                    //eprintln!("i={}: book {} {} {}", i, board.empty().count_ones(), hand, score);
+                    hands.push(hand);
+                    board = board.play_hand(hand).unwrap();
+                    continue;
+                }
+            }
+            solve_obj.eval_cache.inc_gen();
+            let hand = if board.empty().count_ones() <= 20 {
+                let mut solve_obj = solve_obj.clone();
+                rt.block_on(async move {
+                    let sub_solver = Arc::new(SubSolver::new(&[]));
+                    solve_with_move(board, &mut solve_obj, &sub_solver).await
+                })
+            } else {
+                let start = Instant::now();
+                let timer = Timer {
+                    period: start,
+                    time_limit: think_time_limit,
+                };
+                let mut searcher = Searcher {
+                    evaluator: solve_obj.evaluator.clone(),
+                    cache: solve_obj.eval_cache.clone(),
+                    timer: Some(timer),
+                    node_count: 0,
+                };
+                let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+                //eprintln!("i={}, search {} {} {}", i, board.empty().count_ones(), hand, score as f64 / SCALE as f64);
+                hand
+            };
+            hands.push(hand);
+            board = board.play_hand(hand).unwrap();
+        }
+        book.lock().unwrap().append(Record::new(Board::initial_state(), &hands, board.score().into())).unwrap();
+    });
+    book.lock().unwrap().export(out_book_path)?;
+    Ok(())
+}
+
+pub fn command_grow_book( matches: &ArgMatches) {
+    let in_book_path = matches.get_one::<String>("INPUT").unwrap();
+    let out_book_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let repeat = matches.get_one::<String>("REPEAT").unwrap().parse().unwrap();
+    grow_book(Path::new(in_book_path), Path::new(out_book_path), repeat).unwrap();
+}
 
 fn write_record<W: Write>(current: &mut Vec<Hand>, writer: &mut W) {
     for hand in current {

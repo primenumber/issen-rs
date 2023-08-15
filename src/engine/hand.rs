@@ -1,5 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Hand {
@@ -57,6 +58,8 @@ impl fmt::Display for Hand {
     }
 }
 
+#[derive(Error, Debug)]
+#[error("Failed to parse hand")]
 pub struct ParseHandError {}
 
 impl FromStr for Hand {
