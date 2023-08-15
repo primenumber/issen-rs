@@ -172,7 +172,7 @@ impl Board {
     }
 
     pub fn pass(&self) -> Result<Board> {
-        if self.mobility_bits() != 0 {
+        if self.mobility_bits() == 0 {
             Ok(Board {
                 player: self.opponent,
                 opponent: self.player,
