@@ -1,29 +1,29 @@
 use crate::engine::bits::*;
-use crate::engine::eval::*;
 use crate::engine::board::*;
+use crate::engine::eval::*;
 use crate::engine::hand::*;
-use crate::engine::think::*;
 use crate::engine::search::*;
+use crate::engine::think::*;
 use crate::playout::*;
-use crate::serialize::*;
 use crate::record::*;
+use crate::serialize::*;
 use crate::setup::*;
 use crate::train::*;
-use clap::ArgMatches;
-use std::time::Instant;
 use anyhow::Result;
+use clap::ArgMatches;
+use rand::prelude::*;
+use rand::rngs::SmallRng;
 use rayon::prelude::*;
+use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::runtime::Runtime;
-use std::path::Path;
-use std::cmp::max;
-use rand::rngs::SmallRng;
-use rand::prelude::*;
 
 struct Book {
     records: Vec<Record>,
@@ -79,7 +79,7 @@ impl Book {
                 for (next, h) in board.next_iter() {
                     if let Some((_, next_score)) = self.lookup(next) {
                         if -next_score > best_score {
-                            best_score =  -next_score;
+                            best_score = -next_score;
                             best_hand = h;
                         }
                     }
@@ -91,7 +91,7 @@ impl Book {
     }
 }
 
-fn grow_book(in_book_path: &Path, out_book_path:&Path, repeat: usize) -> Result<()> {
+fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result<()> {
     let book = Arc::new(Mutex::new(Book::import(in_book_path)?));
     let mut solve_obj = setup_default();
     solve_obj.params.ybwc_empties_limit = 64;
@@ -147,16 +147,27 @@ fn grow_book(in_book_path: &Path, out_book_path:&Path, repeat: usize) -> Result<
             hands.push(hand);
             board = board.play_hand(hand).unwrap();
         }
-        book.lock().unwrap().append(Record::new(Board::initial_state(), &hands, board.score().into())).unwrap();
+        book.lock()
+            .unwrap()
+            .append(Record::new(
+                Board::initial_state(),
+                &hands,
+                board.score().into(),
+            ))
+            .unwrap();
     });
     book.lock().unwrap().export(out_book_path)?;
     Ok(())
 }
 
-pub fn command_grow_book( matches: &ArgMatches) {
+pub fn command_grow_book(matches: &ArgMatches) {
     let in_book_path = matches.get_one::<String>("INPUT").unwrap();
     let out_book_path = matches.get_one::<String>("OUTPUT").unwrap();
-    let repeat = matches.get_one::<String>("REPEAT").unwrap().parse().unwrap();
+    let repeat = matches
+        .get_one::<String>("REPEAT")
+        .unwrap()
+        .parse()
+        .unwrap();
     grow_book(Path::new(in_book_path), Path::new(out_book_path), repeat).unwrap();
 }
 
@@ -436,10 +447,7 @@ pub fn gen_book(matches: &ArgMatches) -> Option<()> {
         let data: Vec<&str> = input_line.split(' ').collect();
         let player = u64::from_str_radix(data[0], 16).ok()?;
         let opponent = u64::from_str_radix(data[1], 16).ok()?;
-        let board = Board {
-            player,
-            opponent,
-        };
+        let board = Board { player, opponent };
         if BOARD_SIZE as i8 - popcnt(board.empty()) > max_count {
             continue;
         }
