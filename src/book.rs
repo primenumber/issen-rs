@@ -12,7 +12,6 @@ use crate::train::*;
 use anyhow::Result;
 use clap::ArgMatches;
 use rand::prelude::*;
-use rand::rngs::SmallRng;
 use rayon::prelude::*;
 use std::cmp::max;
 use std::cmp::Ordering;
@@ -25,20 +24,20 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
-struct Book {
+pub struct Book {
     records: Vec<Record>,
     minimax_map: HashMap<Board, (Hand, i16)>,
 }
 
 impl Book {
-    fn new() -> Book {
+    pub fn new() -> Book {
         Book {
             records: Vec::new(),
             minimax_map: HashMap::new(),
         }
     }
 
-    fn import(path: &Path) -> Result<Book> {
+    pub fn import(path: &Path) -> Result<Book> {
         let f = File::open(path)?;
         let reader = BufReader::new(f);
         let mut book = Book::new();
@@ -48,7 +47,7 @@ impl Book {
         Ok(book)
     }
 
-    fn export(&self, path: &Path) -> Result<()> {
+    pub fn export(&self, path: &Path) -> Result<()> {
         let f = File::create(path)?;
         let mut writer = BufWriter::new(f);
         for record in &self.records {
@@ -57,11 +56,11 @@ impl Book {
         Ok(())
     }
 
-    fn lookup(&self, board: Board) -> Option<(Hand, i16)> {
+    pub fn lookup(&self, board: Board) -> Option<(Hand, i16)> {
         self.minimax_map.get(&board).copied()
     }
 
-    fn append(&mut self, record: Record) -> Result<()> {
+    pub fn append(&mut self, record: Record) -> Result<()> {
         let mut timeline = record.timeline()?;
         self.records.push(record);
         timeline.reverse();

@@ -2,6 +2,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::book::*;
 use crate::engine::search::*;
 use crate::engine::think::*;
 use crate::setup::*;
@@ -16,6 +17,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::sync::Arc;
+use std::path::Path;
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
@@ -260,6 +262,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let solve_obj = setup_default();
     let sub_solver = Arc::new(SubSolver::new(&[]));
     let mut reader = BufReader::new(std::io::stdin());
+    let book = Book::import(Path::new("medium2.book"))?;
 
     // read initial states
     let id = {
@@ -306,8 +309,10 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             let mut buf = String::new();
             reader.read_line(&mut buf)?;
         }
-        // search
-        let best = if popcnt(board.empty()) > 16 {
+        // book or search
+        let best = if let Some((hand, _score)) = book.lookup(board.board) {
+            hand
+        } else if popcnt(board.empty()) > 16 {
             let time_limit = 130;
             let start = Instant::now();
             let timer = Timer {
