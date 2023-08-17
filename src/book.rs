@@ -60,6 +60,19 @@ impl Book {
         self.minimax_map.get(&board).copied()
     }
 
+    pub fn lookup_with_symmetry(&self, mut board: Board) -> Option<(Hand, i16)> {
+        for i in 0..4 {
+            if let Some((hand, score)) = self.lookup(board) {
+                return Some((hand.transform(3 - i, false), score));
+            }
+            if let Some((hand, score)) = self.lookup(board.flip_diag()) {
+                return Some((hand.transform(3 - i, true), score));
+            }
+            board = board.rot90();
+        }
+        None
+    }
+
     pub fn append(&mut self, record: Record) -> Result<()> {
         let mut timeline = record.timeline()?;
         self.records.push(record);

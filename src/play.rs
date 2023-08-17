@@ -310,7 +310,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             reader.read_line(&mut buf)?;
         }
         // book or search
-        let best = if let Some((hand, _score)) = book.lookup(board.board) {
+        let best = if let Some((hand, _score)) = book.lookup_with_symmetry(board.board) {
             hand
         } else if popcnt(board.empty()) > 16 {
             let time_limit = 130;
