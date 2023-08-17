@@ -126,70 +126,78 @@ impl Book {
     }
 }
 
+fn play_with_book(
+    book: Arc<Mutex<Book>>,
+    think_time_limit: u128,
+    solve_obj: &SolveObj,
+    rt: &Runtime,
+    rng: &mut SmallRng,
+) {
+    let mut board = Board::initial_state();
+    let mut hands = Vec::new();
+    let initial_hand = "F5".parse().unwrap();
+    hands.push(initial_hand);
+    board = board.play_hand(initial_hand).unwrap();
+    while !board.is_gameover() {
+        if let Some((hand, score)) = book.lock().unwrap().lookup(board) {
+            let from_book = if score > 0 {
+                true
+            } else if score == 0 {
+                rng.gen_bool(0.5)
+            } else {
+                false
+            };
+            if from_book {
+                hands.push(hand);
+                board = board.play_hand(hand).unwrap();
+                continue;
+            }
+        }
+        solve_obj.eval_cache.inc_gen();
+        let hand = if board.empty().count_ones() <= 20 {
+            let mut solve_obj = solve_obj.clone();
+            rt.block_on(async move {
+                let sub_solver = Arc::new(SubSolver::new(&[]));
+                solve_with_move(board, &mut solve_obj, &sub_solver).await
+            })
+        } else {
+            let start = Instant::now();
+            let timer = Timer {
+                period: start,
+                time_limit: think_time_limit,
+            };
+            let mut searcher = Searcher {
+                evaluator: solve_obj.evaluator.clone(),
+                cache: solve_obj.eval_cache.clone(),
+                timer: Some(timer),
+                node_count: 0,
+            };
+            let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+            hand
+        };
+        hands.push(hand);
+        board = board.play_hand(hand).unwrap();
+    }
+    book.lock()
+        .unwrap()
+        .append(Record::new(
+            Board::initial_state(),
+            &hands,
+            board.score().into(),
+        ))
+        .unwrap();
+}
+
 fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result<()> {
     let book = Arc::new(Mutex::new(Book::import(in_book_path)?));
     let mut solve_obj = setup_default();
     solve_obj.params.ybwc_empties_limit = 64;
     let rt = Runtime::new().unwrap();
     (0..repeat).into_par_iter().for_each(|i| {
-        let mut rng = rand::thread_rng();
+        let mut rng = SmallRng::from_entropy();
         let think_time_limit = 1 << rng.gen_range(7..=12);
         eprintln!("i={}, tl={}", i, think_time_limit);
-        let mut board = Board::initial_state();
-        let mut hands = Vec::new();
-        let initial_hand = "F5".parse().unwrap();
-        hands.push(initial_hand);
-        board = board.play_hand(initial_hand).unwrap();
-        while !board.is_gameover() {
-            if let Some((hand, score)) = book.lock().unwrap().lookup(board) {
-                let from_book = if score > 0 {
-                    true
-                } else if score == 0 {
-                    rng.gen_bool(0.5)
-                } else {
-                    false
-                };
-                if from_book {
-                    //eprintln!("i={}: book {} {} {}", i, board.empty().count_ones(), hand, score);
-                    hands.push(hand);
-                    board = board.play_hand(hand).unwrap();
-                    continue;
-                }
-            }
-            solve_obj.eval_cache.inc_gen();
-            let hand = if board.empty().count_ones() <= 20 {
-                let mut solve_obj = solve_obj.clone();
-                rt.block_on(async move {
-                    let sub_solver = Arc::new(SubSolver::new(&[]));
-                    solve_with_move(board, &mut solve_obj, &sub_solver).await
-                })
-            } else {
-                let start = Instant::now();
-                let timer = Timer {
-                    period: start,
-                    time_limit: think_time_limit,
-                };
-                let mut searcher = Searcher {
-                    evaluator: solve_obj.evaluator.clone(),
-                    cache: solve_obj.eval_cache.clone(),
-                    timer: Some(timer),
-                    node_count: 0,
-                };
-                let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
-                //eprintln!("i={}, search {} {} {}", i, board.empty().count_ones(), hand, score as f64 / SCALE as f64);
-                hand
-            };
-            hands.push(hand);
-            board = board.play_hand(hand).unwrap();
-        }
-        book.lock()
-            .unwrap()
-            .append(Record::new(
-                Board::initial_state(),
-                &hands,
-                board.score().into(),
-            ))
-            .unwrap();
+        play_with_book(book.clone(), think_time_limit, &solve_obj, &rt, &mut rng);
     });
     book.lock().unwrap().export(out_book_path)?;
     Ok(())
