@@ -1,8 +1,8 @@
+use crate::book::*;
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
-use crate::book::*;
 use crate::engine::search::*;
 use crate::engine::think::*;
 use crate::setup::*;
@@ -16,8 +16,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::BufWriter;
-use std::sync::Arc;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
@@ -291,14 +291,14 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 }
             }
         }
-        let board = 
-            BoardWithColor {
-                board: Board {
-                player: black,
-                opponent: white,
-                },
-                is_black: id == 0,
-            };
+        let is_black = id == 0;
+        let board = BoardWithColor {
+            board: Board {
+                player: if is_black { black } else { white },
+                opponent: if is_black { white } else { black },
+            },
+            is_black,
+        };
         // read actions
         let actions = {
             let mut buf = String::new();
