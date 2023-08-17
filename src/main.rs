@@ -1,9 +1,9 @@
 #![feature(test)]
-mod record;
 mod book;
 mod engine;
 mod play;
 mod playout;
+mod record;
 mod remote;
 mod serialize;
 mod setup;
@@ -326,6 +326,13 @@ fn main() {
                 .arg(Arg::new("REPEAT").short('r').required(true)),
         )
         .subcommand(
+            Command::new("gen-book-v2")
+                .about("Generate book v2")
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone())
+                .arg(Arg::new("MIN_COUNT").short('c').required(true)),
+        )
+        .subcommand(
             Command::new("gen-book")
                 .about("Generate book")
                 .arg(arg_input_file.clone())
@@ -407,6 +414,9 @@ fn main() {
         }
         Some(("gen-book", matches)) => {
             gen_book(matches);
+        }
+        Some(("gen-book-v2", matches)) => {
+            gen_book_v2(matches);
         }
         Some(("grow-book", matches)) => {
             command_grow_book(matches);

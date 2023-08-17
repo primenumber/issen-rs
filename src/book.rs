@@ -88,6 +88,42 @@ impl Book {
         }
         Ok(())
     }
+
+    pub fn filter_record(&self, min_count: usize) -> Book {
+        let mut records = self.records.clone();
+        records.sort_unstable();
+        records.dedup();
+        let mut count_map = HashMap::<Board, usize>::new();
+        for rec in &records {
+            for (board, _hand, _score) in rec.timeline().unwrap() {
+                if let Some(num) = count_map.get(&board) {
+                    count_map.insert(board, num + 1);
+                } else {
+                    count_map.insert(board, 1);
+                }
+            }
+        }
+        let mut new_records = Vec::new();
+        for rec in &records {
+            let mut hands = Vec::new();
+            let mut last_score = None;
+            for (board, hand, _score) in rec.timeline().unwrap() {
+                last_score = Some(self.lookup(board).unwrap().1);
+                let &num = count_map.get(&board).unwrap();
+                if num < min_count {
+                    break;
+                }
+                hands.push(hand);
+            }
+            new_records.push(Record::new(rec.get_initial(), &hands, last_score.unwrap()));
+        }
+        new_records.dedup();
+        let mut new_book = Book::new();
+        for rec in new_records {
+            new_book.append(rec).unwrap();
+        }
+        new_book
+    }
 }
 
 fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result<()> {
@@ -168,6 +204,21 @@ pub fn command_grow_book(matches: &ArgMatches) {
         .parse()
         .unwrap();
     grow_book(Path::new(in_book_path), Path::new(out_book_path), repeat).unwrap();
+}
+
+pub fn gen_book_v2(matches: &ArgMatches) -> Option<()> {
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let min_count = matches
+        .get_one::<String>("MIN_COUNT")
+        .unwrap()
+        .parse()
+        .unwrap();
+
+    let orig_book = Book::import(Path::new(input_path)).unwrap();
+    let new_book = orig_book.filter_record(min_count);
+    new_book.export(Path::new(output_path)).unwrap();
+    Some(())
 }
 
 fn write_record<W: Write>(current: &mut Vec<Hand>, writer: &mut W) {

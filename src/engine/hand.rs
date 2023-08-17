@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Hand {
     Play(usize),
     Pass,
