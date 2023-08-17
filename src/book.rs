@@ -155,6 +155,7 @@ fn play_with_book(
         }
         solve_obj.eval_cache.inc_gen();
         let hand = if board.empty().count_ones() <= 20 {
+            solve_obj.res_cache.inc_gen();
             let mut solve_obj = solve_obj.clone();
             rt.block_on(async move {
                 let sub_solver = Arc::new(SubSolver::new(&[]));
