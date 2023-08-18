@@ -78,7 +78,7 @@ pub fn step_by_pos_with_color(board: &BoardWithColor, pos: usize) -> Option<Boar
             if !board.board.mobility().is_empty() {
                 None
             } else {
-                match board.pass_unchecked().play(pos) {
+                match board.pass().unwrap().play(pos) {
                     Ok(next) => Some(next),
                     Err(_) => None,
                 }
@@ -113,7 +113,10 @@ fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, H
     match record.first() {
         Some(&first) => {
             let ((mut boards, score), hand) = if board.mobility_bits() == 0 {
-                (boards_from_record_impl(board.pass_unchecked(), record), Hand::Pass)
+                (
+                    boards_from_record_impl(board.pass_unchecked(), record),
+                    Hand::Pass,
+                )
             } else {
                 (
                     boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
@@ -487,10 +490,7 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         let data: Vec<&str> = input_line.split(' ').collect();
         let player = u64::from_str_radix(&data[0], 16).ok()?;
         let opponent = u64::from_str_radix(&data[1], 16).ok()?;
-        boards.push(Board {
-            player,
-            opponent,
-        });
+        boards.push(Board { player, opponent });
         scores.push(data[2].trim().parse().unwrap());
     }
     let mut wp = WeightedPattern::new(&PATTERNS_LARGE);
@@ -605,10 +605,7 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
         let player = u64::from_str_radix(&data[0], 16).ok()?;
         let opponent = u64::from_str_radix(&data[1], 16).ok()?;
         dataset.insert((
-            Board {
-                player,
-                opponent,
-            },
+            Board { player, opponent },
             data[2].trim().parse::<i16>().unwrap(),
         ));
     }
