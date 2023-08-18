@@ -64,10 +64,10 @@ impl Book {
         let mut fboard = board.flip_diag();
         for i in 0..4 {
             if let Some((hand, score)) = self.lookup(board) {
-                return Some((hand.transform(3 - i, false), score));
+                return Some((hand.transform(4 - i, false), score));
             }
             if let Some((hand, score)) = self.lookup(fboard) {
-                return Some((hand.transform(3 - i, true), score));
+                return Some((hand.transform(4 - i, true), score));
             }
             board = board.rot90();
             fboard = fboard.rot90();
