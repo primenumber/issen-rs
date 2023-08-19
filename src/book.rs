@@ -37,6 +37,14 @@ impl Book {
         }
     }
 
+    pub fn from_records(records: &[Record]) -> Book {
+        let mut book = Book::new();
+        for rec in records {
+            book.append(rec.clone()).unwrap();
+        }
+        book
+    }
+
     pub fn import(path: &Path) -> Result<Book> {
         let f = File::open(path)?;
         let reader = BufReader::new(f);
@@ -111,11 +119,7 @@ impl Book {
         let mut count_map = HashMap::<Board, usize>::new();
         for rec in &records {
             for (board, _hand, _score) in rec.timeline().unwrap() {
-                if let Some(num) = count_map.get(&board) {
-                    count_map.insert(board, num + 1);
-                } else {
-                    count_map.insert(board, 1);
-                }
+                count_map.insert(board, count_map.get(&board).unwrap_or(&0) + 1);
             }
         }
         let mut new_records = Vec::new();
@@ -124,8 +128,7 @@ impl Book {
             let mut last_score = None;
             for (board, hand, _score) in rec.timeline().unwrap() {
                 last_score = Some(self.lookup(board).unwrap().1);
-                let &num = count_map.get(&board).unwrap();
-                if num < min_count {
+                if *count_map.get(&board).unwrap() < min_count {
                     break;
                 }
                 hands.push(hand);
@@ -133,11 +136,7 @@ impl Book {
             new_records.push(Record::new(rec.get_initial(), &hands, last_score.unwrap()));
         }
         new_records.dedup();
-        let mut new_book = Book::new();
-        for rec in new_records {
-            new_book.append(rec).unwrap();
-        }
-        new_book
+        Book::from_records(&new_records)
     }
 }
 
