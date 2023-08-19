@@ -140,6 +140,45 @@ impl Book {
     }
 }
 
+fn search(board: Board, think_time_limit: u128, solve_obj: &SolveObj, rt: &Runtime) -> Hand {
+    solve_obj.eval_cache.inc_gen();
+    if board.empty().count_ones() <= 20 {
+        solve_obj.res_cache.inc_gen();
+        let mut solve_obj = solve_obj.clone();
+        rt.block_on(async move {
+            let sub_solver = Arc::new(SubSolver::new(&[]));
+            solve_with_move(board, &mut solve_obj, &sub_solver).await
+        })
+    } else {
+        let start = Instant::now();
+        let timer = Timer {
+            period: start,
+            time_limit: think_time_limit,
+        };
+        let mut searcher = Searcher {
+            evaluator: solve_obj.evaluator.clone(),
+            cache: solve_obj.eval_cache.clone(),
+            timer: Some(timer),
+            node_count: 0,
+        };
+        let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+        hand
+    }
+}
+
+fn gen_opening(rng: &mut SmallRng) -> (Board, Vec<Hand>) {
+    let mut board = Board::initial_state();
+    let mut hands = Vec::new();
+    let initial_hand = "F5".parse().unwrap();
+    hands.push(initial_hand);
+    board = board.play_hand(initial_hand).unwrap();
+    // NOTE: Prevent searcher from always choosing D6
+    let second_hand = if rng.gen_bool(0.5) { "D6" } else { "F6" }.parse().unwrap();
+    hands.push(second_hand);
+    board = board.play_hand(second_hand).unwrap();
+    (board, hands)
+}
+
 fn play_with_book(
     book: Arc<Mutex<Book>>,
     think_time_limit: u128,
@@ -147,19 +186,13 @@ fn play_with_book(
     rt: &Runtime,
     rng: &mut SmallRng,
 ) {
-    let mut board = Board::initial_state();
-    let mut hands = Vec::new();
-    let initial_hand = "F5".parse().unwrap();
-    hands.push(initial_hand);
-    board = board.play_hand(initial_hand).unwrap();
+    let (mut board, mut hands) = gen_opening(rng);
     while !board.is_gameover() {
         if let Some((hand, score)) = book.lock().unwrap().lookup(board) {
-            let from_book = if score > 0 {
-                true
-            } else if score == 0 {
-                rng.gen_bool(0.5)
-            } else {
-                false
+            let from_book = match score.cmp(&0) {
+                Ordering::Less => false,
+                Ordering::Equal => rng.gen_bool(0.5),
+                Ordering::Greater => true,
             };
             if from_book {
                 hands.push(hand);
@@ -167,40 +200,13 @@ fn play_with_book(
                 continue;
             }
         }
-        solve_obj.eval_cache.inc_gen();
-        let hand = if board.empty().count_ones() <= 20 {
-            solve_obj.res_cache.inc_gen();
-            let mut solve_obj = solve_obj.clone();
-            rt.block_on(async move {
-                let sub_solver = Arc::new(SubSolver::new(&[]));
-                solve_with_move(board, &mut solve_obj, &sub_solver).await
-            })
-        } else {
-            let start = Instant::now();
-            let timer = Timer {
-                period: start,
-                time_limit: think_time_limit,
-            };
-            let mut searcher = Searcher {
-                evaluator: solve_obj.evaluator.clone(),
-                cache: solve_obj.eval_cache.clone(),
-                timer: Some(timer),
-                node_count: 0,
-            };
-            let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
-            hand
-        };
+        let hand = search(board, think_time_limit, solve_obj, rt);
         hands.push(hand);
         board = board.play_hand(hand).unwrap();
     }
-    book.lock()
-        .unwrap()
-        .append(Record::new(
-            Board::initial_state(),
-            &hands,
-            board.score().into(),
-        ))
-        .unwrap();
+    let record = Record::new(Board::initial_state(), &hands, board.score().into());
+    eprintln!("{}", record);
+    book.lock().unwrap().append(record).unwrap();
 }
 
 fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result<()> {
