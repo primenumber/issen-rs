@@ -191,7 +191,7 @@ fn play_with_book(
         if let Some((hand, score)) = book.lock().unwrap().lookup(board) {
             let from_book = match score.cmp(&0) {
                 Ordering::Less => false,
-                Ordering::Equal => rng.gen_bool(0.5),
+                Ordering::Equal => rng.gen_bool(0.8),
                 Ordering::Greater => true,
             };
             if from_book {
