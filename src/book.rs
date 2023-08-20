@@ -112,6 +112,26 @@ impl Book {
         Ok(())
     }
 
+    pub fn minimax_record(&self, min_count: usize) -> Book {
+        let mut records = self.records.clone();
+        records.sort_unstable();
+        records.dedup();
+        let mut new_records = Vec::new();
+        for rec in &records {
+            let mut is_best_record = true;
+            for (board, _hand, score) in rec.timeline().unwrap() {
+                if self.lookup(board).unwrap().1 > score {
+                    is_best_record = false;
+                    break;
+                }
+            }
+            if is_best_record {
+                new_records.push(rec);
+            }
+        }
+        Book::from_records(&new_records)
+    }
+
     pub fn filter_record(&self, min_count: usize) -> Book {
         let mut records = self.records.clone();
         records.sort_unstable();
