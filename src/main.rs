@@ -306,6 +306,12 @@ fn main() {
                 .arg(Arg::new("REPEAT").short('r').required(true)),
         )
         .subcommand(
+            Command::new("gen-book")
+                .about("Generate book")
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
+        )
+        .subcommand(
             Command::new("gen-book-v2")
                 .about("Generate book v2")
                 .arg(arg_input_file.clone())
@@ -369,6 +375,9 @@ fn main() {
         }
         Some(("train", matches)) => {
             train(matches);
+        }
+        Some(("gen-book", matches)) => {
+            gen_book(matches);
         }
         Some(("gen-book-v2", matches)) => {
             gen_book_v2(matches);

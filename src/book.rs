@@ -250,6 +250,16 @@ pub fn command_grow_book(matches: &ArgMatches) {
     grow_book(Path::new(in_book_path), Path::new(out_book_path), repeat).unwrap();
 }
 
+pub fn gen_book(matches: &ArgMatches) -> Option<()> {
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+
+    let orig_book = Book::import(Path::new(input_path)).unwrap();
+    let new_book = orig_book.minimax_record();
+    new_book.export(Path::new(output_path)).unwrap();
+    Some(())
+}
+
 pub fn gen_book_v2(matches: &ArgMatches) -> Option<()> {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
