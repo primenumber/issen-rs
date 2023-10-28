@@ -21,7 +21,7 @@ use tokio::runtime::Runtime;
 
 pub struct Book {
     records: Vec<Record>,
-    minimax_map: HashMap<Board, (Hand, i16)>,
+    minimax_map: HashMap<Board, (Vec<Hand>, i16)>,
 }
 
 impl Book {
@@ -59,18 +59,30 @@ impl Book {
         Ok(())
     }
 
-    pub fn lookup(&self, board: Board) -> Option<(Hand, i16)> {
-        self.minimax_map.get(&board).copied()
+    pub fn lookup(&self, board: Board) -> Option<(Vec<Hand>, i16)> {
+        self.minimax_map.get(&board).cloned()
     }
 
-    pub fn lookup_with_symmetry(&self, mut board: Board) -> Option<(Hand, i16)> {
+    pub fn lookup_with_symmetry(&self, mut board: Board) -> Option<(Vec<Hand>, i16)> {
         let mut fboard = board.flip_diag();
         for i in 0..4 {
-            if let Some((hand, score)) = self.lookup(board) {
-                return Some((hand.transform(4 - i, false), score));
+            if let Some((hands, score)) = self.lookup(board) {
+                return Some((
+                    hands
+                        .into_iter()
+                        .map(|h| h.transform(4 - i, false))
+                        .collect(),
+                    score,
+                ));
             }
-            if let Some((hand, score)) = self.lookup(fboard) {
-                return Some((hand.transform(4 - i, true), score));
+            if let Some((hands, score)) = self.lookup(fboard) {
+                return Some((
+                    hands
+                        .into_iter()
+                        .map(|h| h.transform(4 - i, true))
+                        .collect(),
+                    score,
+                ));
             }
             board = board.rot90();
             fboard = fboard.rot90();
@@ -83,7 +95,7 @@ impl Book {
         self.records.push(record);
         timeline.reverse();
         for (board, hand, score) in timeline {
-            let mut best_hand = hand;
+            let mut best_hands = vec![hand];
             let mut best_score = -(BOARD_SIZE as i16);
             if board.is_gameover() {
                 best_score = score;
@@ -97,12 +109,14 @@ impl Book {
                     if let Some((_, next_score)) = self.lookup(next) {
                         if -next_score > best_score {
                             best_score = -next_score;
-                            best_hand = h;
+                            best_hands = vec![h];
+                        } else if -next_score == best_score {
+                            best_hands.push(h);
                         }
                     }
                 }
             }
-            self.minimax_map.insert(board, (best_hand, best_score));
+            self.minimax_map.insert(board, (best_hands, best_score));
         }
         Ok(())
     }
@@ -203,13 +217,14 @@ fn play_with_book(
 ) {
     let (mut board, mut hands) = gen_opening(rng);
     while !board.is_gameover() {
-        if let Some((hand, score)) = book.lock().unwrap().lookup(board) {
+        if let Some((best_hands, score)) = book.lock().unwrap().lookup(board) {
             let from_book = match score.cmp(&0) {
                 Ordering::Less => false,
                 Ordering::Equal => rng.gen_bool(0.8),
                 Ordering::Greater => true,
             };
             if from_book {
+                let hand = *best_hands.choose(rng).unwrap();
                 hands.push(hand);
                 board = board.play_hand(hand).unwrap();
                 continue;
@@ -230,7 +245,7 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
     solve_obj.params.ybwc_empties_limit = 64;
     let rt = Runtime::new().unwrap();
     (0..repeat).into_par_iter().for_each(|i| {
-        let mut rng = SmallRng::from_entropy();
+        let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
         let think_time_limit = 1 << rng.gen_range(7..=12);
         eprintln!("i={}, tl={}", i, think_time_limit);
         play_with_book(book.clone(), think_time_limit, &solve_obj, &rt, &mut rng);
