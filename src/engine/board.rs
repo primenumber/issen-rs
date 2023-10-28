@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod test;
-use anyhow::Result;
 use crate::engine::bits::*;
-use thiserror::Error;
 use crate::engine::hand::*;
+use anyhow::Result;
 use clap::ArgMatches;
 use core::arch::x86_64::*;
 use lazy_static::lazy_static;
@@ -11,6 +10,7 @@ use std::cmp::min;
 use std::fmt;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Board {
@@ -378,10 +378,7 @@ impl Board {
                 }
             }
         }
-        Ok(Board {
-            player,
-            opponent,
-        })
+        Ok(Board { player, opponent })
     }
 
     pub fn to_base81(&self) -> String {
@@ -404,28 +401,6 @@ impl Board {
         String::from_utf8(result).unwrap()
     }
 
-    pub fn transform(&self, rotate: usize, mirror: bool) -> Board {
-        let mut tmp = *self;
-        for _ in 0..rotate {
-            tmp = tmp.rot90();
-        }
-        if mirror {
-            tmp = tmp.flip_diag();
-        }
-        tmp
-    }
-
-    pub fn sym_boards(&self) -> Vec<Board> {
-        let mut tmp = *self;
-        let mut boards = Vec::new();
-        for _ in 0..4 {
-            tmp = tmp.rot90();
-            boards.push(tmp);
-            boards.push(tmp.flip_diag());
-        }
-        boards
-    }
-
     #[allow(dead_code)]
     pub fn normalize(&self) -> (Board, usize, bool) {
         let mut res = (*self, 0, false);
@@ -443,9 +418,9 @@ impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for i in 0..BOARD_SIZE {
             if ((self.player >> i) & 1) != 0 {
-                    write!(f, "X")?;
+                write!(f, "X")?;
             } else if ((self.opponent >> i) & 1) != 0 {
-                    write!(f, "O")?;
+                write!(f, "O")?;
             } else {
                 write!(f, ".")?;
             }
@@ -557,16 +532,16 @@ impl FromStr for BoardWithColor {
         if s.chars().nth(65) == Some('X') {
             Ok(BoardWithColor {
                 board: Board {
-                player: black,
-                opponent: white,
+                    player: black,
+                    opponent: white,
                 },
                 is_black: true,
             })
         } else if s.chars().nth(65) == Some('O') {
             Ok(BoardWithColor {
                 board: Board {
-                player: white,
-                opponent: black,
+                    player: white,
+                    opponent: black,
                 },
                 is_black: false,
             })
@@ -657,10 +632,7 @@ pub fn parse_board(matches: &ArgMatches) {
     let data: Vec<&str> = s.split(' ').collect();
     let player = u64::from_str_radix(data[0], 16).unwrap();
     let opponent = u64::from_str_radix(data[1], 16).unwrap();
-    let board = Board {
-        player,
-        opponent,
-    };
+    let board = Board { player, opponent };
     println!("{}", board);
 }
 

@@ -2,12 +2,9 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
-use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
-use crate::playout::*;
 use crate::serialize::*;
-use crate::setup::*;
 use crate::sparse_mat::*;
 use clap::ArgMatches;
 use rayon::prelude::*;
@@ -16,9 +13,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::str;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 const PACKED_SCALE: i32 = 256;
 
@@ -71,22 +66,6 @@ pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
     }
 }
 
-pub fn step_by_pos_with_color(board: &BoardWithColor, pos: usize) -> Option<BoardWithColor> {
-    match board.play(pos) {
-        Ok(next) => Some(next),
-        Err(_) => {
-            if !board.board.mobility().is_empty() {
-                None
-            } else {
-                match board.pass_unchecked().play(pos) {
-                    Ok(next) => Some(next),
-                    Err(_) => None,
-                }
-            }
-        }
-    }
-}
-
 pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     let mut board = Board {
         player: 0x0000_0008_1000_0000,
@@ -113,7 +92,10 @@ fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, H
     match record.first() {
         Some(&first) => {
             let ((mut boards, score), hand) = if board.mobility_bits() == 0 {
-                (boards_from_record_impl(board.pass_unchecked(), record), Hand::Pass)
+                (
+                    boards_from_record_impl(board.pass_unchecked(), record),
+                    Hand::Pass,
+                )
             } else {
                 (
                     boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
@@ -131,25 +113,6 @@ fn boards_from_record(line: &str) -> Vec<(Board, i8, Hand)> {
     let record = parse_record(line);
     let board = Board::initial_state();
     boards_from_record_impl(board, &record).0
-}
-
-pub fn load_records(input_path: &str) -> Vec<Vec<Board>> {
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_records = input_line.trim().parse().unwrap();
-    let mut result = Vec::new();
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line).unwrap();
-        let record = parse_record(&input_line);
-        if let Some(boards) = collect_boards(&record) {
-            result.push(boards);
-        }
-    }
-    result
 }
 
 pub fn clean_record(matches: &ArgMatches) {
@@ -190,83 +153,6 @@ pub fn pos_to_str(pos: usize) -> String {
     result.push(first as char);
     result.push(second as char);
     result
-}
-
-pub async fn create_record_by_solve(
-    mut board: BoardWithColor,
-    solve_obj: &mut SolveObj,
-    sub_solver: &Arc<SubSolver>,
-) -> (String, BoardWithColor) {
-    let mut result = String::new();
-    while !board.is_gameover() {
-        let pos = solve_with_move(board.board, solve_obj, sub_solver).await;
-        if let Hand::Play(pos) = pos {
-            result += &pos_to_str(pos);
-            board = board.play(pos).unwrap();
-        } else {
-            board = board.pass_unchecked();
-        }
-    }
-    (result, board)
-}
-
-pub fn update_record(matches: &ArgMatches) {
-    let input_path = matches.get_one::<String>("INPUT").unwrap();
-    let depth = *matches.get_one::<usize>("DEPTH").unwrap();
-    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
-
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_records = input_line.trim().parse().unwrap();
-
-    let solve_obj = setup_default();
-    let sub_solver = Arc::new(SubSolver::new(&[]));
-
-    let mut handles = Vec::new();
-    let finished = Arc::new(AtomicUsize::new(0));
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line).unwrap();
-        let finished = finished.clone();
-
-        let mut solve_obj = solve_obj.clone();
-        let sub_solver = sub_solver.clone();
-        handles.push(tokio::task::spawn(async move {
-            let record = parse_record(&input_line);
-            let mut updateds = Vec::new();
-            for (idx, _) in record.iter().enumerate() {
-                let sub_record = record.clone();
-                let sub_record = &sub_record[0..=idx];
-                //let updated = update_record_impl(&record, &mut solve_obj, depth).await;
-                let updated = playout(sub_record, &mut solve_obj, &sub_solver, 100, depth).await;
-                let count = finished.fetch_add(1, Ordering::SeqCst);
-                if count % 1000 == 0 {
-                    eprintln!("{}", count);
-                }
-                updateds.push(updated);
-            }
-            updateds
-        }));
-    }
-
-    let mut result = Vec::new();
-    for handle in handles {
-        let results = Runtime::new().unwrap().block_on(handle).unwrap();
-        for (line, score) in results.iter().flatten() {
-            result.push(format!("{} {}\n", line, score));
-        }
-    }
-
-    let out_f = File::create(output_path).unwrap();
-    let mut writer = BufWriter::new(out_f);
-
-    writeln!(writer, "{}", result.len()).unwrap();
-    for line in result {
-        write!(writer, "{}", line).unwrap();
-    }
 }
 
 pub fn gen_dataset(matches: &ArgMatches) {
@@ -487,10 +373,7 @@ pub fn train(matches: &ArgMatches) -> Option<()> {
         let data: Vec<&str> = input_line.split(' ').collect();
         let player = u64::from_str_radix(&data[0], 16).ok()?;
         let opponent = u64::from_str_radix(&data[1], 16).ok()?;
-        boards.push(Board {
-            player,
-            opponent,
-        });
+        boards.push(Board { player, opponent });
         scores.push(data[2].trim().parse().unwrap());
     }
     let mut wp = WeightedPattern::new(&PATTERNS_LARGE);
@@ -605,10 +488,7 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
         let player = u64::from_str_radix(&data[0], 16).ok()?;
         let opponent = u64::from_str_radix(&data[1], 16).ok()?;
         dataset.insert((
-            Board {
-                player,
-                opponent,
-            },
+            Board { player, opponent },
             data[2].trim().parse::<i16>().unwrap(),
         ));
     }

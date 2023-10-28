@@ -1,3 +1,4 @@
+use crate::book::*;
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
@@ -15,6 +16,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::BufWriter;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Runtime;
@@ -260,6 +262,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let solve_obj = setup_default();
     let sub_solver = Arc::new(SubSolver::new(&[]));
     let mut reader = BufReader::new(std::io::stdin());
+    let book = Book::import(Path::new("medium2.book"))?;
 
     // read initial states
     let id = {
@@ -288,14 +291,14 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 }
             }
         }
-        let board = 
-            BoardWithColor {
-                board: Board {
-                player: black,
-                opponent: white,
-                },
-                is_black: id == 0,
-            };
+        let is_black = id == 0;
+        let board = BoardWithColor {
+            board: Board {
+                player: if is_black { black } else { white },
+                opponent: if is_black { white } else { black },
+            },
+            is_black,
+        };
         // read actions
         let actions = {
             let mut buf = String::new();
@@ -306,8 +309,10 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             let mut buf = String::new();
             reader.read_line(&mut buf)?;
         }
-        // search
-        let best = if popcnt(board.empty()) > 16 {
+        // book or search
+        let best = if let Some((hand, _score)) = book.lookup_with_symmetry(board.board) {
+            hand
+        } else if popcnt(board.empty()) > 16 {
             let time_limit = 130;
             let start = Instant::now();
             let timer = Timer {
