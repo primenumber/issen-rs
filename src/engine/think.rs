@@ -76,7 +76,9 @@ impl Searcher {
                 return Some(((board.score() as i16) * SCALE, Hand::Pass));
             } else {
                 return Some((
-                    -self.think(board.pass_unchecked(), -beta, -alpha, true, depth)?.0,
+                    -self
+                        .think(board.pass_unchecked(), -beta, -alpha, true, depth)?
+                        .0,
                     Hand::Pass,
                 ));
             }
@@ -161,7 +163,9 @@ impl Searcher {
                 return Some(((board.score() as i16) * SCALE, Hand::Pass));
             } else {
                 return Some((
-                    -self.think(board.pass_unchecked(), -beta, -alpha, true, depth)?.0,
+                    -self
+                        .think(board.pass_unchecked(), -beta, -alpha, true, depth)?
+                        .0,
                     Hand::Pass,
                 ));
             }

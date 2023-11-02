@@ -2,7 +2,7 @@
 mod book;
 mod engine;
 mod play;
-mod playout;
+mod record;
 mod remote;
 mod serialize;
 mod setup;
@@ -283,19 +283,6 @@ fn main() {
                 .arg(arg_output_file.clone()),
         )
         .subcommand(
-            Command::new("update-record")
-                .about("Update record by end-game search")
-                .arg(arg_input_file.clone())
-                .arg(Arg::new("DEPTH").short('d').required(true))
-                .arg(arg_output_file.clone()),
-        )
-        .subcommand(
-            Command::new("minimax-record")
-                .about("Minimax Record")
-                .arg(arg_input_file.clone())
-                .arg(arg_output_file.clone()),
-        )
-        .subcommand(
             Command::new("gen-dataset")
                 .about("Generate training dataset")
                 .arg(arg_input_file.clone())
@@ -312,17 +299,24 @@ fn main() {
                 .arg(Arg::new("width").required(true)),
         )
         .subcommand(
-            Command::new("update-record-v2")
-                .about("Update record iterative")
+            Command::new("grow-book")
+                .about("Grow book")
                 .arg(arg_input_file.clone())
-                .arg(arg_output_file.clone()),
+                .arg(arg_output_file.clone())
+                .arg(Arg::new("REPEAT").short('r').required(true)),
         )
         .subcommand(
             Command::new("gen-book")
                 .about("Generate book")
                 .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
+        )
+        .subcommand(
+            Command::new("gen-book-v2")
+                .about("Generate book v2")
+                .arg(arg_input_file.clone())
                 .arg(arg_output_file.clone())
-                .arg(Arg::new("MAX_COUNT").short('c').required(true)),
+                .arg(Arg::new("MIN_COUNT").short('c').required(true)),
         )
         .subcommand(
             Command::new("binarize")
@@ -333,12 +327,6 @@ fn main() {
         .subcommand(
             Command::new("pack")
                 .about("Pack weights file")
-                .arg(arg_input_file.clone())
-                .arg(arg_output_file.clone()),
-        )
-        .subcommand(
-            Command::new("pack-book")
-                .about("Pack book file")
                 .arg(arg_input_file.clone())
                 .arg(arg_output_file.clone()),
         )
@@ -382,15 +370,6 @@ fn main() {
         Some(("clean-record", matches)) => {
             clean_record(matches);
         }
-        Some(("update-record", matches)) => {
-            update_record(matches);
-        }
-        Some(("update-record-v2", matches)) => {
-            iterative_update_book(matches);
-        }
-        Some(("minimax-record", matches)) => {
-            minimax_record(matches);
-        }
         Some(("gen-dataset", matches)) => {
             gen_dataset(matches);
         }
@@ -400,14 +379,17 @@ fn main() {
         Some(("gen-book", matches)) => {
             gen_book(matches);
         }
+        Some(("gen-book-v2", matches)) => {
+            gen_book_v2(matches);
+        }
+        Some(("grow-book", matches)) => {
+            command_grow_book(matches);
+        }
         Some(("binarize", matches)) => {
             binarize_weights(matches);
         }
         Some(("pack", matches)) => {
             pack_weights(matches);
-        }
-        Some(("pack-book", matches)) => {
-            pack_book(matches);
         }
         Some(("last-table", matches)) => {
             gen_last_table(matches);
