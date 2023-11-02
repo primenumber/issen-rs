@@ -109,7 +109,7 @@ impl SolveStat {
 
 #[derive(Clone)]
 pub struct SubSolver {
-    pub client: Client,
+    pub client: Arc<Client>,
     pub sem: Arc<Semaphore>,
     pub workers: Arc<Vec<String>>,
 }
@@ -117,7 +117,7 @@ pub struct SubSolver {
 impl SubSolver {
     pub fn new(worker_urls: &[String]) -> SubSolver {
         SubSolver {
-            client: Client::new(),
+            client: Arc::new(Client::new()),
             sem: Arc::new(Semaphore::new(128)),
             workers: Arc::new(worker_urls.to_vec()),
         }

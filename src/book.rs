@@ -169,14 +169,13 @@ impl Book {
     }
 }
 
-fn search(board: Board, think_time_limit: u128, solve_obj: &SolveObj, rt: &Runtime) -> Hand {
+fn search(board: Board, think_time_limit: u128, solve_obj: &SolveObj, rt: &Runtime, sub_solver: &Arc<SubSolver>) -> Hand {
     solve_obj.eval_cache.inc_gen();
-    if board.empty().count_ones() <= 20 {
+    if board.empty().count_ones() <= 18 {
         solve_obj.res_cache.inc_gen();
         let mut solve_obj = solve_obj.clone();
         rt.block_on(async move {
-            let sub_solver = Arc::new(SubSolver::new(&[]));
-            solve_with_move(board, &mut solve_obj, &sub_solver).await
+            solve_with_move(board, &mut solve_obj, &sub_solver.clone()).await
         })
     } else {
         let start = Instant::now();
@@ -214,6 +213,7 @@ fn play_with_book(
     solve_obj: &SolveObj,
     rt: &Runtime,
     rng: &mut SmallRng,
+    sub_solver: &Arc<SubSolver>,
 ) {
     let (mut board, mut hands) = gen_opening(rng);
     while !board.is_gameover() {
@@ -230,7 +230,7 @@ fn play_with_book(
                 continue;
             }
         }
-        let hand = search(board, think_time_limit, solve_obj, rt);
+        let hand = search(board, think_time_limit, solve_obj, rt, &sub_solver);
         hands.push(hand);
         board = board.play_hand(hand).unwrap();
     }
@@ -244,11 +244,12 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
     let mut solve_obj = setup_default();
     solve_obj.params.ybwc_empties_limit = 64;
     let rt = Runtime::new().unwrap();
+    let sub_solver = Arc::new(SubSolver::new(&[]));
     (0..repeat).into_par_iter().for_each(|i| {
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
-        let think_time_limit = 1 << rng.gen_range(7..=12);
+        let think_time_limit = 1 << rng.gen_range(7..=9);
         eprintln!("i={}, tl={}", i, think_time_limit);
-        play_with_book(book.clone(), think_time_limit, &solve_obj, &rt, &mut rng);
+        play_with_book(book.clone(), think_time_limit, &solve_obj, &rt, &mut rng, &sub_solver.clone());
     });
     book.lock().unwrap().export(out_book_path)?;
     Ok(())
