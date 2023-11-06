@@ -7,7 +7,7 @@ use bitintr::Tzcnt;
 pub struct LastCache {
     table: [(i8, i8); 4096],
     masks: [(u64, u64, u64); BOARD_SIZE],
-    indices: [(u8, u8, u8, u8); BOARD_SIZE],
+    indices: [(u8, u8); BOARD_SIZE],
 }
 
 impl LastCache {
@@ -37,7 +37,7 @@ impl LastCache {
             }
         }
         let mut masks = [(0, 0, 0); BOARD_SIZE];
-        let mut indices = [(0, 0, 0, 0); BOARD_SIZE];
+        let mut indices = [(0, 0); BOARD_SIZE];
         for pos in 0..BOARD_SIZE {
             let row = pos / 8;
             let col = pos % 8;
@@ -55,7 +55,7 @@ impl LastCache {
             };
             let diag2_idx = if row + col > 7 { 7 - col } else { row };
             masks[pos] = (col_mask, diag1_mask, diag2_mask);
-            indices[pos] = (col as u8, row as u8, diag1_idx as u8, diag2_idx as u8);
+            indices[pos] = (diag1_idx as u8, diag2_idx as u8);
         }
         LastCache {
             table,
@@ -67,16 +67,13 @@ impl LastCache {
     unsafe fn solve_last_impl(&self, board: Board) -> (i8, usize) {
         let pos = board.empty().tzcnt() as usize;
         let row = pos >> 3;
+        let col = pos & 0b111;
         let row_bits = (board.player >> (row * 8)) & 0xff;
         let &(col_mask, diag1_mask, diag2_mask) = self.masks.get_unchecked(pos);
-        let &(row_idx, col_idx, diag1_idx, diag2_idx) = self.indices.get_unchecked(pos);
-        let &row_score = self
-            .table
-            .get_unchecked((row_bits as usize) * 8 + row_idx as usize);
+        let &(diag1_idx, diag2_idx) = self.indices.get_unchecked(pos);
+        let &row_score = self.table.get_unchecked((row_bits as usize) * 8 + col);
         let col_bits = pext(board.player, col_mask);
-        let &col_score = self
-            .table
-            .get_unchecked((col_bits as usize) * 8 + col_idx as usize);
+        let &col_score = self.table.get_unchecked((col_bits as usize) * 8 + row);
         let diag1_bits = pext(board.player, diag1_mask);
         let &diag1_score = self
             .table
