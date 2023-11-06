@@ -2,13 +2,13 @@ use super::*;
 
 use rand::{Rng, SeedableRng};
 
-fn solve_last_naive(board: Board) -> i8 {
+fn solve_last_naive(board: Board) -> (i8, usize) {
     let pos = board.empty().tzcnt() as usize;
     match board.play(pos) {
-        Ok(next) => -next.score(),
+        Ok(next) => (-next.score(), 1),
         Err(_) => match board.pass_unchecked().play(pos) {
-            Ok(next) => next.score(),
-            Err(_) => board.score(),
+            Ok(next) => (next.score(), 2),
+            Err(_) => (board.score(), 0),
         },
     }
 }
