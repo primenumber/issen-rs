@@ -52,15 +52,12 @@ pub fn parse_record(line: &str) -> Vec<usize> {
 
 pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
     match board.play(pos) {
-        Ok(next) => Some(next),
-        Err(_) => {
+        Some(next) => Some(next),
+        None => {
             if !board.mobility().is_empty() {
                 None
             } else {
-                match board.pass_unchecked().play(pos) {
-                    Ok(next) => Some(next),
-                    Err(_) => None,
-                }
+                board.pass_unchecked().play(pos)
             }
         }
     }

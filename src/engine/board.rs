@@ -140,24 +140,24 @@ impl Board {
         self.flip(pos) != 0
     }
 
-    pub fn play(&self, pos: usize) -> Result<Board> {
+    pub fn play(&self, pos: usize) -> Option<Board> {
         if pos >= BOARD_SIZE {
-            return Err(UnmovableError {}.into());
+            return None;
         }
         if ((self.player >> pos) & 1) != 0 || ((self.opponent >> pos) & 1) != 0 {
-            return Err(UnmovableError {}.into());
+            return None;
         }
         let flip_bits = self.flip(pos);
         if flip_bits == 0 {
-            return Err(UnmovableError {}.into());
+            return None;
         }
-        Ok(Board {
+        Some(Board {
             player: self.opponent ^ flip_bits,
             opponent: (self.player ^ flip_bits) | (1u64 << pos),
         })
     }
 
-    pub fn play_hand(&self, hand: Hand) -> Result<Board> {
+    pub fn play_hand(&self, hand: Hand) -> Option<Board> {
         match hand {
             Hand::Play(pos) => self.play(pos),
             Hand::Pass => self.pass(),
@@ -171,14 +171,14 @@ impl Board {
         }
     }
 
-    pub fn pass(&self) -> Result<Board> {
+    pub fn pass(&self) -> Option<Board> {
         if self.mobility_bits() == 0 {
-            Ok(Board {
+            Some(Board {
                 player: self.opponent,
                 opponent: self.player,
             })
         } else {
-            Err(UnmovableError {}.into())
+            None
         }
     }
 
@@ -446,9 +446,9 @@ impl BoardWithColor {
         }
     }
 
-    pub fn play(&self, pos: usize) -> Result<BoardWithColor> {
+    pub fn play(&self, pos: usize) -> Option<BoardWithColor> {
         let board = self.board.play(pos)?;
-        Ok(BoardWithColor {
+        Some(BoardWithColor {
             board,
             is_black: !self.is_black,
         })
@@ -461,8 +461,8 @@ impl BoardWithColor {
         }
     }
 
-    pub fn pass(&self) -> Result<BoardWithColor> {
-        Ok(BoardWithColor {
+    pub fn pass(&self) -> Option<BoardWithColor> {
+        Some(BoardWithColor {
             board: self.board.pass()?,
             is_black: !self.is_black,
         })
@@ -558,7 +558,7 @@ impl Iterator for PlayIterator {
         while self.remain != 0 {
             let pos = self.remain.trailing_zeros() as usize;
             self.remain &= self.remain - 1;
-            if let Ok(next) = self.board.play(pos) {
+            if let Some(next) = self.board.play(pos) {
                 return Some((next, Hand::Play(pos)));
             }
         }
