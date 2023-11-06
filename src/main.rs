@@ -64,9 +64,11 @@ struct Stat {
 fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &[String]) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
+    let mut total_nodes = 0;
     println!("|No.|empties|result|answer|move|nodes|time|NPS|");
     println!("|---:|---:|---:|---:|---:|---:|:--:|---:|");
     let mut stats = Vec::new();
+    let global_start = Instant::now();
     for line in reader.lines() {
         let line_str = line.unwrap();
         let desired: i8 = line_str[71..].split(';').next().unwrap().parse().unwrap();
@@ -105,10 +107,18 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
                     correct: res == desired,
                 });
                 *index += 1;
+                total_nodes += stat.node_count;
             }
             Err(_) => println!("Parse error"),
         }
     }
+    let micro_seconds = global_start.elapsed().as_micros();
+    let nps = (total_nodes * 1000000) as u128 / micro_seconds;
+    println!(
+        "[Total] elapsed: {}us, node count: {}, NPS: {}nodes/sec",
+        micro_seconds, total_nodes, nps,
+    );
+
     stats
 }
 

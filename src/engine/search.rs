@@ -4,10 +4,12 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::last_cache::*;
 use crate::engine::midgame::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use anyhow::Result;
+use arrayvec::ArrayVec;
 use crc64::Crc64;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -51,6 +53,7 @@ pub struct SolveObj {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
     pub evaluator: Arc<Evaluator>,
+    pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
 }
 
@@ -65,6 +68,7 @@ impl SolveObj {
             res_cache,
             eval_cache,
             evaluator,
+            last_cache: Arc::new(LastCache::new()),
             params,
         }
     }
@@ -207,7 +211,8 @@ fn calc_max_depth(rem: i8) -> i8 {
 }
 
 pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Option<Hand>) -> Vec<(Hand, Board)> {
-    let mut nexts = Vec::with_capacity(32);
+    const MAX_NEXT_COUNT: usize = 32;
+    let mut nexts = ArrayVec::<_, MAX_NEXT_COUNT>::new();
     for (next, pos) in board.next_iter() {
         nexts.push((0, pos, next));
     }
@@ -215,7 +220,7 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
     let rem = popcnt(board.empty());
     let max_depth = calc_max_depth(rem);
     let min_depth = (max_depth - 3).max(0);
-    let mut tmp = Vec::with_capacity(32);
+    let mut tmp = ArrayVec::<_, MAX_NEXT_COUNT>::new();
     for think_depth in min_depth..=max_depth {
         tmp.clear();
         for &(_score, pos, next) in nexts.iter() {

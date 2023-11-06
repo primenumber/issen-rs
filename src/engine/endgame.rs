@@ -5,26 +5,19 @@ use crate::engine::board::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
+use arrayvec::ArrayVec;
 use bitintr::Tzcnt;
 use std::cmp::max;
-use std::mem::MaybeUninit;
 
-fn near_leaf(board: Board) -> (i8, SolveStat) {
-    let bit = board.empty();
-    let pos = bit.tzcnt() as usize;
-    match board.play(pos) {
-        Ok(next) => (-next.score(), SolveStat::one()),
-        Err(_) => (
-            match board.pass_unchecked().play(pos) {
-                Ok(next) => next.score(),
-                Err(_) => board.score(),
-            },
-            SolveStat {
-                node_count: 2,
-                st_cut_count: 0,
-            },
-        ),
-    }
+fn near_leaf(solve_obj: &mut SolveObj, board: Board) -> (i8, SolveStat) {
+    let (score, node_count) = solve_obj.last_cache.solve_last(board);
+    (
+        score,
+        SolveStat {
+            node_count,
+            st_cut_count: 0,
+        },
+    )
 }
 
 fn naive(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
@@ -112,19 +105,14 @@ fn negascout_impl(solve_obj: &mut SolveObj, next: Board, (alpha, beta): (i8, i8)
 
 fn fastest_first(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
     const MAX_FFS_NEXT: usize = 20;
-    let nexts = MaybeUninit::<[(i8, Board); MAX_FFS_NEXT]>::uninit();
-    let mut nexts = unsafe { nexts.assume_init() };
-    let mut count = 0;
+    let mut nexts = ArrayVec::<_, MAX_FFS_NEXT>::new();
     for (next, _pos) in board.next_iter() {
-        nexts[count] = (weighted_mobility(&next), next);
-        count += 1;
+        nexts.push((weighted_mobility(&next), next));
     }
-    assert!(count <= MAX_FFS_NEXT);
-
-    nexts[0..count].sort_by(|a, b| a.0.cmp(&b.0));
+    nexts.sort_by(|a, b| a.0.cmp(&b.0));
     let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
-    for (i, &(_, next)) in nexts[0..count].iter().enumerate() {
+    for (i, &(_, next)) in nexts.iter().enumerate() {
         let (child_res, child_stat) = negascout_impl(solve_obj, next, (alpha, beta), i == 0);
         res = max(res, -child_res);
         stat.merge(child_stat);
@@ -133,7 +121,7 @@ fn fastest_first(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8,
             return (res, stat);
         }
     }
-    if count == 0 {
+    if nexts.is_empty() {
         if passed {
             return (board.score(), stat);
         } else {
@@ -190,7 +178,7 @@ pub fn solve_inner(
     if rem == 0 {
         (board.score(), SolveStat::zero())
     } else if rem == 1 {
-        near_leaf(board)
+        near_leaf(solve_obj, board)
     } else if rem < solve_obj.params.static_ordering_limit {
         naive(solve_obj, board, (alpha, beta), passed)
     } else if rem < solve_obj.params.ffs_ordering_limit {

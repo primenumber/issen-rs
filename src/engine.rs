@@ -3,6 +3,7 @@ pub mod board;
 pub mod endgame;
 pub mod eval;
 pub mod hand;
+pub mod last_cache;
 pub mod midgame;
 pub mod search;
 pub mod table;
