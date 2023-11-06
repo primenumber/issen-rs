@@ -75,8 +75,8 @@ pub fn play(matches: &ArgMatches) -> Board {
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(hand) => match board.play(hand) {
-                Ok(next) => board = next,
-                Err(_) => println!("Invalid move"),
+                Some(next) => board = next,
+                None => println!("Invalid move"),
             },
         }
     }
@@ -131,8 +131,8 @@ pub fn self_play(matches: &ArgMatches) -> Board {
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(hand) => match board.play(hand) {
-                Ok(next) => board = next,
-                Err(_) => println!("Invalid move"),
+                Some(next) => board = next,
+                None => println!("Invalid move"),
             },
         }
     }
@@ -149,11 +149,11 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(pos) => match board.play(*pos) {
-                Ok(next) => {
+                Some(next) => {
                     write!(&mut record_str, "{}", hand).unwrap();
                     board = next;
                 }
-                Err(_) => panic!(),
+                None => panic!(),
             },
         }
     }
@@ -185,11 +185,11 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
             Hand::Play(pos) => match board.play(pos) {
-                Ok(next) => {
+                Some(next) => {
                     write!(&mut record_str, "{}", hand).unwrap();
                     board = next;
                 }
-                Err(_) => panic!(),
+                None => panic!(),
             },
         }
     }

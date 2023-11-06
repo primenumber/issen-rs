@@ -61,7 +61,7 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, 
         while remain != 0 {
             let pos = remain.tzcnt() as usize;
             remain = remain & (remain - 1);
-            if let Ok(next) = board.play(pos) {
+            if let Some(next) = board.play(pos) {
                 pass = false;
                 let (child_res, child_stat) = solve_inner(solve_obj, next, (-beta, -alpha), false);
                 res = max(res, -child_res);
