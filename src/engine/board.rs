@@ -33,12 +33,13 @@ pub struct PlayIterator {
 
 pub const BOARD_SIZE: usize = 64;
 
-unsafe fn avx512_upper_bit(x: __m256i) -> __m256i {
+#[cfg(all(target_feature = "avx512cd", target_feature="avx512vl"))]
+unsafe fn smart_upper_bit(x: __m256i) -> __m256i {
     let y = _mm256_lzcnt_epi64(x);
     _mm256_srlv_epi64(_mm256_set1_epi64x(0x8000_0000_0000_0000u64 as i64), y)
 }
 
-#[allow(dead_code)]
+#[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
 unsafe fn smart_upper_bit(mut x: __m256i) -> __m256i {
     x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9)));
     x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(16, 2, 14, 18)));
@@ -101,7 +102,7 @@ impl Board {
             0x0040201008040201u64 as i64,
         );
         let mut mask = _mm256_srlv_epi64(mask1, _mm256_set1_epi64x((63 - pos) as i64));
-        let mut outflank = _mm256_and_si256(avx512_upper_bit(_mm256_andnot_si256(om, mask)), p);
+        let mut outflank = _mm256_and_si256(smart_upper_bit(_mm256_andnot_si256(om, mask)), p);
         let mut flipped = _mm256_and_si256(
             _mm256_slli_epi64(_mm256_sub_epi64(_mm256_setzero_si256(), outflank), 1),
             mask,
