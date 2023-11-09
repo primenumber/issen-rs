@@ -33,9 +33,9 @@ pub struct PlayIterator {
 
 pub const BOARD_SIZE: usize = 64;
 
-unsafe fn avx512_upper_bit(mut x: __m256i) -> __m256i {
-    let y = _mm256_sub_epi64(_mm256_set1_epi64x(63), _mm256_lzcnt_epi64(x));
-    _mm256_sllv_epi64(_mm256_set1_epi64x(1), y)
+unsafe fn avx512_upper_bit(x: __m256i) -> __m256i {
+    let y = _mm256_lzcnt_epi64(x);
+    _mm256_srlv_epi64(_mm256_set1_epi64x(0x8000_0000_0000_0000u64 as i64), y)
 }
 
 #[allow(dead_code)]
