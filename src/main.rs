@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(stdsimd)]
 mod book;
 mod engine;
 mod play;
