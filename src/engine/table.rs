@@ -4,13 +4,12 @@ use crate::engine::hand::*;
 use crc64::Crc64;
 use spin::Mutex;
 use std::io::Write;
-use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 
 pub trait CacheElement: Clone + Default {
     fn has_key(&self, board: Board) -> bool;
     fn get_key(&self) -> Board;
-    fn update(&mut self, that: &Self, gen: u16);
+    fn update(&mut self, that: &Self);
 }
 
 #[derive(Clone)]
@@ -18,7 +17,7 @@ pub struct EvalCache {
     pub board: Board,
     pub lower: i16,
     pub upper: i16,
-    pub gen: u16,
+    pub gen: u8,
     pub best: Option<Hand>,
     pub depth: i32,
 }
@@ -48,7 +47,7 @@ impl CacheElement for EvalCache {
         self.board
     }
 
-    fn update(&mut self, that: &Self, gen: u16) {
+    fn update(&mut self, that: &Self) {
         if that.board == self.board {
             if that.depth >= self.depth {
                 if that.depth == self.depth {
@@ -60,14 +59,14 @@ impl CacheElement for EvalCache {
                 } else {
                     *self = that.clone();
                 }
-                self.gen = gen;
+                self.gen = that.gen;
             }
         } else {
             let empty_self = popcnt(self.board.empty());
             let empty_that = popcnt(that.board.empty());
-            if empty_that >= empty_self || gen > self.gen {
+            if empty_that >= empty_self || that.gen > self.gen {
                 *self = that.clone();
-                self.gen = gen;
+                self.gen = that.gen;
             }
         }
     }
@@ -78,7 +77,7 @@ pub struct ResCache {
     pub board: Board,
     pub lower: i8,
     pub upper: i8,
-    pub gen: u16,
+    pub gen: u8,
     pub best: Option<Hand>,
 }
 
@@ -106,20 +105,20 @@ impl CacheElement for ResCache {
         self.board
     }
 
-    fn update(&mut self, that: &Self, gen: u16) {
+    fn update(&mut self, that: &Self) {
         if that.board == self.board {
             let lower = self.lower.max(that.lower);
             let upper = self.upper.min(that.upper);
             *self = that.clone();
             self.lower = lower;
             self.upper = upper;
-            self.gen = gen;
+            self.gen = that.gen;
         } else {
             let empty_self = popcnt(self.board.empty());
             let empty_that = popcnt(that.board.empty());
-            if empty_that >= empty_self || gen > self.gen {
+            if empty_that >= empty_self || that.gen > self.gen {
                 *self = that.clone();
-                self.gen = gen;
+                self.gen = that.gen;
             }
         }
     }
@@ -149,17 +148,16 @@ impl<T: CacheElement> CacheArray<T> {
         }
     }
 
-    fn update(&mut self, new_elem: &T, hash: u64, gen: u16) {
+    fn update(&mut self, new_elem: &T, hash: u64) {
         let index = (hash % self.cycle) as usize;
         let elem = &mut self.ary[index];
-        elem.update(new_elem, gen);
+        elem.update(new_elem);
     }
 }
 
 pub struct CacheTable<T: CacheElement> {
     arrays: Vec<Mutex<CacheArray<T>>>,
     buckets: u64,
-    pub gen: AtomicU16,
 }
 
 impl<T: CacheElement> CacheTable<T> {
@@ -171,7 +169,6 @@ impl<T: CacheElement> CacheTable<T> {
         CacheTable::<T> {
             arrays: vec,
             buckets: buckets as u64,
-            gen: 1.into(),
         }
     }
 
@@ -193,13 +190,7 @@ impl<T: CacheElement> CacheTable<T> {
         let hash = crc64.get();
         let bucket_id = (hash % self.buckets) as usize;
         let bucket_hash = hash / self.buckets;
-        self.arrays[bucket_id]
-            .lock()
-            .update(&cache, bucket_hash, self.gen.load(Ordering::SeqCst));
-    }
-
-    pub fn inc_gen(&self) {
-        self.gen.fetch_add(1, Ordering::SeqCst);
+        self.arrays[bucket_id].lock().update(&cache, bucket_hash);
     }
 }
 
@@ -207,7 +198,7 @@ pub type EvalCacheTable = CacheTable<EvalCache>;
 pub type ResCacheTable = CacheTable<ResCache>;
 
 fn make_record(
-    gen: u16,
+    gen: u8,
     board: Board,
     mut res: i8,
     best: Option<Hand>,
@@ -233,19 +224,13 @@ fn make_record(
 
 pub fn update_table(
     res_cache: Arc<ResCacheTable>,
+    cache_gen: u8,
     board: Board,
     res: i8,
     best: Option<Hand>,
     (alpha, beta): (i8, i8),
     range: (i8, i8),
 ) {
-    let record = make_record(
-        res_cache.gen.load(Ordering::SeqCst),
-        board,
-        res,
-        best,
-        (alpha, beta),
-        range,
-    );
+    let record = make_record(cache_gen, board, res, best, (alpha, beta), range);
     res_cache.update(record);
 }

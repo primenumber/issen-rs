@@ -51,7 +51,7 @@ async fn worker_body() {
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = Arc::new(ResCacheTable::new(256, 65536));
     let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
-    let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params);
+    let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params, 0);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 7733));
 

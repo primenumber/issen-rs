@@ -24,7 +24,7 @@ use tokio::runtime::Runtime;
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.get_one::<String>("player").unwrap() == "B";
 
-    let solve_obj = setup_default();
+    let mut solve_obj = setup_default();
     let sub_solver = Arc::new(SubSolver::new(&[]));
 
     let mut board = BoardWithColor::initial_state();
@@ -57,6 +57,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                     cache: solve_obj.eval_cache.clone(),
                     timer: Some(timer),
                     node_count: 0,
+                    cache_gen: solve_obj.cache_gen,
                 };
                 let (score, best, depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
                 let scaled_score = score as f64 / SCALE as f64;
@@ -68,8 +69,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                     .unwrap()
                     .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
             };
-            solve_obj.eval_cache.inc_gen();
-            solve_obj.res_cache.inc_gen();
+            solve_obj.cache_gen += 1;
             best
         };
         match hand {
@@ -86,7 +86,7 @@ pub fn play(matches: &ArgMatches) -> Board {
 }
 
 pub fn self_play(matches: &ArgMatches) -> Board {
-    let solve_obj = setup_default();
+    let mut solve_obj = setup_default();
     let worker_urls = matches
         .get_many("workers")
         .unwrap()
@@ -110,6 +110,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
+                cache_gen: solve_obj.cache_gen,
             };
             let (score, best, depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             let secs = start.elapsed().as_secs_f64();
@@ -125,8 +126,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 .unwrap()
                 .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
         };
-        solve_obj.eval_cache.inc_gen();
-        solve_obj.res_cache.inc_gen();
+        solve_obj.cache_gen += 1;
         let hand = best;
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
@@ -141,7 +141,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
     board.board
 }
 
-fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_record: &[Hand]) -> (String, i8) {
+fn self_play_worker(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_record: &[Hand]) -> (String, i8) {
     use std::fmt::Write;
     let mut board = BoardWithColor::initial_state();
     let mut record_str = String::new();
@@ -170,6 +170,7 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
+                cache_gen: solve_obj.cache_gen,
             };
             let (_score, best, _depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             best
@@ -179,8 +180,7 @@ fn self_play_worker(solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_rec
                 .unwrap()
                 .block_on(solve_with_move(board.board, &mut obj, &sub_solver))
         };
-        solve_obj.eval_cache.inc_gen();
-        solve_obj.res_cache.inc_gen();
+        solve_obj.cache_gen += 1;
         let hand = best;
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
@@ -259,7 +259,7 @@ macro_rules! parse_input {
 }
 
 pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let solve_obj = setup_default();
+    let mut solve_obj = setup_default();
     let sub_solver = Arc::new(SubSolver::new(&[]));
     let mut reader = BufReader::new(std::io::stdin());
     let book = Book::import(Path::new("medium2.book"))?;
@@ -324,6 +324,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
+                cache_gen: solve_obj.cache_gen,
             };
             let (score, best, depth) = searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
             eprintln!(
@@ -337,8 +338,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 .unwrap()
                 .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
         };
-        solve_obj.eval_cache.inc_gen();
-        solve_obj.res_cache.inc_gen();
+        solve_obj.cache_gen += 1;
         match best {
             Hand::Play(pos) => {
                 println!("{}", pos_to_str(pos).to_ascii_lowercase());

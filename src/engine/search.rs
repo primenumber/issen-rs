@@ -55,6 +55,7 @@ pub struct SolveObj {
     pub evaluator: Arc<Evaluator>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
+    pub cache_gen: u8,
 }
 
 impl SolveObj {
@@ -63,6 +64,7 @@ impl SolveObj {
         eval_cache: Arc<EvalCacheTable>,
         evaluator: Arc<Evaluator>,
         params: SearchParams,
+        cache_gen: u8,
     ) -> SolveObj {
         SolveObj {
             res_cache,
@@ -70,6 +72,7 @@ impl SolveObj {
             evaluator,
             last_cache: Arc::new(LastCache::new()),
             params,
+            cache_gen,
         }
     }
 }
@@ -237,6 +240,7 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
                 cache: solve_obj.eval_cache.clone(),
                 timer: None,
                 node_count: 0,
+                cache_gen: solve_obj.cache_gen,
             };
             let score = searcher
                 .think(

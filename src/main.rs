@@ -100,8 +100,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
                     end.subsec_millis(),
                     nodes_per_sec / 1_000_000
                 );
-                solve_obj.eval_cache.inc_gen();
-                solve_obj.res_cache.inc_gen();
+                solve_obj.cache_gen += 1;
                 stats.push(Stat {
                     nodes: stat.node_count,
                     elapsed: end.as_secs_f64(),
