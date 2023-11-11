@@ -14,7 +14,7 @@ pub fn setup_default() -> SolveObj {
         ybwc_younger_add: 2,
         ybwc_empties_limit: 18,
         eval_ordering_limit: 15,
-        res_cache_limit: 13,
+        res_cache_limit: 12,
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 5,
