@@ -23,7 +23,7 @@ pub struct Searcher {
     pub cache: Arc<EvalCacheTable>,
     pub timer: Option<Timer>,
     pub node_count: usize,
-    pub cache_gen: u8,
+    pub cache_gen: u32,
 }
 
 pub const DEPTH_SCALE: i32 = 256;

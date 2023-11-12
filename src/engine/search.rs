@@ -55,7 +55,7 @@ pub struct SolveObj {
     pub evaluator: Arc<Evaluator>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
-    pub cache_gen: u8,
+    pub cache_gen: u32,
 }
 
 impl SolveObj {
@@ -64,7 +64,7 @@ impl SolveObj {
         eval_cache: Arc<EvalCacheTable>,
         evaluator: Arc<Evaluator>,
         params: SearchParams,
-        cache_gen: u8,
+        cache_gen: u32,
     ) -> SolveObj {
         SolveObj {
             res_cache,

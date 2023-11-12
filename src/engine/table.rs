@@ -17,7 +17,7 @@ pub struct EvalCache {
     pub board: Board,
     pub lower: i16,
     pub upper: i16,
-    pub gen: u8,
+    pub gen: u32,
     pub best: Option<Hand>,
     pub depth: i32,
 }
@@ -77,7 +77,7 @@ pub struct ResCache {
     pub board: Board,
     pub lower: i8,
     pub upper: i8,
-    pub gen: u8,
+    pub gen: u32,
     pub best: Option<Hand>,
 }
 
@@ -198,7 +198,7 @@ pub type EvalCacheTable = CacheTable<EvalCache>;
 pub type ResCacheTable = CacheTable<ResCache>;
 
 fn make_record(
-    gen: u8,
+    gen: u32,
     board: Board,
     mut res: i8,
     best: Option<Hand>,
@@ -224,7 +224,7 @@ fn make_record(
 
 pub fn update_table(
     res_cache: Arc<ResCacheTable>,
-    cache_gen: u8,
+    cache_gen: u32,
     board: Board,
     res: i8,
     best: Option<Hand>,
