@@ -1,14 +1,18 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::endgame::*;
+use crate::engine::eval::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
+use crate::engine::think::*;
 use futures::channel::mpsc;
 use futures::channel::mpsc::UnboundedSender;
 use futures::future::{BoxFuture, FutureExt};
 use futures::StreamExt;
 use std::cmp::max;
+use std::collections::HashMap;
+use std::future::*;
 
 struct YBWCContext {
     tx: UnboundedSender<((i8, Option<Hand>), SolveStat)>,
@@ -167,6 +171,202 @@ async fn ybwc(
         }
     }
     (res, best, stat)
+}
+
+struct APHIDCache<'a> {
+    estimated_score: i16,
+    lower: i8,
+    upper: i8,
+    future: BoxFuture<'a, (i8, SolveStat)>,
+}
+
+async fn negascout_impl_2<'a, 'b>(
+    solve_obj: &mut SolveObj,
+    sub_solver: &SubSolver,
+    next: Board,
+    (alpha, beta): (i8, i8),
+    is_first: bool,
+    depth: i8,
+    aphid_cache: &'a mut HashMap<Board, APHIDCache<'b>>,
+) -> (usize, i8, Option<Hand>, SolveStat)
+where
+    'a: 'b,
+{
+    if is_first {
+        aphid_impl(
+            solve_obj,
+            sub_solver,
+            next,
+            (-beta, -alpha),
+            false,
+            None,
+            depth,
+            aphid_cache,
+        )
+        .await
+    } else {
+        let (mut unsolved_leaves, res, mut hand, mut stat) = aphid_impl(
+            solve_obj,
+            sub_solver,
+            next,
+            (-alpha - 1, -alpha),
+            false,
+            None,
+            depth,
+            aphid_cache,
+        )
+        .await;
+        let mut neg_result = -res;
+        if neg_result >= beta {
+            return (unsolved_leaves, res, hand, stat);
+        }
+        if neg_result > alpha {
+            let (unsolved_leaves2, res2, hand2, stat2) = aphid_impl(
+                solve_obj,
+                sub_solver,
+                next,
+                (-beta, -neg_result),
+                false,
+                None,
+                depth,
+                aphid_cache,
+            )
+            .await;
+            stat.merge(stat2);
+            neg_result = -res2;
+            hand = hand2;
+            unsolved_leaves += unsolved_leaves2;
+        }
+        (unsolved_leaves, -neg_result, hand, stat)
+    }
+}
+
+fn aphid_impl<'a, 'b, 'c, 'd>(
+    solve_obj: &'a mut SolveObj,
+    sub_solver: &'b SubSolver,
+    board: Board,
+    (mut alpha, beta): (i8, i8),
+    passed: bool,
+    old_best: Option<Hand>,
+    depth: i8,
+    aphid_cache: &'c mut HashMap<Board, APHIDCache<'c>>,
+) -> BoxFuture<'d, (usize, i8, Option<Hand>, SolveStat)>
+where
+    'a: 'd,
+    'b: 'd,
+    'c: 'd,
+{
+    async move {
+        if depth >= solve_obj.params.ybwc_depth_limit {
+            if let Some(entry) = aphid_cache.get(&board) {
+            } else {
+                let mut searcher = Searcher {
+                    evaluator: solve_obj.evaluator.clone(),
+                    cache: solve_obj.eval_cache.clone(),
+                    timer: None,
+                    node_count: 0,
+                    cache_gen: solve_obj.cache_gen,
+                };
+                let think_depth = 3;
+                let score = searcher
+                    .think(
+                        board,
+                        EVAL_SCORE_MIN,
+                        EVAL_SCORE_MAX,
+                        false,
+                        think_depth as i32 * DEPTH_SCALE,
+                    )
+                    .unwrap()
+                    .0;
+                aphid_cache.insert(
+                    board,
+                    APHIDCache {
+                        estimated_score: score,
+                        lower: -(BOARD_SIZE as i8),
+                        upper: BOARD_SIZE as i8,
+                        future: sub_solver.solve_remote(board, (alpha, beta)),
+                    },
+                );
+                return (1, score / SCALE, None, SolveStat::one());
+            }
+        }
+        let v = move_ordering_impl(solve_obj, board, old_best);
+        let mut res = -(BOARD_SIZE as i8);
+        let mut best = None;
+        let mut stat = SolveStat::one();
+        let mut unsolved_leaves = 0;
+        for (i, &(pos, next)) in v.iter().enumerate() {
+            let (child_unsolved_leaves, child_res, _child_hand, child_stat) = negascout_impl_2(
+                solve_obj,
+                sub_solver,
+                next,
+                (alpha, beta),
+                i == 0,
+                depth,
+                aphid_cache,
+            )
+            .await;
+            if -child_res > res {
+                res = -child_res;
+                best = Some(pos);
+            }
+            stat.merge(child_stat);
+            alpha = max(alpha, res);
+            unsolved_leaves += child_unsolved_leaves;
+            if res >= beta {
+                return (unsolved_leaves, res, best, stat);
+            }
+        }
+        if v.is_empty() {
+            if passed {
+                return (unsolved_leaves, board.score(), Some(Hand::Pass), stat);
+            } else {
+                let (child_unsolved_leaves, child_res, _child_hand, child_stat) = aphid_impl(
+                    solve_obj,
+                    sub_solver,
+                    board.pass_unchecked(),
+                    (-beta, -alpha),
+                    true,
+                    None,
+                    depth,
+                    aphid_cache,
+                )
+                .await;
+                stat.merge(child_stat);
+                return (child_unsolved_leaves, -child_res, Some(Hand::Pass), stat);
+            }
+        }
+        (unsolved_leaves, res, best, stat)
+    }
+    .boxed()
+}
+
+async fn aphid(
+    solve_obj: &mut SolveObj,
+    sub_solver: &SubSolver,
+    board: Board,
+    (alpha, beta): (i8, i8),
+    passed: bool,
+    old_best: Option<Hand>,
+    depth: i8,
+) -> (i8, Option<Hand>, SolveStat) {
+    let mut aphid_cache = HashMap::<Board, APHIDCache>::new();
+    loop {
+        let (unsolved_leaves, res, best, stat) = aphid_impl(
+            solve_obj,
+            sub_solver,
+            board,
+            (alpha, beta),
+            passed,
+            old_best,
+            depth,
+            &mut aphid_cache,
+        )
+        .await;
+        if unsolved_leaves == 0 {
+            return (res, best, stat);
+        }
+    }
 }
 
 pub fn solve_outer<'a, 'b, 'c>(
