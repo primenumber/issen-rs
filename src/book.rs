@@ -2,6 +2,7 @@ use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
+use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::record::*;
 use crate::setup::*;
@@ -169,14 +170,17 @@ impl Book {
     }
 }
 
-fn search(board: Board, think_time_limit: u128, solve_obj: &SolveObj, rt: &Runtime, sub_solver: &Arc<SubSolver>) -> Hand {
-    solve_obj.eval_cache.inc_gen();
+fn search(
+    board: Board,
+    think_time_limit: u128,
+    solve_obj: &mut SolveObj,
+    rt: &Runtime,
+    sub_solver: &Arc<SubSolver>,
+) -> Hand {
+    solve_obj.cache_gen += 1;
     if board.empty().count_ones() <= 18 {
-        solve_obj.res_cache.inc_gen();
         let mut solve_obj = solve_obj.clone();
-        rt.block_on(async move {
-            solve_with_move(board, &mut solve_obj, &sub_solver.clone()).await
-        })
+        rt.block_on(async move { solve_with_move(board, &mut solve_obj, &sub_solver.clone()).await })
     } else {
         let start = Instant::now();
         let timer = Timer {
@@ -188,6 +192,7 @@ fn search(board: Board, think_time_limit: u128, solve_obj: &SolveObj, rt: &Runti
             cache: solve_obj.eval_cache.clone(),
             timer: Some(timer),
             node_count: 0,
+            cache_gen: solve_obj.cache_gen,
         };
         let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
         hand
@@ -210,7 +215,7 @@ fn gen_opening(rng: &mut SmallRng) -> (Board, Vec<Hand>) {
 fn play_with_book(
     book: Arc<Mutex<Book>>,
     think_time_limit: u128,
-    solve_obj: &SolveObj,
+    solve_obj: &mut SolveObj,
     rt: &Runtime,
     rng: &mut SmallRng,
     sub_solver: &Arc<SubSolver>,
@@ -249,7 +254,21 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
         let think_time_limit = 1 << rng.gen_range(7..=9);
         eprintln!("i={}, tl={}", i, think_time_limit);
-        play_with_book(book.clone(), think_time_limit, &solve_obj, &rt, &mut rng, &sub_solver.clone());
+        let mut solve_obj = SolveObj::new(
+            Arc::new(ResCacheTable::new(256, 4096)),
+            Arc::new(EvalCacheTable::new(256, 4096)),
+            solve_obj.evaluator.clone(),
+            solve_obj.params.clone(),
+            0,
+        );
+        play_with_book(
+            book.clone(),
+            think_time_limit,
+            &mut solve_obj,
+            &rt,
+            &mut rng,
+            &sub_solver.clone(),
+        );
     });
     book.lock().unwrap().export(out_book_path)?;
     Ok(())

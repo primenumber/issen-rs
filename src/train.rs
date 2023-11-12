@@ -493,22 +493,21 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
     let dataset: Vec<_> = dataset.into_iter().take(8192).collect();
 
     eprintln!("Computing...");
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let evaluator = Arc::new(Evaluator::new("table-single"));
     let depth_max = 8;
     let scores: Vec<_> = dataset
         .par_iter()
         .map(|&(board, _)| {
             let mut scores = Vec::new();
-            let eval_cache = eval_cache.clone();
+            let eval_cache = Arc::new(EvalCacheTable::new(256, 4096));
             let mut searcher = Searcher {
                 evaluator: evaluator.clone(),
                 cache: eval_cache.clone(),
                 timer: None,
                 node_count: 0,
+                cache_gen: 0,
             };
             for depth in 1..=depth_max {
-                eval_cache.inc_gen();
                 if let Some((evaluated, _)) = searcher.think(
                     board,
                     EVAL_SCORE_MIN,

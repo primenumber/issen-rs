@@ -213,6 +213,7 @@ where
         if rem >= solve_obj.params.res_cache_limit {
             update_table(
                 solve_obj.res_cache.clone(),
+                solve_obj.cache_gen,
                 board,
                 res,
                 best,

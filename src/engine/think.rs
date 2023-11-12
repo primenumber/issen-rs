@@ -23,6 +23,7 @@ pub struct Searcher {
     pub cache: Arc<EvalCacheTable>,
     pub timer: Option<Timer>,
     pub node_count: usize,
+    pub cache_gen: u32,
 }
 
 pub const DEPTH_SCALE: i32 = 256;
@@ -233,7 +234,7 @@ impl Searcher {
                     board,
                     lower: range.0,
                     upper: range.1,
-                    gen: self.cache.gen.load(std::sync::atomic::Ordering::SeqCst),
+                    gen: self.cache_gen,
                     best: Some(best),
                     depth,
                 };
@@ -280,6 +281,7 @@ impl Searcher {
 
     pub fn iterative_think(&mut self, board: Board, alpha: i16, beta: i16, passed: bool) -> (i16, Hand, i8) {
         let min_depth = 3;
+        let max_depth = 60;
         let mut current_depth = min_depth;
 
         let (mut score, mut hand) = self
@@ -290,8 +292,7 @@ impl Searcher {
             return (score, hand, current_depth as i8);
         }
 
-        for depth in (min_depth + 1).. {
-            self.cache.inc_gen();
+        for depth in (min_depth + 1)..=max_depth {
             let t = match self.think_with_move(board, alpha, beta, passed, depth * DEPTH_SCALE) {
                 Some(t) => t,
                 _ => return (score, hand, current_depth as i8),

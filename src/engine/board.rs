@@ -33,6 +33,13 @@ pub struct PlayIterator {
 
 pub const BOARD_SIZE: usize = 64;
 
+#[cfg(all(target_feature = "avx512cd", target_feature="avx512vl"))]
+unsafe fn smart_upper_bit(x: __m256i) -> __m256i {
+    let y = _mm256_lzcnt_epi64(x);
+    _mm256_srlv_epi64(_mm256_set1_epi64x(0x8000_0000_0000_0000u64 as i64), y)
+}
+
+#[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
 unsafe fn smart_upper_bit(mut x: __m256i) -> __m256i {
     x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9)));
     x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(16, 2, 14, 18)));

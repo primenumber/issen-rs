@@ -201,6 +201,7 @@ pub fn solve_inner(
             let (res, stat) = fastest_first(solve_obj, board, (alpha, beta), passed);
             update_table(
                 solve_obj.res_cache.clone(),
+                solve_obj.cache_gen,
                 board,
                 res,
                 None,
@@ -217,6 +218,7 @@ pub fn solve_inner(
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
                     solve_obj.res_cache.clone(),
+                    solve_obj.cache_gen,
                     board,
                     res,
                     best,
