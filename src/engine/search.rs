@@ -17,7 +17,6 @@ use std::cmp::{max, min};
 use std::io::Write;
 use std::mem::swap;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -277,11 +276,8 @@ pub fn solve(
     passed: bool,
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async move {
-        let sub_solver = SubSolver::new(worker_urls);
-        solve_outer(solve_obj, &sub_solver, board, (alpha, beta), passed, depth).await
-    })
+    let sub_solver = SubSolver::new(worker_urls);
+    simplified_abdada(solve_obj, &sub_solver, board, (alpha, beta), passed, depth)
 }
 
 pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
