@@ -322,7 +322,6 @@ fn simplified_abdada_body(
     let mut stat = SolveStat::one();
     while let Some((pos, next, deffered)) = q.pop_front() {
         if is_first {
-            start_search(next, cs_hash);
             let (cres, _chand, cstat) = simplified_abdada_intro(
                 solve_obj,
                 sub_solver,
@@ -332,7 +331,6 @@ fn simplified_abdada_body(
                 depth + 1,
                 cs_hash,
             );
-            finish_search(next, cs_hash);
             stat.merge(cstat);
             res = -cres;
             best = Some(pos);
