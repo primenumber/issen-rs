@@ -11,6 +11,7 @@ use futures::StreamExt;
 use num_cpus;
 use std::cmp::max;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -230,8 +231,14 @@ where
     .boxed()
 }
 
+struct ABDADAContext {
+    solve_obj: SolveObj,
+    cs_hash: Arc<Mutex<HashMap<Board, usize>>>,
+    finished: Arc<AtomicBool>,
+}
+
 fn simplified_abdada_young(
-    solve_obj: &mut SolveObj,
+    ctx: &mut ABDADAContext,
     (alpha, beta): (i8, i8),
     stat: &mut SolveStat,
     deffered: &mut Vec<(Hand, Board)>,
@@ -239,27 +246,19 @@ fn simplified_abdada_young(
     res: &mut i8,
     best: &mut Option<Hand>,
     depth: i8,
-    cs_hash: &Arc<Mutex<HashMap<Board, usize>>>,
 ) -> Option<(i8, Option<Hand>, SolveStat)> {
-    if defer_search(next, cs_hash) {
+    if defer_search(next, &ctx.cs_hash) {
         deffered.push((pos, next));
         return None;
     }
     // NWS
-    start_search(next, cs_hash);
-    let (cres, _chand, cstat) = simplified_abdada_intro(
-        solve_obj,
-        next,
-        (-alpha - 1, -alpha),
-        false,
-        depth + 1,
-        cs_hash,
-    );
-    finish_search(next, cs_hash);
+    start_search(next, &ctx.cs_hash);
+    let (cres, _chand, cstat) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
+    finish_search(next, &ctx.cs_hash);
     stat.merge(cstat);
     let mut tmp = -cres;
     if alpha < tmp && tmp < beta {
-        let (cres, _chand, cstat) = simplified_abdada_intro(solve_obj, next, (-beta, -tmp), false, depth + 1, cs_hash);
+        let (cres, _chand, cstat) = simplified_abdada_intro(ctx, next, (-beta, -tmp), false, depth + 1)?;
         stat.merge(cstat);
         tmp = -cres;
     }
@@ -274,29 +273,22 @@ fn simplified_abdada_young(
 }
 
 fn simplified_abdada_body(
-    solve_obj: &mut SolveObj,
+    ctx: &mut ABDADAContext,
     board: Board,
     (mut alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
-    cs_hash: &Arc<Mutex<HashMap<Board, usize>>>,
-) -> (i8, Option<Hand>, SolveStat) {
-    let v = move_ordering_impl(solve_obj, board, None);
+) -> Option<(i8, Option<Hand>, SolveStat)> {
+    let v = move_ordering_impl(&mut ctx.solve_obj, board, None);
     let mut stat = SolveStat::one();
     if v.is_empty() {
         if passed {
-            return (board.score(), Some(Hand::Pass), stat);
+            return Some((board.score(), Some(Hand::Pass), stat));
         } else {
-            let (child_res, _child_best, child_stat) = simplified_abdada_intro(
-                solve_obj,
-                board.pass_unchecked(),
-                (-beta, -alpha),
-                true,
-                depth,
-                cs_hash,
-            );
+            let (child_res, _child_best, child_stat) =
+                simplified_abdada_intro(ctx, board.pass_unchecked(), (-beta, -alpha), true, depth)?;
             stat.merge(child_stat);
-            return (-child_res, Some(Hand::Pass), stat);
+            return Some((-child_res, Some(Hand::Pass), stat));
         }
     }
     let mut res = -(BOARD_SIZE as i8);
@@ -305,19 +297,18 @@ fn simplified_abdada_body(
     let mut deffered = Vec::new();
     for (i, (pos, next)) in v.into_iter().enumerate() {
         if i == 0 {
-            let (cres, _chand, cstat) =
-                simplified_abdada_intro(solve_obj, next, (-beta, -alpha), false, depth + 1, cs_hash);
+            let (cres, _chand, cstat) = simplified_abdada_intro(ctx, next, (-beta, -alpha), false, depth + 1)?;
             stat.merge(cstat);
             res = -cres;
             best = Some(pos);
             alpha = max(alpha, res);
             if alpha >= beta {
-                return (res, best, stat);
+                return Some((res, best, stat));
             }
             continue;
         }
         if let Some(ret) = simplified_abdada_young(
-            solve_obj,
+            ctx,
             (alpha, beta),
             &mut stat,
             &mut deffered,
@@ -325,67 +316,60 @@ fn simplified_abdada_body(
             &mut res,
             &mut best,
             depth,
-            cs_hash,
         ) {
-            return ret;
+            return Some(ret);
         }
     }
     for (pos, next) in deffered {
         // NWS
-        let (cres, _chand, cstat) = simplified_abdada_intro(
-            solve_obj,
-            next,
-            (-alpha - 1, -alpha),
-            false,
-            depth + 1,
-            cs_hash,
-        );
+        let (cres, _chand, cstat) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
         stat.merge(cstat);
         let mut tmp = -cres;
         if alpha < tmp && tmp < beta {
-            let (cres, _chand, cstat) =
-                simplified_abdada_intro(solve_obj, next, (-beta, -tmp), false, depth + 1, cs_hash);
+            let (cres, _chand, cstat) = simplified_abdada_intro(ctx, next, (-beta, -tmp), false, depth + 1)?;
             stat.merge(cstat);
             tmp = -cres;
         }
         if tmp >= beta {
-            return (tmp, Some(pos), stat);
+            return Some((tmp, Some(pos), stat));
         }
         if tmp > res {
             best = Some(pos);
             res = tmp;
         }
     }
-    (res, best, stat)
+    Some((res, best, stat))
 }
 
 fn simplified_abdada_intro(
-    solve_obj: &mut SolveObj,
+    ctx: &mut ABDADAContext,
     board: Board,
     (mut alpha, mut beta): (i8, i8),
     passed: bool,
     depth: i8,
-    cs_hash: &Arc<Mutex<HashMap<Board, usize>>>,
-) -> (i8, Option<Hand>, SolveStat) {
+) -> Option<(i8, Option<Hand>, SolveStat)> {
     let rem = popcnt(board.empty());
-    if depth >= solve_obj.params.ybwc_depth_limit || rem < solve_obj.params.ybwc_empties_limit {
-        let (res, stat) = solve_inner(solve_obj, board, (alpha, beta), passed);
-        return (res, None, stat);
+    if depth >= ctx.solve_obj.params.ybwc_depth_limit || rem < ctx.solve_obj.params.ybwc_empties_limit {
+        let (res, stat) = solve_inner(&mut ctx.solve_obj, board, (alpha, beta), passed);
+        return Some((res, None, stat));
+    }
+    if ctx.finished.load(std::sync::atomic::Ordering::SeqCst) {
+        return None;
     }
     match stability_cut(board, (alpha, beta)) {
         CutType::NoCut => (),
-        CutType::MoreThanBeta(v) => return (v, None, SolveStat::one_stcut()),
-        CutType::LessThanAlpha(v) => return (v, None, SolveStat::one_stcut()),
+        CutType::MoreThanBeta(v) => return Some((v, None, SolveStat::one_stcut())),
+        CutType::LessThanAlpha(v) => return Some((v, None, SolveStat::one_stcut())),
     }
-    let (lower, upper, _old_best) = match lookup_table(solve_obj, board, (&mut alpha, &mut beta)) {
-        CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
+    let (lower, upper, _old_best) = match lookup_table(&mut ctx.solve_obj, board, (&mut alpha, &mut beta)) {
+        CacheLookupResult::Cut(v) => return Some((v, None, SolveStat::zero())),
         CacheLookupResult::NoCut(l, u, b) => (l, u, b),
     };
-    let (res, best, stat) = simplified_abdada_body(solve_obj, board, (alpha, beta), passed, depth, cs_hash);
-    if rem >= solve_obj.params.res_cache_limit {
+    let (res, best, stat) = simplified_abdada_body(ctx, board, (alpha, beta), passed, depth)?;
+    if rem >= ctx.solve_obj.params.res_cache_limit {
         update_table(
-            solve_obj.res_cache.clone(),
-            solve_obj.cache_gen,
+            ctx.solve_obj.res_cache.clone(),
+            ctx.solve_obj.cache_gen,
             board,
             res,
             best,
@@ -393,7 +377,7 @@ fn simplified_abdada_intro(
             (lower, upper),
         );
     }
-    (res, best, stat)
+    Some((res, best, stat))
 }
 
 fn start_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) {
@@ -435,28 +419,37 @@ pub fn simplified_abdada(
     thread::scope(|s| {
         let mut handles = Vec::new();
         let cs_hash = Arc::new(Mutex::new(HashMap::new()));
-        for _ in 0..num_cpus::get_physical() {
-            let mut solve_obj = solve_obj.clone();
+        let finished = Arc::new(AtomicBool::new(false));
+        for _ in 0..num_cpus::get() {
+            let solve_obj = solve_obj.clone();
             let cs_hash = cs_hash.clone();
+            let finished = finished.clone();
+            let finished2 = finished.clone();
             handles.push(s.spawn(move || {
-                simplified_abdada_intro(
-                    &mut solve_obj,
+                let res = simplified_abdada_intro(
+                    &mut ABDADAContext {
+                        solve_obj,
+                        cs_hash,
+                        finished,
+                    },
                     board,
                     (alpha, beta),
                     passed,
                     depth,
-                    &cs_hash,
-                )
+                );
+                finished2.store(true, std::sync::atomic::Ordering::SeqCst);
+                res
             }));
         }
         let mut stat = SolveStat::zero();
         let mut res = -(BOARD_SIZE as i8);
         let mut best = None;
         for h in handles {
-            let (tres, tbest, tstat) = h.join().unwrap();
-            stat.merge(tstat);
-            res = tres;
-            best = tbest;
+            if let Some((tres, tbest, tstat)) = h.join().unwrap() {
+                stat.merge(tstat);
+                res = tres;
+                best = tbest;
+            }
         }
         (res, best, stat)
     })
