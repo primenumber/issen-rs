@@ -4,8 +4,8 @@ use crate::engine::table::*;
 use std::sync::Arc;
 
 pub fn setup_default() -> SolveObj {
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
+    let res_cache = Arc::new(ResCacheTable::new(1024, 16384));
+    let eval_cache = Arc::new(EvalCacheTable::new(1024, 16384));
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let search_params = SearchParams {
         reduce: false,
