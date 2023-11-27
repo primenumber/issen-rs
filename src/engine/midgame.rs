@@ -11,7 +11,7 @@ use futures::StreamExt;
 use num_cpus;
 use std::cmp::max;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 struct YBWCContext {
@@ -239,7 +239,7 @@ fn simplified_abdada_young(
     res: &mut i8,
     best: &mut Option<Hand>,
     depth: i8,
-    cs_hash: &Arc<RwLock<HashMap<Board, usize>>>,
+    cs_hash: &Arc<Mutex<HashMap<Board, usize>>>,
 ) -> Option<(i8, Option<Hand>, SolveStat)> {
     if defer_search(next, cs_hash) {
         deffered.push((pos, next));
@@ -279,7 +279,7 @@ fn simplified_abdada_body(
     (mut alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
-    cs_hash: &Arc<RwLock<HashMap<Board, usize>>>,
+    cs_hash: &Arc<Mutex<HashMap<Board, usize>>>,
 ) -> (i8, Option<Hand>, SolveStat) {
     let v = move_ordering_impl(solve_obj, board, None);
     let mut stat = SolveStat::one();
@@ -365,7 +365,7 @@ fn simplified_abdada_intro(
     (mut alpha, mut beta): (i8, i8),
     passed: bool,
     depth: i8,
-    cs_hash: &Arc<RwLock<HashMap<Board, usize>>>,
+    cs_hash: &Arc<Mutex<HashMap<Board, usize>>>,
 ) -> (i8, Option<Hand>, SolveStat) {
     let rem = popcnt(board.empty());
     if depth >= solve_obj.params.ybwc_depth_limit || rem < solve_obj.params.ybwc_empties_limit {
@@ -396,8 +396,8 @@ fn simplified_abdada_intro(
     (res, best, stat)
 }
 
-fn start_search(board: Board, cs_hash: &Arc<RwLock<HashMap<Board, usize>>>) {
-    let mut locked_table = cs_hash.write().unwrap();
+fn start_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) {
+    let mut locked_table = cs_hash.lock().unwrap();
     match locked_table.get_mut(&board) {
         Some(nproc) => *nproc += 1,
         None => {
@@ -406,8 +406,8 @@ fn start_search(board: Board, cs_hash: &Arc<RwLock<HashMap<Board, usize>>>) {
     }
 }
 
-fn finish_search(board: Board, cs_hash: &Arc<RwLock<HashMap<Board, usize>>>) {
-    let mut locked_table = cs_hash.write().unwrap();
+fn finish_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) {
+    let mut locked_table = cs_hash.lock().unwrap();
     match locked_table.get_mut(&board) {
         Some(nproc) => {
             *nproc -= 1;
@@ -421,13 +421,12 @@ fn finish_search(board: Board, cs_hash: &Arc<RwLock<HashMap<Board, usize>>>) {
     }
 }
 
-fn defer_search(board: Board, cs_hash: &Arc<RwLock<HashMap<Board, usize>>>) -> bool {
-    cs_hash.read().unwrap().contains_key(&board)
+fn defer_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) -> bool {
+    cs_hash.lock().unwrap().contains_key(&board)
 }
 
 pub fn simplified_abdada(
     solve_obj: &mut SolveObj,
-    _sub_solver: &SubSolver,
     board: Board,
     (alpha, beta): (i8, i8),
     passed: bool,
@@ -435,8 +434,8 @@ pub fn simplified_abdada(
 ) -> (i8, Option<Hand>, SolveStat) {
     thread::scope(|s| {
         let mut handles = Vec::new();
-        let cs_hash = Arc::new(RwLock::new(HashMap::new()));
-        for _ in 0..num_cpus::get() {
+        let cs_hash = Arc::new(Mutex::new(HashMap::new()));
+        for _ in 0..num_cpus::get_physical() {
             let mut solve_obj = solve_obj.clone();
             let cs_hash = cs_hash.clone();
             handles.push(s.spawn(move || {

@@ -270,14 +270,13 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
 
 pub fn solve(
     solve_obj: &mut SolveObj,
-    worker_urls: &[String],
+    _worker_urls: &[String],
     board: Board,
     (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
 ) -> (i8, Option<Hand>, SolveStat) {
-    let sub_solver = SubSolver::new(worker_urls);
-    simplified_abdada(solve_obj, &sub_solver, board, (alpha, beta), passed, depth)
+    simplified_abdada(solve_obj, board, (alpha, beta), passed, depth)
 }
 
 pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
