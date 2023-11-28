@@ -4,7 +4,7 @@ use crate::engine::endgame::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
-use dashmap::DashMap;
+use dashmap::DashSet;
 use futures::channel::mpsc;
 use futures::channel::mpsc::UnboundedSender;
 use futures::future::{BoxFuture, FutureExt};
@@ -233,7 +233,7 @@ where
 
 struct ABDADAContext {
     solve_obj: SolveObj,
-    cs_hash: Arc<DashMap<Board, usize>>,
+    cs_hash: Arc<DashSet<Board>>,
     finished: Arc<AtomicBool>,
     stats: SolveStat,
 }
@@ -373,16 +373,16 @@ fn simplified_abdada_intro(
     Some((res, best))
 }
 
-fn start_search(board: Board, cs_hash: &Arc<DashMap<Board, usize>>) {
-    cs_hash.insert(board, 1);
+fn start_search(board: Board, cs_hash: &Arc<DashSet<Board>>) {
+    cs_hash.insert(board);
 }
 
-fn finish_search(board: Board, cs_hash: &Arc<DashMap<Board, usize>>) {
+fn finish_search(board: Board, cs_hash: &Arc<DashSet<Board>>) {
     cs_hash.remove(&board);
 }
 
-fn defer_search(board: Board, cs_hash: &Arc<DashMap<Board, usize>>) -> bool {
-    cs_hash.contains_key(&board)
+fn defer_search(board: Board, cs_hash: &Arc<DashSet<Board>>) -> bool {
+    cs_hash.contains(&board)
 }
 
 pub fn simplified_abdada(
@@ -394,7 +394,7 @@ pub fn simplified_abdada(
 ) -> (i8, Option<Hand>, SolveStat) {
     thread::scope(|s| {
         let mut handles = Vec::new();
-        let cs_hash = Arc::new(DashMap::new());
+        let cs_hash = Arc::new(DashSet::new());
         let finished = Arc::new(AtomicBool::new(false));
         for _ in 0..num_cpus::get() {
             let solve_obj = solve_obj.clone();
