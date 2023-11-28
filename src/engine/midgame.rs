@@ -4,15 +4,15 @@ use crate::engine::endgame::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
+use dashmap::DashMap;
 use futures::channel::mpsc;
 use futures::channel::mpsc::UnboundedSender;
 use futures::future::{BoxFuture, FutureExt};
 use futures::StreamExt;
 use num_cpus;
 use std::cmp::max;
-use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 
 struct YBWCContext {
@@ -233,7 +233,7 @@ where
 
 struct ABDADAContext {
     solve_obj: SolveObj,
-    cs_hash: Arc<Mutex<HashMap<Board, usize>>>,
+    cs_hash: Arc<DashMap<Board, usize>>,
     finished: Arc<AtomicBool>,
     stats: SolveStat,
 }
@@ -373,33 +373,16 @@ fn simplified_abdada_intro(
     Some((res, best))
 }
 
-fn start_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) {
-    let mut locked_table = cs_hash.lock().unwrap();
-    match locked_table.get_mut(&board) {
-        Some(nproc) => *nproc += 1,
-        None => {
-            locked_table.insert(board, 1);
-        }
-    }
+fn start_search(board: Board, cs_hash: &Arc<DashMap<Board, usize>>) {
+    cs_hash.insert(board, 1);
 }
 
-fn finish_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) {
-    let mut locked_table = cs_hash.lock().unwrap();
-    match locked_table.get_mut(&board) {
-        Some(nproc) => {
-            *nproc -= 1;
-            if *nproc == 0 {
-                locked_table.remove(&board);
-            }
-        }
-        None => {
-            panic!();
-        }
-    }
+fn finish_search(board: Board, cs_hash: &Arc<DashMap<Board, usize>>) {
+    cs_hash.remove(&board);
 }
 
-fn defer_search(board: Board, cs_hash: &Arc<Mutex<HashMap<Board, usize>>>) -> bool {
-    cs_hash.lock().unwrap().contains_key(&board)
+fn defer_search(board: Board, cs_hash: &Arc<DashMap<Board, usize>>) -> bool {
+    cs_hash.contains_key(&board)
 }
 
 pub fn simplified_abdada(
@@ -411,7 +394,7 @@ pub fn simplified_abdada(
 ) -> (i8, Option<Hand>, SolveStat) {
     thread::scope(|s| {
         let mut handles = Vec::new();
-        let cs_hash = Arc::new(Mutex::new(HashMap::new()));
+        let cs_hash = Arc::new(DashMap::new());
         let finished = Arc::new(AtomicBool::new(false));
         for _ in 0..num_cpus::get() {
             let solve_obj = solve_obj.clone();
