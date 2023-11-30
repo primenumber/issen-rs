@@ -238,38 +238,6 @@ struct ABDADAContext {
     stats: SolveStat,
 }
 
-fn simplified_abdada_young(
-    ctx: &mut ABDADAContext,
-    (alpha, beta): (i8, i8),
-    deffered: &mut Vec<(Hand, Board)>,
-    (pos, next): (Hand, Board),
-    res: &mut i8,
-    best: &mut Option<Hand>,
-    depth: i8,
-) -> Option<(i8, Option<Hand>)> {
-    if defer_search(next, &ctx.cs_hash) {
-        deffered.push((pos, next));
-        return None;
-    }
-    // NWS
-    start_search(next, &ctx.cs_hash);
-    let (cres, _chand) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
-    finish_search(next, &ctx.cs_hash);
-    let mut tmp = -cres;
-    if alpha < tmp && tmp < beta {
-        let (cres, _chand) = simplified_abdada_intro(ctx, next, (-beta, -tmp), false, depth + 1)?;
-        tmp = -cres;
-    }
-    if tmp >= beta {
-        return Some((tmp, Some(pos)));
-    }
-    if tmp > *res {
-        *best = Some(pos);
-        *res = tmp;
-    }
-    None
-}
-
 fn simplified_abdada_body(
     ctx: &mut ABDADAContext,
     board: Board,
@@ -301,16 +269,25 @@ fn simplified_abdada_body(
             }
             continue;
         }
-        if let Some(ret) = simplified_abdada_young(
-            ctx,
-            (alpha, beta),
-            &mut deffered,
-            (pos, next),
-            &mut res,
-            &mut best,
-            depth,
-        ) {
-            return Some(ret);
+        if defer_search(next, &ctx.cs_hash) {
+            deffered.push((pos, next));
+            continue;
+        }
+        start_search(next, &ctx.cs_hash);
+        let (cres, _chand) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
+        finish_search(next, &ctx.cs_hash);
+        let mut tmp = -cres;
+        if alpha < tmp && tmp < beta {
+            let (cres, _chand) = simplified_abdada_intro(ctx, next, (-beta, -tmp), false, depth + 1)?;
+            tmp = -cres;
+        }
+        if tmp >= beta {
+            return Some((tmp, Some(pos)));
+        }
+        if tmp > res {
+            best = Some(pos);
+            res = tmp;
+            alpha = max(alpha, res);
         }
     }
     for (pos, next) in deffered {
@@ -327,6 +304,7 @@ fn simplified_abdada_body(
         if tmp > res {
             best = Some(pos);
             res = tmp;
+            alpha = max(alpha, res);
         }
     }
     Some((res, best))
