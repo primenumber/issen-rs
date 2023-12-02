@@ -19,7 +19,6 @@ use std::io::BufWriter;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::runtime::Runtime;
 
 pub fn play(matches: &ArgMatches) -> Board {
     let player_turn = matches.get_one::<String>("player").unwrap() == "B";
@@ -65,9 +64,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                 best
             } else {
                 let mut solve_obj = solve_obj.clone();
-                Runtime::new()
-                    .unwrap()
-                    .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
+                solve_with_move(board.board, &mut solve_obj, &sub_solver)
             };
             solve_obj.cache_gen += 1;
             best
@@ -122,9 +119,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
             best
         } else {
             let mut solve_obj = solve_obj.clone();
-            Runtime::new()
-                .unwrap()
-                .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
+            solve_with_move(board.board, &mut solve_obj, &sub_solver)
         };
         solve_obj.cache_gen += 1;
         let hand = best;
@@ -176,9 +171,7 @@ fn self_play_worker(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial
             best
         } else {
             let mut obj = solve_obj.clone();
-            Runtime::new()
-                .unwrap()
-                .block_on(solve_with_move(board.board, &mut obj, &sub_solver))
+            solve_with_move(board.board, &mut obj, &sub_solver)
         };
         solve_obj.cache_gen += 1;
         let hand = best;
@@ -334,9 +327,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             best
         } else {
             let mut solve_obj = solve_obj.clone();
-            Runtime::new()
-                .unwrap()
-                .block_on(solve_with_move(board.board, &mut solve_obj, &sub_solver))
+            solve_with_move(board.board, &mut solve_obj, &sub_solver)
         };
         solve_obj.cache_gen += 1;
         match best {

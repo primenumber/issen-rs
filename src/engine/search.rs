@@ -129,6 +129,7 @@ impl SubSolver {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn solve_remote(&self, board: Board, (alpha, beta): (i8, i8)) -> Result<(i8, SolveStat)> {
         let data = SolveRequest {
             board: board.to_base81(),
@@ -279,16 +280,14 @@ pub fn solve(
     simplified_abdada(solve_obj, board, (alpha, beta), passed, depth)
 }
 
-pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
-    if let Some(best) = solve_outer(
+pub fn solve_with_move(board: Board, solve_obj: &mut SolveObj, _sub_solver: &Arc<SubSolver>) -> Hand {
+    if let Some(best) = simplified_abdada(
         solve_obj,
-        sub_solver,
         board,
         (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
         false,
         0,
     )
-    .await
     .1
     {
         return best;
@@ -297,16 +296,7 @@ pub async fn solve_with_move(board: Board, solve_obj: &mut SolveObj, sub_solver:
     let mut result = -65;
     for pos in board.mobility() {
         let next = board.play(pos).unwrap();
-        let res = -solve_outer(
-            solve_obj,
-            sub_solver,
-            next,
-            (-(BOARD_SIZE as i8), -result),
-            false,
-            0,
-        )
-        .await
-        .0;
+        let res = -simplified_abdada(solve_obj, next, (-(BOARD_SIZE as i8), -result), false, 0).0;
         if res > result {
             result = res;
             best_pos = Some(pos);

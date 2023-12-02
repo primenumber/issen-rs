@@ -18,7 +18,6 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::runtime::Runtime;
 
 pub struct Book {
     records: Vec<Record>,
@@ -170,17 +169,11 @@ impl Book {
     }
 }
 
-fn search(
-    board: Board,
-    think_time_limit: u128,
-    solve_obj: &mut SolveObj,
-    rt: &Runtime,
-    sub_solver: &Arc<SubSolver>,
-) -> Hand {
+fn search(board: Board, think_time_limit: u128, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
     solve_obj.cache_gen += 1;
     if board.empty().count_ones() <= 18 {
         let mut solve_obj = solve_obj.clone();
-        rt.block_on(async move { solve_with_move(board, &mut solve_obj, &sub_solver.clone()).await })
+        solve_with_move(board, &mut solve_obj, &sub_solver.clone())
     } else {
         let start = Instant::now();
         let timer = Timer {
@@ -216,7 +209,6 @@ fn play_with_book(
     book: Arc<Mutex<Book>>,
     think_time_limit: u128,
     solve_obj: &mut SolveObj,
-    rt: &Runtime,
     rng: &mut SmallRng,
     sub_solver: &Arc<SubSolver>,
 ) {
@@ -235,7 +227,7 @@ fn play_with_book(
                 continue;
             }
         }
-        let hand = search(board, think_time_limit, solve_obj, rt, &sub_solver);
+        let hand = search(board, think_time_limit, solve_obj, sub_solver);
         hands.push(hand);
         board = board.play_hand(hand).unwrap();
     }
@@ -248,7 +240,6 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
     let book = Arc::new(Mutex::new(Book::import(in_book_path)?));
     let mut solve_obj = setup_default();
     solve_obj.params.ybwc_empties_limit = 64;
-    let rt = Runtime::new().unwrap();
     let sub_solver = Arc::new(SubSolver::new(&[]));
     (0..repeat).into_par_iter().for_each(|i| {
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
@@ -265,7 +256,6 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
             book.clone(),
             think_time_limit,
             &mut solve_obj,
-            &rt,
             &mut rng,
             &sub_solver.clone(),
         );
