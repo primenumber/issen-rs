@@ -4,224 +4,184 @@ use crate::engine::endgame::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
-use futures::channel::mpsc;
-use futures::channel::mpsc::UnboundedSender;
-use futures::future::{BoxFuture, FutureExt};
-use futures::StreamExt;
+use dashmap::DashSet;
+use num_cpus;
 use std::cmp::max;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::thread;
 
-struct YBWCContext {
-    tx: UnboundedSender<((i8, Option<Hand>), SolveStat)>,
-    next: Board,
-    pos: Hand,
-    alpha: i8,
-    beta: i8,
-    res: i8,
-    best: Option<Hand>,
+struct ABDADAContext {
+    solve_obj: SolveObj,
+    cs_hash: Arc<DashSet<Board>>,
+    finished: Arc<AtomicBool>,
+    stats: SolveStat,
 }
 
-async fn ybwc_child(mut solve_obj: SolveObj, sub_solver: SubSolver, depth: i8, mut cxt: YBWCContext) {
-    let mut stat = SolveStat::zero();
-    let next_depth = depth + solve_obj.params.ybwc_younger_add;
-    let child_future = solve_outer(
-        &mut solve_obj,
-        &sub_solver,
-        cxt.next,
-        (-cxt.alpha - 1, -cxt.alpha),
-        false,
-        next_depth,
-    );
-    let (child_res, _child_best, child_stat) = child_future.await;
-    stat.merge(child_stat);
-    let mut tmp = -child_res;
-    if cxt.alpha < tmp && tmp < cxt.beta {
-        let child_future = solve_outer(
-            &mut solve_obj,
-            &sub_solver,
-            cxt.next,
-            (-cxt.beta, -tmp),
-            false,
-            next_depth,
-        );
-        let (child_res, _child_best, child_stat) = child_future.await;
-        stat.merge(child_stat);
-        tmp = -child_res;
-    }
-    if tmp > cxt.res {
-        cxt.best = Some(cxt.pos);
-        cxt.res = tmp;
-    }
-    let res_tuple = (cxt.res, cxt.best);
-    let _ = cxt.tx.unbounded_send((res_tuple, stat));
-}
-
-async fn ybwc(
-    solve_obj: &mut SolveObj,
-    sub_solver: &SubSolver,
+fn simplified_abdada_body(
+    ctx: &mut ABDADAContext,
     board: Board,
     (mut alpha, beta): (i8, i8),
     passed: bool,
-    old_best: Option<Hand>,
     depth: i8,
-) -> (i8, Option<Hand>, SolveStat) {
-    let v = move_ordering_impl(solve_obj, board, old_best);
-    let mut stat = SolveStat::one();
+) -> Option<(i8, Option<Hand>)> {
+    let v = move_ordering_impl(&mut ctx.solve_obj, board, None);
     if v.is_empty() {
         if passed {
-            return (board.score(), Some(Hand::Pass), stat);
+            return Some((board.score(), Some(Hand::Pass)));
         } else {
-            let (child_res, _child_best, child_stat) = solve_outer(
-                solve_obj,
-                sub_solver,
-                board.pass_unchecked(),
-                (-beta, -alpha),
-                true,
-                depth,
-            )
-            .await;
-            stat.merge(child_stat);
-            return (-child_res, Some(Hand::Pass), stat);
+            let (child_res, _child_best) =
+                simplified_abdada_intro(ctx, board.pass_unchecked(), (-beta, -alpha), true, depth)?;
+            return Some((-child_res, Some(Hand::Pass)));
         }
     }
     let mut res = -(BOARD_SIZE as i8);
     let mut best = None;
-    let (tx, mut rx) = mpsc::unbounded();
-    let mut handles = Vec::new();
-    for (i, &(pos, next)) in v.iter().enumerate() {
+    let mut deffered = Vec::new();
+    for (i, (pos, next)) in v.into_iter().enumerate() {
         if i == 0 {
-            let next_depth = depth + solve_obj.params.ybwc_elder_add;
-            let (child_res, _child_best, child_stat) = solve_outer(
-                solve_obj,
-                sub_solver,
-                next,
-                (-beta, -alpha),
-                false,
-                next_depth,
-            )
-            .await;
-            stat.merge(child_stat);
-            res = -child_res;
+            let (cres, _chand) = simplified_abdada_intro(ctx, next, (-beta, -alpha), false, depth + 1)?;
+            res = -cres;
             best = Some(pos);
             alpha = max(alpha, res);
             if alpha >= beta {
-                return (res, best, stat);
+                return Some((res, best));
             }
-        } else if depth < solve_obj.params.ybwc_depth_limit {
-            let tx = tx.clone();
-            let context = YBWCContext {
-                tx,
-                next,
-                pos,
-                alpha,
-                beta,
-                res,
-                best,
-            };
-            handles.push(tokio::task::spawn(ybwc_child(
-                solve_obj.clone(),
-                sub_solver.clone(),
-                depth,
-                context,
-            )));
-        } else {
-            let (child_res, _child_best, child_stat) = solve_outer(
-                solve_obj,
-                sub_solver,
-                next,
-                (-alpha - 1, -alpha),
-                false,
-                depth,
-            )
-            .await;
-            stat.merge(child_stat);
-            let mut tmp = -child_res;
-            if alpha < tmp && tmp < beta {
-                let (child_res, _child_best, child_stat) =
-                    solve_outer(solve_obj, sub_solver, next, (-beta, -tmp), false, depth).await;
-                stat.merge(child_stat);
-                tmp = -child_res;
-            }
-            if tmp >= beta {
-                return (tmp, Some(pos), stat);
-            }
-            if tmp > res {
-                best = Some(pos);
-                res = tmp;
-            }
+            continue;
+        }
+        if defer_search(next, &ctx.cs_hash) {
+            deffered.push((pos, next));
+            continue;
+        }
+        start_search(next, &ctx.cs_hash);
+        let (cres, _chand) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
+        finish_search(next, &ctx.cs_hash);
+        let mut tmp = -cres;
+        if alpha < tmp && tmp < beta {
+            let (cres, _chand) = simplified_abdada_intro(ctx, next, (-beta, -tmp), false, depth + 1)?;
+            tmp = -cres;
+        }
+        if tmp >= beta {
+            return Some((tmp, Some(pos)));
+        }
+        if tmp > res {
+            best = Some(pos);
+            res = tmp;
+            alpha = max(alpha, res);
         }
     }
-    drop(tx);
-    while let Some((res_tuple, child_stat)) = rx.next().await {
-        stat.merge(child_stat);
-        let (child_res, child_best) = res_tuple;
-        if child_res > res {
-            res = child_res;
-            best = child_best;
-            if res >= beta {
-                for handle in &handles {
-                    handle.abort();
-                }
-                rx.close();
-                return (res, best, stat);
-            }
+    for (pos, next) in deffered {
+        // NWS
+        let (cres, _chand) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
+        let mut tmp = -cres;
+        if alpha < tmp && tmp < beta {
+            let (cres, _chand) = simplified_abdada_intro(ctx, next, (-beta, -tmp), false, depth + 1)?;
+            tmp = -cres;
+        }
+        if tmp >= beta {
+            return Some((tmp, Some(pos)));
+        }
+        if tmp > res {
+            best = Some(pos);
+            res = tmp;
+            alpha = max(alpha, res);
         }
     }
-    (res, best, stat)
+    Some((res, best))
 }
 
-pub fn solve_outer<'a, 'b, 'c>(
-    solve_obj: &'a mut SolveObj,
-    sub_solver: &'b SubSolver,
+fn simplified_abdada_intro(
+    ctx: &mut ABDADAContext,
     board: Board,
     (mut alpha, mut beta): (i8, i8),
     passed: bool,
     depth: i8,
-) -> BoxFuture<'c, (i8, Option<Hand>, SolveStat)>
-where
-    'a: 'c,
-    'b: 'c,
-{
-    async move {
-        let rem = popcnt(board.empty());
-        if rem < solve_obj.params.ybwc_empties_limit {
-            let (res, stat) = if sub_solver.workers.is_empty() {
-                solve_inner(solve_obj, board, (alpha, beta), passed)
-            } else {
-                sub_solver.solve_remote(board, (alpha, beta)).await.unwrap()
-            };
-            return (res, None, stat);
-        }
-        match stability_cut(board, (alpha, beta)) {
-            CutType::NoCut => (),
-            CutType::MoreThanBeta(v) => return (v, None, SolveStat::one_stcut()),
-            CutType::LessThanAlpha(v) => return (v, None, SolveStat::one_stcut()),
-        }
-        let (lower, upper, old_best) = match lookup_table(solve_obj, board, (&mut alpha, &mut beta)) {
-            CacheLookupResult::Cut(v) => return (v, None, SolveStat::zero()),
-            CacheLookupResult::NoCut(l, u, b) => (l, u, b),
-        };
-        let (res, best, stat) = ybwc(
-            solve_obj,
-            sub_solver,
+) -> Option<(i8, Option<Hand>)> {
+    let rem = popcnt(board.empty());
+    if depth >= ctx.solve_obj.params.ybwc_depth_limit || rem < ctx.solve_obj.params.ybwc_empties_limit {
+        let (res, stat) = solve_inner(&mut ctx.solve_obj, board, (alpha, beta), passed);
+        ctx.stats.merge(stat);
+        return Some((res, None));
+    }
+    ctx.stats.merge(SolveStat::one());
+    if ctx.finished.load(std::sync::atomic::Ordering::SeqCst) {
+        return None;
+    }
+    match stability_cut(board, (alpha, beta)) {
+        CutType::NoCut => (),
+        CutType::MoreThanBeta(v) => return Some((v, None)),
+        CutType::LessThanAlpha(v) => return Some((v, None)),
+    }
+    let (lower, upper, _old_best) = match lookup_table(&mut ctx.solve_obj, board, (&mut alpha, &mut beta)) {
+        CacheLookupResult::Cut(v) => return Some((v, None)),
+        CacheLookupResult::NoCut(l, u, b) => (l, u, b),
+    };
+    let (res, best) = simplified_abdada_body(ctx, board, (alpha, beta), passed, depth)?;
+    if rem >= ctx.solve_obj.params.res_cache_limit {
+        update_table(
+            ctx.solve_obj.res_cache.clone(),
+            ctx.solve_obj.cache_gen,
             board,
+            res,
+            best,
             (alpha, beta),
-            passed,
-            old_best,
-            depth,
-        )
-        .await;
-        if rem >= solve_obj.params.res_cache_limit {
-            update_table(
-                solve_obj.res_cache.clone(),
-                solve_obj.cache_gen,
-                board,
-                res,
-                best,
-                (alpha, beta),
-                (lower, upper),
-            );
+            (lower, upper),
+        );
+    }
+    Some((res, best))
+}
+
+fn start_search(board: Board, cs_hash: &Arc<DashSet<Board>>) {
+    cs_hash.insert(board);
+}
+
+fn finish_search(board: Board, cs_hash: &Arc<DashSet<Board>>) {
+    cs_hash.remove(&board);
+}
+
+fn defer_search(board: Board, cs_hash: &Arc<DashSet<Board>>) -> bool {
+    cs_hash.contains(&board)
+}
+
+pub fn simplified_abdada(
+    solve_obj: &mut SolveObj,
+    board: Board,
+    (alpha, beta): (i8, i8),
+    passed: bool,
+    depth: i8,
+) -> (i8, Option<Hand>, SolveStat) {
+    thread::scope(|s| {
+        let mut handles = Vec::new();
+        let cs_hash = Arc::new(DashSet::new());
+        let finished = Arc::new(AtomicBool::new(false));
+        for _ in 0..num_cpus::get() {
+            let solve_obj = solve_obj.clone();
+            let cs_hash = cs_hash.clone();
+            let finished = finished.clone();
+            let finished2 = finished.clone();
+            handles.push(s.spawn(move || {
+                let mut ctx = ABDADAContext {
+                    solve_obj,
+                    cs_hash,
+                    finished,
+                    stats: SolveStat::zero(),
+                };
+                let res = simplified_abdada_intro(&mut ctx, board, (alpha, beta), passed, depth);
+                finished2.store(true, std::sync::atomic::Ordering::SeqCst);
+                (res, ctx.stats)
+            }));
+        }
+        let mut stat = SolveStat::zero();
+        let mut res = -(BOARD_SIZE as i8);
+        let mut best = None;
+        for h in handles {
+            let (tres, tstat) = h.join().unwrap();
+            stat.merge(tstat);
+            if let Some((tscore, tbest)) = tres {
+                res = tscore;
+                best = tbest;
+            }
         }
         (res, best, stat)
-    }
-    .boxed()
+    })
 }

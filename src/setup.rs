@@ -4,15 +4,15 @@ use crate::engine::table::*;
 use std::sync::Arc;
 
 pub fn setup_default() -> SolveObj {
-    let res_cache = Arc::new(ResCacheTable::new(256, 65536));
-    let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
+    let res_cache = Arc::new(ResCacheTable::new(2048, 16384));
+    let eval_cache = Arc::new(EvalCacheTable::new(2048, 16384));
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let search_params = SearchParams {
         reduce: false,
         ybwc_depth_limit: 12,
         ybwc_elder_add: 1,
         ybwc_younger_add: 2,
-        ybwc_empties_limit: 18,
+        ybwc_empties_limit: 16,
         eval_ordering_limit: 15,
         res_cache_limit: 12,
         stability_cut_limit: 8,
