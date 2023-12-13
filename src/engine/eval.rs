@@ -18,7 +18,7 @@ struct EvaluatorConfig {
 
 impl EvaluatorConfig {
     fn new(config_path: &Path) -> Option<EvaluatorConfig> {
-        let mut config_file = File::open(&config_path).ok()?;
+        let mut config_file = File::open(config_path).ok()?;
         let mut config_string = String::new();
         config_file.read_to_string(&mut config_string).ok()?;
         let config_objs = yaml::YamlLoader::load_from_str(&config_string).ok()?;
@@ -92,10 +92,7 @@ impl Parameters {
             patterns_by_d4.push(flip_diag(pattern_bits));
             pattern_bits = rot90(pattern_bits);
         }
-        patterns_by_d4
-            .into_iter()
-            .zip(permuted_weights.into_iter())
-            .collect()
+        patterns_by_d4.into_iter().zip(permuted_weights).collect()
     }
 
     fn new(
@@ -113,7 +110,7 @@ impl Parameters {
             );
             for (t_pattern, t_weights) in expanded {
                 if let Some((_, vw)) = v.iter_mut().find(|(p, _)| *p == t_pattern) {
-                    for (w, &e) in vw.into_iter().zip(t_weights.iter()) {
+                    for (w, &e) in vw.iter_mut().zip(t_weights.iter()) {
                         *w += e;
                     }
                 } else {
