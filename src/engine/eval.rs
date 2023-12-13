@@ -39,6 +39,14 @@ impl EvaluatorConfig {
     }
 }
 
+const NON_PATTERN_SCORES: usize = 4;
+
+struct EvaluatorPattern {
+    mask: u64,
+    offset: usize,
+    pattern_count: usize,
+}
+
 struct Parameters {
     pattern_weights: Vec<i16>,
     patterns: Vec<u64>,
@@ -95,17 +103,12 @@ impl Parameters {
         patterns_by_d4.into_iter().zip(permuted_weights).collect()
     }
 
-    fn new(
-        orig_weights: &[i16],
-        orig_offsets: &[usize],
-        orig_patterns: &[u64],
-        b3conv: &[usize],
-    ) -> Option<Parameters> {
+    fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern], b3conv: &[usize]) -> Option<Parameters> {
         let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
-        for (i, &pattern) in orig_patterns.iter().enumerate() {
+        for pattern in orig_patterns.iter() {
             let expanded = Self::expand_weights_by_d4(
-                &orig_weights[orig_offsets[i]..orig_offsets[i + 1]],
-                pattern,
+                &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
+                pattern.mask,
                 b3conv,
             );
             for (t_pattern, t_weights) in expanded {
@@ -131,7 +134,7 @@ impl Parameters {
         while offsets.len() % 16 != 0 {
             offsets.push(offset as u32);
         }
-        let non_patterns_offset = *orig_offsets.last().unwrap();
+        let non_patterns_offset = orig_patterns.last().unwrap().offset;
         Some(Parameters {
             pattern_weights,
             patterns,
@@ -242,39 +245,54 @@ impl Evaluator {
         base3
     }
 
-    pub fn new(table_dirname: &str) -> Evaluator {
-        let table_path = Path::new(table_dirname);
-        let config_path = table_path.join("config.yaml");
-        let config = EvaluatorConfig::new(&config_path).unwrap();
-        let mut patterns = Vec::new();
-        let mut offsets = Vec::new();
-        let mut length: usize = 0;
-        let mut max_bits = 0;
-        for pattern_str in config.masks.iter() {
-            let bits = u64::from_str_radix(pattern_str, 2).unwrap();
-            patterns.push(bits);
-            offsets.push(length);
-            length += pow3(popcnt(bits));
-            max_bits = max(max_bits, popcnt(bits));
-        }
-        offsets.push(length);
-        length += 4;
-
+    fn load_all_weights(table_path: &Path, config: &EvaluatorConfig, length: usize) -> Vec<Vec<i16>> {
         let mut weights = Vec::new();
         for num in config.stones_range.clone() {
             let path = table_path.join(format!("value{}", num));
             weights.push(Self::load_weight(&path, length).unwrap());
         }
+        weights
+    }
 
+    fn load_patterns(config: &EvaluatorConfig) -> (Vec<EvaluatorPattern>, usize, i8) {
+        let mut patterns = Vec::new();
+        let mut offset = 0;
+        let mut max_bits = 0;
+        for pattern_str in config.masks.iter() {
+            let mask = u64::from_str_radix(pattern_str, 2).unwrap();
+            let mask_size = popcnt(mask);
+            let pattern_count = pow3(mask_size);
+            patterns.push(EvaluatorPattern {
+                mask,
+                offset,
+                pattern_count,
+            });
+            offset += pattern_count;
+            max_bits = max(max_bits, mask_size);
+        }
+
+        patterns.push(EvaluatorPattern {
+            mask: 0,
+            offset,
+            pattern_count: NON_PATTERN_SCORES,
+        });
+        offset += NON_PATTERN_SCORES;
+        (patterns, offset, max_bits)
+    }
+
+    pub fn new(table_dirname: &str) -> Evaluator {
+        let table_path = Path::new(table_dirname);
+        let config_path = table_path.join("config.yaml");
+        let config = EvaluatorConfig::new(&config_path).unwrap();
+        let (patterns, length, max_bits) = Self::load_patterns(&config);
+        let weights = Self::load_all_weights(table_path, &config, length);
         let smoothed_weights = Self::smooth_weight(&weights, length, 1);
-
         let base3 = Self::generate_base3_vec(max_bits);
-
         let params: Vec<_> = smoothed_weights
             .iter()
             .enumerate()
             .map(|(i, w)| {
-                let mut param = Parameters::new(w, &offsets, &patterns, &base3).unwrap();
+                let mut param = Parameters::new(w, &patterns, &base3).unwrap();
                 param.fold_parity(i as i8 + config.stones_range.start());
                 param
             })
