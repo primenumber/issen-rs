@@ -228,6 +228,20 @@ impl Evaluator {
         result
     }
 
+    fn generate_base3_vec(max_bits: i8) -> Vec<usize> {
+        let mut base3 = vec![0; 1 << max_bits];
+        for (i, item) in base3.iter_mut().enumerate() {
+            let mut sum = 0;
+            for j in 0..max_bits {
+                if ((i >> j) & 1) != 0 {
+                    sum += pow3(j);
+                }
+            }
+            *item = sum;
+        }
+        base3
+    }
+
     pub fn new(table_dirname: &str) -> Evaluator {
         let table_path = Path::new(table_dirname);
         let config_path = table_path.join("config.yaml");
@@ -254,16 +268,7 @@ impl Evaluator {
 
         let smoothed_weights = Self::smooth_weight(&weights, length, 1);
 
-        let mut base3 = vec![0; 1 << max_bits];
-        for (i, item) in base3.iter_mut().enumerate() {
-            let mut sum = 0;
-            for j in 0..max_bits {
-                if ((i >> j) & 1) != 0 {
-                    sum += pow3(j);
-                }
-            }
-            *item = sum;
-        }
+        let base3 = Self::generate_base3_vec(max_bits);
 
         let params: Vec<_> = smoothed_weights
             .iter()
