@@ -1,4 +1,4 @@
-use bitintr::{Pdep, Pext};
+use core::arch::x86_64::{_pdep_u64, _pext_u64};
 use lazy_static::lazy_static;
 
 pub fn popcnt(x: u64) -> i8 {
@@ -45,12 +45,12 @@ pub fn mirror_under_8(mut x: u64) -> u64 {
 }
 
 pub fn pext(x: u64, mask: u64) -> u64 {
-    x.pext(mask)
+    unsafe { _pext_u64(x, mask) }
 }
 
 #[allow(dead_code)]
 pub fn pdep(x: u64, mask: u64) -> u64 {
-    x.pdep(mask)
+    unsafe { _pdep_u64(x, mask) }
 }
 
 lazy_static! {
