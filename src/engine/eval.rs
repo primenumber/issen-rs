@@ -106,11 +106,19 @@ impl Parameters {
     fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern], b3conv: &[usize]) -> Option<Parameters> {
         let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
         for pattern in orig_patterns.iter() {
-            let expanded = Self::expand_weights_by_d4(
-                &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
-                pattern.mask,
-                b3conv,
-            );
+            let expanded = if pattern.mask != 0 {
+                Self::expand_weights_by_d4(
+                    &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
+                    pattern.mask,
+                    b3conv,
+                )
+            } else {
+                // non-pattern scores should not be expanded
+                vec![(
+                    pattern.mask,
+                    orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)].to_vec(),
+                )]
+            };
             for (t_pattern, t_weights) in expanded {
                 if let Some((_, vw)) = v.iter_mut().find(|(p, _)| *p == t_pattern) {
                     for (w, &e) in vw.iter_mut().zip(t_weights.iter()) {
