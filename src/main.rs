@@ -1,3 +1,4 @@
+#![feature(const_option)]
 #![feature(test)]
 mod book;
 mod engine;

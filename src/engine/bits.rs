@@ -1,5 +1,4 @@
 use core::arch::x86_64::{_pdep_u64, _pext_u64};
-use lazy_static::lazy_static;
 
 pub fn popcnt(x: u64) -> i8 {
     x.count_ones() as i8
@@ -53,23 +52,25 @@ pub fn pdep(x: u64, mask: u64) -> u64 {
     unsafe { _pdep_u64(x, mask) }
 }
 
-lazy_static! {
-    pub static ref BASE3: [usize; 256] = {
-        let mut res = [0usize; 256];
-        for x in 0..256 {
-            let mut pow3 = 1;
-            let mut sum = 0;
-            for i in 0..8 {
-                if ((x >> i) & 1) == 1 {
-                    sum += pow3;
-                }
-                pow3 *= 3;
+pub const BASE3: [usize; 256] = {
+    let mut res = [0usize; 256];
+    let mut x = 0;
+    while x < 256 {
+        let mut pow3 = 1;
+        let mut sum = 0;
+        let mut i = 0;
+        while i < 8 {
+            if ((x >> i) & 1) == 1 {
+                sum += pow3;
             }
-            res[x] = sum;
+            pow3 *= 3;
+            i += 1;
         }
-        res
-    };
-}
+        res[x] = sum;
+        x += 1;
+    }
+    res
+};
 
 #[cfg(test)]
 mod tests {

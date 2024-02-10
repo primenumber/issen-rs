@@ -49,10 +49,7 @@ impl From<NaiveBoard> for Board {
                 _ => (),
             }
         }
-        Board {
-            player,
-            opponent,
-        }
+        Board { player, opponent }
     }
 }
 
@@ -202,6 +199,7 @@ fn test_ops() {
     assert_eq!(board, Board::from(naive_board.clone()));
     for i in 0..BOARD_SIZE {
         assert_eq!(board.flip(i), naive_board.flip(i));
+        assert_eq!(board.flip_const(i), naive_board.flip(i));
         assert_eq!(board.is_movable(i), naive_board.is_movable(i));
         if board.is_movable(i) {
             assert_eq!(
