@@ -6,7 +6,7 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use arrayvec::ArrayVec;
-use bitintr::Tzcnt;
+use core::arch::x86_64::_tzcnt_u64;
 use std::cmp::max;
 
 fn near_leaf(solve_obj: &mut SolveObj, board: Board) -> (i8, SolveStat) {
@@ -59,7 +59,7 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, 
     for mask in MASKS.iter() {
         let mut remain = mobility_bits & mask;
         while remain != 0 {
-            let pos = remain.tzcnt() as usize;
+            let pos = unsafe { _tzcnt_u64(remain) } as usize;
             remain = remain & (remain - 1);
             if let Some(next) = board.play(pos) {
                 pass = false;
