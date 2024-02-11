@@ -4,7 +4,6 @@ use crate::engine::bits::*;
 use crate::engine::hand::*;
 use anyhow::Result;
 use clap::ArgMatches;
-//use core::arch::x86_64::*;
 use std::cmp::min;
 use std::fmt;
 use std::io::{BufWriter, Write};
@@ -269,8 +268,8 @@ impl Board {
         flip_r |= pre_r & (flip_r >> shift2);
         let mut res = flip_l << shift1;
         res |= flip_r >> shift1;
-        res &= Simd::splat(self.empty());
-        res.reduce_or()
+        let res = res.reduce_or();
+        res & self.empty()
     }
 
     #[cfg(not(target_feature = "avx2"))]
