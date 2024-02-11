@@ -1,4 +1,5 @@
 #![feature(const_option)]
+#![feature(portable_simd)]
 #![feature(test)]
 mod book;
 mod engine;

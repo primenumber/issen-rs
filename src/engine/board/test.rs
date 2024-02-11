@@ -249,19 +249,15 @@ fn iszero_naive(x: [u64; 4]) -> [u64; 4] {
 }
 
 unsafe fn upper_bit_wrapper(x: [u64; 4]) -> [u64; 4] {
-    let x = _mm256_loadu_si256(&x as *const u64 as *const __m256i);
+    let x = Simd::from_array(x);
     let y = upper_bit(x);
-    let mut z = [0; 4];
-    _mm256_storeu_si256(&mut z as *mut u64 as *mut __m256i, y);
-    z
+    y.to_array()
 }
 
 unsafe fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
-    let x = _mm256_loadu_si256(&x as *const u64 as *const __m256i);
+    let x = Simd::from_array(x);
     let y = iszero(x);
-    let mut z = [0; 4];
-    _mm256_storeu_si256(&mut z as *mut u64 as *mut __m256i, y);
-    z
+    y.to_array()
 }
 
 #[test]
