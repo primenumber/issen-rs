@@ -38,7 +38,10 @@ unsafe fn smart_upper_bit(x: __m256i) -> __m256i {
     _mm256_srlv_epi64(_mm256_set1_epi64x(0x8000_0000_0000_0000u64 as i64), y)
 }
 
-#[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
+#[cfg(all(
+    target_feature = "avx2",
+    not(all(target_feature = "avx512cd", target_feature = "avx512vl"))
+))]
 unsafe fn smart_upper_bit(mut x: __m256i) -> __m256i {
     x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9)));
     x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(16, 2, 14, 18)));
@@ -67,11 +70,13 @@ unsafe fn upper_bit(mut x: __m256i) -> __m256i {
     _mm256_andnot_si256(lowers, x)
 }
 
+#[cfg(target_feature = "avx2")]
 unsafe fn iszero(x: __m256i) -> __m256i {
     let zero = _mm256_setzero_si256();
     _mm256_cmpeq_epi64(x, zero)
 }
 
+#[cfg(target_feature = "avx2")]
 unsafe fn reduce_or(x: __m256i) -> u64 {
     let xh = _mm_or_si128(_mm256_castsi256_si128(x), _mm256_extracti128_si256(x, 1));
     (_mm_cvtsi128_si64(xh) | _mm_extract_epi64(xh, 1)) as u64
@@ -92,6 +97,7 @@ impl Board {
         }
     }
 
+    #[cfg(target_feature = "avx2")]
     unsafe fn flip_simd(&self, pos: usize) -> u64 {
         let p = _mm256_set1_epi64x(self.player as i64);
         let o = _mm256_set1_epi64x(self.opponent as i64);
@@ -132,12 +138,7 @@ impl Board {
         reduce_or(flipped)
     }
 
-    #[cfg(all(target_feature = "avx2"))]
-    pub fn flip_unchecked(&self, pos: usize) -> u64 {
-        unsafe { self.flip_simd(pos) }
-    }
-
-    pub const fn flip_naive(&self, pos: usize) -> u64 {
+    pub const fn flip_scalar(&self, pos: usize) -> u64 {
         let o_mask = 0x7E7E_7E7E_7E7E_7E7Eu64;
         let om = [
             self.opponent,
@@ -177,6 +178,16 @@ impl Board {
         flipped
     }
 
+    #[cfg(target_feature = "avx2")]
+    pub fn flip_unchecked(&self, pos: usize) -> u64 {
+        unsafe { self.flip_simd(pos) }
+    }
+
+    #[cfg(not(target_feature = "avx2"))]
+    pub fn flip_unchecked(&self, pos: usize) -> u64 {
+        self.flip_scalar(pos)
+    }
+
     pub fn flip(&self, pos: usize) -> u64 {
         if ((self.empty() >> pos) & 1) == 0 {
             0
@@ -189,7 +200,7 @@ impl Board {
         if ((self.empty() >> pos) & 1) == 0 {
             0
         } else {
-            self.flip_naive(pos)
+            self.flip_scalar(pos)
         }
     }
 
@@ -249,6 +260,7 @@ impl Board {
         !(self.player | self.opponent)
     }
 
+    #[cfg(target_feature = "avx2")]
     unsafe fn mobility_bits_simd(&self) -> u64 {
         let shift1 = _mm256_setr_epi64x(1, 7, 9, 8);
         let mask = _mm256_setr_epi64x(
@@ -294,8 +306,44 @@ impl Board {
         reduce_or(res)
     }
 
+    #[cfg(not(target_feature = "avx2"))]
+    fn mobility_bits_scalar(&self) -> u64 {
+        let shift1 = [1, 7, 9, 8];
+        let mask = [
+            0x7e7e7e7e7e7e7e7eu64,
+            0x7e7e7e7e7e7e7e7eu64,
+            0x7e7e7e7e7e7e7e7eu64,
+            0xffffffffffffffffu64,
+        ];
+        let mut res = 0;
+        for i in 0..4 {
+            let masked_op = self.opponent & mask[i];
+            let mut flip_l = masked_op & (self.player << shift1[i]);
+            let mut flip_r = masked_op & (self.player << shift1[i]);
+            flip_l |= masked_op & (flip_l << shift1[i]);
+            flip_r |= masked_op & (flip_r >> shift1[i]);
+            let pre_l = masked_op & (masked_op << shift1[i]);
+            let pre_r = pre_l >> shift1[i];
+            let shift2 = shift1[i] * 2;
+            flip_l |= pre_l & (flip_l << shift2);
+            flip_r |= pre_r & (flip_r >> shift2);
+            flip_l |= pre_l & (flip_l << shift2);
+            flip_r |= pre_r & (flip_r >> shift2);
+            res |= flip_l << shift1[i];
+            res |= flip_r >> shift1[i];
+        }
+        res &= self.empty();
+        res
+    }
+
+    #[cfg(target_feature = "avx2")]
     pub fn mobility_bits(&self) -> u64 {
         unsafe { self.mobility_bits_simd() }
+    }
+
+    #[cfg(not(target_feature = "avx2"))]
+    pub fn mobility_bits(&self) -> u64 {
+        self.mobility_bits_scalar()
     }
 
     pub fn mobility(&self) -> Vec<usize> {
