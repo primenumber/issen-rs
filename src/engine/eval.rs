@@ -9,6 +9,7 @@ use std::io::Read;
 use std::mem;
 use std::ops::RangeInclusive;
 use std::path::Path;
+use std::simd::prelude::*;
 use yaml_rust::yaml;
 
 struct EvaluatorConfig {
@@ -326,28 +327,24 @@ impl Evaluator {
         }) as i16
     }
 
-    unsafe fn feature_indices(&self, board: Board) -> (__m256i, __m256i, __m256i) {
-        let mut idx0 = _mm256_setzero_si256();
-        let mut idx1 = _mm256_setzero_si256();
-        let mut idx2 = _mm256_setzero_si256();
+    unsafe fn feature_indices(&self, board: Board) -> (u16x16, u16x16, u16x16) {
+        let mut idx0 = Simd::splat(0);
+        let mut idx1 = Simd::splat(0);
+        let mut idx2 = Simd::splat(0);
         for row in 0..8 {
             let pidx = ((board.player >> (row * 8)) & 0xff) as usize;
             let oidx = ((board.opponent >> (row * 8)) & 0xff) as usize;
-            let vp0 =
-                _mm256_loadu_si256(&self.line_to_indices[48 * (pidx + 256 * row)] as *const u16 as *const __m256i);
-            let vp1 =
-                _mm256_loadu_si256(&self.line_to_indices[48 * (pidx + 256 * row) + 16] as *const u16 as *const __m256i);
-            let vp2 =
-                _mm256_loadu_si256(&self.line_to_indices[48 * (pidx + 256 * row) + 32] as *const u16 as *const __m256i);
-            let vo0 =
-                _mm256_loadu_si256(&self.line_to_indices[48 * (oidx + 256 * row)] as *const u16 as *const __m256i);
-            let vo1 =
-                _mm256_loadu_si256(&self.line_to_indices[48 * (oidx + 256 * row) + 16] as *const u16 as *const __m256i);
-            let vo2 =
-                _mm256_loadu_si256(&self.line_to_indices[48 * (oidx + 256 * row) + 32] as *const u16 as *const __m256i);
-            idx0 = _mm256_add_epi16(_mm256_add_epi16(idx0, vp0), _mm256_add_epi16(vo0, vo0));
-            idx1 = _mm256_add_epi16(_mm256_add_epi16(idx1, vp1), _mm256_add_epi16(vo1, vo1));
-            idx2 = _mm256_add_epi16(_mm256_add_epi16(idx2, vp2), _mm256_add_epi16(vo2, vo2));
+            let offset_base_p = 48 * (pidx + 256 * row);
+            let offset_base_o = 48 * (oidx + 256 * row);
+            let vp0 = Simd::from_slice(&self.line_to_indices[offset_base_p..(offset_base_p + 16)]);
+            let vp1 = Simd::from_slice(&self.line_to_indices[(offset_base_p + 16)..(offset_base_p + 32)]);
+            let vp2 = Simd::from_slice(&self.line_to_indices[(offset_base_p + 32)..(offset_base_p + 48)]);
+            let vo0 = Simd::from_slice(&self.line_to_indices[offset_base_o..(offset_base_o + 16)]);
+            let vo1 = Simd::from_slice(&self.line_to_indices[(offset_base_o + 16)..(offset_base_o + 32)]);
+            let vo2 = Simd::from_slice(&self.line_to_indices[(offset_base_o + 32)..(offset_base_o + 48)]);
+            idx0 = idx0 + vp0 + vo0 + vo0;
+            idx1 = idx1 + vp1 + vo1 + vo1;
+            idx2 = idx2 + vp2 + vo2 + vo2;
         }
         (idx0, idx1, idx2)
     }
@@ -371,9 +368,9 @@ impl Evaluator {
             let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
             (lo, hi)
         }
-        let (idxh0, idxh1) = unpack_idx(idx0);
-        let (idxh2, idxh3) = unpack_idx(idx1);
-        let (idxh4, idxh5) = unpack_idx(idx2);
+        let (idxh0, idxh1) = unpack_idx(idx0.into());
+        let (idxh2, idxh3) = unpack_idx(idx1.into());
+        let (idxh4, idxh5) = unpack_idx(idx2.into());
         unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
             let offset = _mm256_add_epi32(
                 idx,
