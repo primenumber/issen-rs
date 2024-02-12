@@ -33,7 +33,7 @@ pub struct PlayIterator {
 pub const BOARD_SIZE: usize = 64;
 
 #[cfg(all(target_feature = "avx512cd", target_feature = "avx512vl"))]
-unsafe fn smart_upper_bit(x: u64x4) -> u64x4 {
+fn smart_upper_bit(x: u64x4) -> u64x4 {
     let y = x.leading_zeros();
     0x8000_0000_0000_0000u64 >> y
 }
@@ -42,7 +42,7 @@ unsafe fn smart_upper_bit(x: u64x4) -> u64x4 {
     target_feature = "avx2",
     not(all(target_feature = "avx512cd", target_feature = "avx512vl"))
 ))]
-unsafe fn smart_upper_bit(mut x: u64x4) -> u64x4 {
+fn smart_upper_bit(mut x: u64x4) -> u64x4 {
     x |= x >> u64x4::from_array([8, 1, 7, 9]);
     x |= x >> u64x4::from_array([16, 2, 14, 18]);
     x |= x >> u64x4::from_array([32, 4, 28, 36]);
@@ -59,7 +59,7 @@ const fn smart_upper_bit_scalar(mut x: u64, lane: usize) -> u64 {
 }
 
 #[allow(dead_code)]
-unsafe fn upper_bit(mut x: u64x4) -> u64x4 {
+fn upper_bit(mut x: u64x4) -> u64x4 {
     x |= x >> 1;
     x |= x >> 2;
     x |= x >> 4;
@@ -70,8 +70,7 @@ unsafe fn upper_bit(mut x: u64x4) -> u64x4 {
     !lowers & x
 }
 
-#[cfg(target_feature = "avx2")]
-unsafe fn iszero(x: u64x4) -> u64x4 {
+fn iszero(x: u64x4) -> u64x4 {
     x.simd_eq(Simd::splat(0u64)).to_int().cast()
 }
 
@@ -90,8 +89,7 @@ impl Board {
         }
     }
 
-    #[cfg(target_feature = "avx2")]
-    unsafe fn flip_simd(&self, pos: usize) -> u64 {
+    fn flip_simd(&self, pos: usize) -> u64 {
         let p = Simd::splat(self.player);
         let o = Simd::splat(self.opponent);
         let omask = Simd::from_array([
@@ -162,14 +160,8 @@ impl Board {
         flipped
     }
 
-    #[cfg(target_feature = "avx2")]
     pub fn flip_unchecked(&self, pos: usize) -> u64 {
-        unsafe { self.flip_simd(pos) }
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    pub fn flip_unchecked(&self, pos: usize) -> u64 {
-        self.flip_scalar(pos)
+        self.flip_simd(pos)
     }
 
     pub fn flip(&self, pos: usize) -> u64 {
@@ -244,8 +236,7 @@ impl Board {
         !(self.player | self.opponent)
     }
 
-    #[cfg(target_feature = "avx2")]
-    unsafe fn mobility_bits_simd(&self) -> u64 {
+    fn mobility_bits_simd(&self) -> u64 {
         let shift1 = Simd::from_array([1, 7, 9, 8]);
         let mask = Simd::from_array([
             0x7e7e7e7e7e7e7e7eu64,
@@ -272,44 +263,8 @@ impl Board {
         res & self.empty()
     }
 
-    #[cfg(not(target_feature = "avx2"))]
-    fn mobility_bits_scalar(&self) -> u64 {
-        let shift1 = [1, 7, 9, 8];
-        let mask = [
-            0x7e7e7e7e7e7e7e7eu64,
-            0x7e7e7e7e7e7e7e7eu64,
-            0x7e7e7e7e7e7e7e7eu64,
-            0xffffffffffffffffu64,
-        ];
-        let mut res = 0;
-        for i in 0..4 {
-            let masked_op = self.opponent & mask[i];
-            let mut flip_l = masked_op & (self.player << shift1[i]);
-            let mut flip_r = masked_op & (self.player << shift1[i]);
-            flip_l |= masked_op & (flip_l << shift1[i]);
-            flip_r |= masked_op & (flip_r >> shift1[i]);
-            let pre_l = masked_op & (masked_op << shift1[i]);
-            let pre_r = pre_l >> shift1[i];
-            let shift2 = shift1[i] * 2;
-            flip_l |= pre_l & (flip_l << shift2);
-            flip_r |= pre_r & (flip_r >> shift2);
-            flip_l |= pre_l & (flip_l << shift2);
-            flip_r |= pre_r & (flip_r >> shift2);
-            res |= flip_l << shift1[i];
-            res |= flip_r >> shift1[i];
-        }
-        res &= self.empty();
-        res
-    }
-
-    #[cfg(target_feature = "avx2")]
     pub fn mobility_bits(&self) -> u64 {
-        unsafe { self.mobility_bits_simd() }
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    pub fn mobility_bits(&self) -> u64 {
-        self.mobility_bits_scalar()
+        self.mobility_bits_simd()
     }
 
     pub fn mobility(&self) -> Vec<usize> {
