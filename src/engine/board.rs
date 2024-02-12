@@ -493,6 +493,7 @@ impl BoardWithColor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn pass(&self) -> Option<BoardWithColor> {
         Some(BoardWithColor {
             board: self.board.pass()?,
