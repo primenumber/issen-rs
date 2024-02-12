@@ -107,7 +107,7 @@ impl Board {
             0x0102040810204000u64,
             0x0040201008040201u64,
         ]);
-        let mut mask = mask1 >> Simd::splat((63 - pos) as u64);
+        let mut mask = mask1 >> ((63 - pos) as u64);
         let mut outflank = smart_upper_bit(!om & mask) & p;
         let mut flipped = ((Simd::splat(0) - outflank) << 1) & mask;
         let mask2 = Simd::from_array([
@@ -116,7 +116,7 @@ impl Board {
             0x0002040810204080u64,
             0x8040201008040200u64,
         ]);
-        mask = mask2 << Simd::splat(pos as u64);
+        mask = mask2 << (pos as u64);
         outflank = !((!om & mask) - Simd::splat(1)) & mask & p;
         flipped |= !(iszero(outflank) - outflank) & mask;
         flipped.reduce_or()
