@@ -38,10 +38,7 @@ fn smart_upper_bit(x: u64x4) -> u64x4 {
     0x8000_0000_0000_0000u64 >> y
 }
 
-#[cfg(all(
-    target_feature = "avx2",
-    not(all(target_feature = "avx512cd", target_feature = "avx512vl"))
-))]
+#[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
 fn smart_upper_bit(mut x: u64x4) -> u64x4 {
     x |= x >> u64x4::from_array([8, 1, 7, 9]);
     x |= x >> u64x4::from_array([16, 2, 14, 18]);
