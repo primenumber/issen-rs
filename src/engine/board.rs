@@ -335,10 +335,10 @@ impl Board {
         const MASKS: [u64; 4] = [MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT];
         let mut res = 0;
         for mask in &MASKS {
-            let me = pext(self.player, *mask) as usize;
-            let op = pext(self.opponent, *mask) as usize;
+            let me = self.player.pext(*mask) as usize;
+            let op = self.opponent.pext(*mask) as usize;
             let base3 = BASE3[me] + 2 * BASE3[op];
-            res |= pdep(STABLE[base3], *mask);
+            res |= STABLE[base3].pdep(*mask);
         }
         let filled = !self.empty();
         let mut filled_v = filled;

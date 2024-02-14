@@ -72,13 +72,13 @@ impl LastCache {
         let &(col_mask, diag1_mask, diag2_mask) = self.masks.get_unchecked(pos);
         let &(diag1_idx, diag2_idx) = self.indices.get_unchecked(pos);
         let &row_score = self.table.get_unchecked((row_bits as usize) * 8 + col);
-        let col_bits = pext(board.player, col_mask);
+        let col_bits = board.player.pext(col_mask);
         let &col_score = self.table.get_unchecked((col_bits as usize) * 8 + row);
-        let diag1_bits = pext(board.player, diag1_mask);
+        let diag1_bits = board.player.pext(diag1_mask);
         let &diag1_score = self
             .table
             .get_unchecked((diag1_bits as usize) * 8 + diag1_idx as usize);
-        let diag2_bits = pext(board.player, diag2_mask);
+        let diag2_bits = board.player.pext(diag2_mask);
         let &diag2_score = self
             .table
             .get_unchecked((diag2_bits as usize) * 8 + diag2_idx as usize);
@@ -88,11 +88,11 @@ impl LastCache {
         if diff_first > 0 {
             (pcnt - ocnt + 2 * diff_first + 1, 1)
         } else {
-            let diag1_bits_second = pext(board.opponent, diag1_mask);
+            let diag1_bits_second = board.opponent.pext(diag1_mask);
             let &diag1_score_second = self
                 .table
                 .get_unchecked((diag1_bits_second as usize) * 8 + diag1_idx as usize);
-            let diag2_bits_second = pext(board.opponent, diag2_mask);
+            let diag2_bits_second = board.opponent.pext(diag2_mask);
             let &diag2_score_second = self
                 .table
                 .get_unchecked((diag2_bits_second as usize) * 8 + diag2_idx as usize);

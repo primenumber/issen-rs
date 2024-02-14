@@ -65,10 +65,10 @@ impl Parameters {
         let mut indices = vec![Vec::new(); 8];
         for i in 0..table_size {
             let mut t_pattern = pattern;
-            let mut t_bits = pdep(i as u64, t_pattern);
+            let mut t_bits = (i as u64).pdep(t_pattern);
             for dir in 0..4 {
-                indices[dir * 2].push(pext(t_bits, t_pattern) as usize);
-                indices[dir * 2 + 1].push(pext(flip_diag(t_bits), flip_diag(t_pattern)) as usize);
+                indices[dir * 2].push(t_bits.pext(t_pattern) as usize);
+                indices[dir * 2 + 1].push(flip_diag(t_bits).pext(flip_diag(t_pattern)) as usize);
                 t_bits = rot90(t_bits);
                 t_pattern = rot90(t_pattern);
             }
@@ -229,7 +229,7 @@ impl Evaluator {
             for row_bits in 0..256 {
                 let bits = row_bits << (row * 8);
                 for &pattern in patterns {
-                    let index = b3conv[pext(bits, pattern) as usize];
+                    let index = b3conv[bits.pext(pattern) as usize];
                     result.push(index as u16);
                 }
                 while result.len() % 16 != 0 {

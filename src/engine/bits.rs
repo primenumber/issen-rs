@@ -1,5 +1,20 @@
 use core::arch::x86_64::{_pdep_u64, _pext_u64};
 
+pub trait BitManip {
+    fn pext(&self, mask: Self) -> Self;
+    fn pdep(&self, mask: Self) -> Self;
+}
+
+impl BitManip for u64 {
+    fn pext(&self, mask: u64) -> u64 {
+        unsafe { _pext_u64(*self, mask) }
+    }
+
+    fn pdep(&self, mask: u64) -> u64 {
+        unsafe { _pdep_u64(*self, mask) }
+    }
+}
+
 pub fn popcnt(x: u64) -> i8 {
     x.count_ones() as i8
 }
@@ -41,15 +56,6 @@ pub fn mirror_under_8(mut x: u64) -> u64 {
     x = ((x >> 2) & 0x33) | ((x << 2) & 0xCC);
     x = ((x >> 1) & 0x55) | ((x << 1) & 0xAA);
     x
-}
-
-pub fn pext(x: u64, mask: u64) -> u64 {
-    unsafe { _pext_u64(x, mask) }
-}
-
-#[allow(dead_code)]
-pub fn pdep(x: u64, mask: u64) -> u64 {
-    unsafe { _pdep_u64(x, mask) }
 }
 
 pub const BASE3: [usize; 256] = {
