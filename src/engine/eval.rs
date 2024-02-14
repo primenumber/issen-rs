@@ -327,7 +327,7 @@ impl Evaluator {
         }) as i16
     }
 
-    unsafe fn feature_indices(&self, board: Board) -> (u16x16, u16x16, u16x16) {
+    fn feature_indices(&self, board: Board) -> (u16x16, u16x16, u16x16) {
         let mut idx0 = Simd::splat(0);
         let mut idx1 = Simd::splat(0);
         let mut idx2 = Simd::splat(0);
@@ -356,13 +356,17 @@ impl Evaluator {
             .min(*self.stones_range.end() as usize);
         let param_index = stones - *self.stones_range.start() as usize;
         let param = &self.params[param_index];
+
+        // non-pattern scores
         let mut score = param.constant_score;
         score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
         score += param.o_mobility_score * popcnt(board.pass_unchecked().mobility_bits()) as i16;
         let mut score = score as i32;
-        const MM_PERM_ACBD: i32 = 0b11011000;
+
+        // pattern-based scores
         let (idx0, idx1, idx2) = self.feature_indices(board);
         unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
+            const MM_PERM_ACBD: i32 = 0b11011000;
             let permed = _mm256_permute4x64_epi64(idx, MM_PERM_ACBD);
             let lo = _mm256_unpacklo_epi16(permed, _mm256_setzero_si256());
             let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
@@ -384,18 +388,21 @@ impl Evaluator {
         let vw3 = gather_weight(param, idxh3, 24);
         let vw4 = gather_weight(param, idxh4, 32);
         let vw5 = gather_weight(param, idxh5, 40);
-        let sum0 = _mm256_blend_epi16(vw0, _mm256_slli_epi32(vw1, 16), 0b10101010);
-        let sum1 = _mm256_blend_epi16(vw2, _mm256_slli_epi32(vw3, 16), 0b10101010);
-        let sum2 = _mm256_blend_epi16(vw4, _mm256_slli_epi32(vw5, 16), 0b10101010);
-        let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
-        let sum = _mm_add_epi16(
-            _mm256_castsi256_si128(sum),
-            _mm256_extracti128_si256(sum, 1),
-        );
-        let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-        let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-        let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-        score += _mm_cvtsi128_si32(sum) as u16 as i16 as i32;
+        unsafe fn reduce_sum(v0: __m256i, v1: __m256i, v2: __m256i, v3: __m256i, v4: __m256i, v5: __m256i) -> i32 {
+            let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
+            let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
+            let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
+            let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
+            let sum = _mm_add_epi16(
+                _mm256_castsi256_si128(sum),
+                _mm256_extracti128_si256(sum, 1),
+            );
+            let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+            let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+            let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+            _mm_cvtsi128_si32(sum) as u16 as i16 as i32
+        }
+        score += reduce_sum(vw0, vw1, vw2, vw3, vw4, vw5);
         score
     }
 
