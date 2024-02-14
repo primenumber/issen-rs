@@ -248,13 +248,13 @@ fn iszero_naive(x: [u64; 4]) -> [u64; 4] {
     res
 }
 
-unsafe fn upper_bit_wrapper(x: [u64; 4]) -> [u64; 4] {
+fn upper_bit_wrapper(x: [u64; 4]) -> [u64; 4] {
     let x = Simd::from_array(x);
     let y = upper_bit(x);
     y.to_array()
 }
 
-unsafe fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
+fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
     let x = Simd::from_array(x);
     let y = iszero(x);
     y.to_array()
@@ -279,7 +279,7 @@ fn test_upper_bit() {
     for i in 0..(LENGTH / 4) {
         let a = &ary[(4 * i)..(4 * i + 4)];
         assert_eq!(
-            unsafe { upper_bit_wrapper(a.try_into().unwrap()) },
+            upper_bit_wrapper(a.try_into().unwrap()),
             upper_bit_naive(a.try_into().unwrap())
         );
     }
@@ -298,7 +298,7 @@ fn test_iszero() {
     for i in 0..=(LENGTH - 4) {
         let a = &ary[i..(i + 4)];
         assert_eq!(
-            unsafe { iszero_wrapper(a.try_into().unwrap()) },
+            iszero_wrapper(a.try_into().unwrap()),
             iszero_naive(a.try_into().unwrap())
         );
     }
