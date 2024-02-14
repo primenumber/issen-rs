@@ -34,6 +34,13 @@ pub fn flip_horizontal(mut x: u64) -> u64 {
     x
 }
 
+// delta swap: bit swapping with mask
+//    MSB F              0 LSB
+// x:    [ponmlkjihgfedcba]
+// mask: [0011000010000000]
+// delta swap with shift = 3
+// res:  [pokjlnmiegfhdcba]
+//          ^^ ^^ ^  ^
 pub fn delta_swap(x: u64, mask: u64, delta: isize) -> u64 {
     let tmp = mask & (x ^ (x << delta));
     x ^ tmp ^ (tmp >> delta)
