@@ -2,7 +2,6 @@
 mod test;
 use crate::engine::bits::*;
 use crate::engine::board::*;
-use core::arch::x86_64::_tzcnt_u64;
 
 pub struct LastCache {
     table: [(i8, i8); 4096],
@@ -65,7 +64,7 @@ impl LastCache {
     }
 
     unsafe fn solve_last_impl(&self, board: Board) -> (i8, usize) {
-        let pos = _tzcnt_u64(board.empty()) as usize;
+        let pos = board.empty().trailing_zeros() as usize;
         let row = pos >> 3;
         let col = pos & 0b111;
         let row_bits = (board.player >> (row * 8)) & 0xff;

@@ -3,7 +3,7 @@ use super::*;
 use rand::{Rng, SeedableRng};
 
 fn solve_last_naive(board: Board) -> (i8, usize) {
-    let pos = unsafe { _tzcnt_u64(board.empty()) } as usize;
+    let pos = board.empty().trailing_zeros() as usize;
     match board.play(pos) {
         Some(next) => (-next.score(), 1),
         None => match board.pass_unchecked().play(pos) {
