@@ -2,6 +2,7 @@
 mod test;
 use crate::engine::bits::*;
 use crate::engine::board::*;
+#[cfg(target_feature = "avx2")]
 use core::arch::x86_64::*;
 use std::cmp::max;
 use std::fs::File;
@@ -327,7 +328,7 @@ impl Evaluator {
         }) as i16
     }
 
-    fn feature_indices(&self, board: Board) -> (u16x16, u16x16, u16x16) {
+    fn feature_indices(&self, board: Board) -> [u16x16; 3] {
         let mut idx0 = Simd::splat(0);
         let mut idx1 = Simd::splat(0);
         let mut idx2 = Simd::splat(0);
@@ -346,10 +347,68 @@ impl Evaluator {
             idx1 = idx1 + vp1 + vo1 + vo1;
             idx2 = idx2 + vp2 + vo2 + vo2;
         }
-        (idx0, idx1, idx2)
+        [idx0, idx1, idx2]
     }
 
-    unsafe fn eval_impl(&self, board: Board) -> i32 {
+    #[cfg(target_feature = "avx2")]
+    fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
+        unsafe {
+            unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
+                const MM_PERM_ACBD: i32 = 0b11011000;
+                let permed = _mm256_permute4x64_epi64(idx, MM_PERM_ACBD);
+                let lo = _mm256_unpacklo_epi16(permed, _mm256_setzero_si256());
+                let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
+                (lo, hi)
+            }
+            let (idxh0, idxh1) = unpack_idx(vidx[0].into());
+            let (idxh2, idxh3) = unpack_idx(vidx[1].into());
+            let (idxh4, idxh5) = unpack_idx(vidx[2].into());
+            unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
+                let offset = _mm256_add_epi32(
+                    idx,
+                    _mm256_loadu_si256(&param.offsets[start] as *const u32 as *const __m256i),
+                );
+                _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
+            }
+            let vw0 = gather_weight(param, idxh0, 0);
+            let vw1 = gather_weight(param, idxh1, 8);
+            let vw2 = gather_weight(param, idxh2, 16);
+            let vw3 = gather_weight(param, idxh3, 24);
+            let vw4 = gather_weight(param, idxh4, 32);
+            let vw5 = gather_weight(param, idxh5, 40);
+            unsafe fn reduce_sum(v0: __m256i, v1: __m256i, v2: __m256i, v3: __m256i, v4: __m256i, v5: __m256i) -> i32 {
+                let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
+                let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
+                let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
+                let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
+                let sum = _mm_add_epi16(
+                    _mm256_castsi256_si128(sum),
+                    _mm256_extracti128_si256(sum, 1),
+                );
+                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
+                _mm_cvtsi128_si32(sum) as u16 as i16 as i32
+            }
+            reduce_sum(vw0, vw1, vw2, vw3, vw4, vw5)
+        }
+    }
+
+    #[cfg(not(target_feature = "avx2"))]
+    fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
+        let mut offsets = [0u16; 48];
+        vidx[0].copy_to_slice(&mut offsets[0..16]);
+        vidx[1].copy_to_slice(&mut offsets[16..32]);
+        vidx[2].copy_to_slice(&mut offsets[32..48]);
+        let mut sum = 0i32;
+        for (idx, poffset) in offsets.iter().zip(param.offsets.iter()) {
+            let offset = *idx as u32 + *poffset;
+            sum += *unsafe { param.pattern_weights.get_unchecked(offset as usize) } as i32;
+        }
+        sum
+    }
+
+    fn eval_impl(&self, board: Board) -> i32 {
         let rem: usize = popcnt(board.empty()) as usize;
         let stones = (BOARD_SIZE - rem)
             .max(*self.stones_range.start() as usize)
@@ -364,50 +423,13 @@ impl Evaluator {
         let mut score = score as i32;
 
         // pattern-based scores
-        let (idx0, idx1, idx2) = self.feature_indices(board);
-        unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
-            const MM_PERM_ACBD: i32 = 0b11011000;
-            let permed = _mm256_permute4x64_epi64(idx, MM_PERM_ACBD);
-            let lo = _mm256_unpacklo_epi16(permed, _mm256_setzero_si256());
-            let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
-            (lo, hi)
-        }
-        let (idxh0, idxh1) = unpack_idx(idx0.into());
-        let (idxh2, idxh3) = unpack_idx(idx1.into());
-        let (idxh4, idxh5) = unpack_idx(idx2.into());
-        unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
-            let offset = _mm256_add_epi32(
-                idx,
-                _mm256_loadu_si256(&param.offsets[start] as *const u32 as *const __m256i),
-            );
-            _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
-        }
-        let vw0 = gather_weight(param, idxh0, 0);
-        let vw1 = gather_weight(param, idxh1, 8);
-        let vw2 = gather_weight(param, idxh2, 16);
-        let vw3 = gather_weight(param, idxh3, 24);
-        let vw4 = gather_weight(param, idxh4, 32);
-        let vw5 = gather_weight(param, idxh5, 40);
-        unsafe fn reduce_sum(v0: __m256i, v1: __m256i, v2: __m256i, v3: __m256i, v4: __m256i, v5: __m256i) -> i32 {
-            let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
-            let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
-            let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
-            let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
-            let sum = _mm_add_epi16(
-                _mm256_castsi256_si128(sum),
-                _mm256_extracti128_si256(sum, 1),
-            );
-            let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-            let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-            let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-            _mm_cvtsi128_si32(sum) as u16 as i16 as i32
-        }
-        score += reduce_sum(vw0, vw1, vw2, vw3, vw4, vw5);
+        let vidx = self.feature_indices(board);
+        score += self.eval_gather(param, vidx);
         score
     }
 
     pub fn eval(&self, board: Board) -> i16 {
-        Self::smooth_val(unsafe { self.eval_impl(board) })
+        Self::smooth_val(self.eval_impl(board))
     }
 }
 
