@@ -337,12 +337,30 @@ impl Evaluator {
             let oidx = ((board.opponent >> (row * 8)) & 0xff) as usize;
             let offset_base_p = 48 * (pidx + 256 * row);
             let offset_base_o = 48 * (oidx + 256 * row);
-            let vp0 = Simd::from_slice(&self.line_to_indices[offset_base_p..(offset_base_p + 16)]);
-            let vp1 = Simd::from_slice(&self.line_to_indices[(offset_base_p + 16)..(offset_base_p + 32)]);
-            let vp2 = Simd::from_slice(&self.line_to_indices[(offset_base_p + 32)..(offset_base_p + 48)]);
-            let vo0 = Simd::from_slice(&self.line_to_indices[offset_base_o..(offset_base_o + 16)]);
-            let vo1 = Simd::from_slice(&self.line_to_indices[(offset_base_o + 16)..(offset_base_o + 32)]);
-            let vo2 = Simd::from_slice(&self.line_to_indices[(offset_base_o + 32)..(offset_base_o + 48)]);
+            let vp0 = Simd::from_slice(unsafe {
+                self.line_to_indices
+                    .get_unchecked(offset_base_p..(offset_base_p + 16))
+            });
+            let vp1 = Simd::from_slice(unsafe {
+                self.line_to_indices
+                    .get_unchecked((offset_base_p + 16)..(offset_base_p + 32))
+            });
+            let vp2 = Simd::from_slice(unsafe {
+                self.line_to_indices
+                    .get_unchecked((offset_base_p + 32)..(offset_base_p + 48))
+            });
+            let vo0 = Simd::from_slice(unsafe {
+                self.line_to_indices
+                    .get_unchecked(offset_base_o..(offset_base_o + 16))
+            });
+            let vo1 = Simd::from_slice(unsafe {
+                self.line_to_indices
+                    .get_unchecked((offset_base_o + 16)..(offset_base_o + 32))
+            });
+            let vo2 = Simd::from_slice(unsafe {
+                self.line_to_indices
+                    .get_unchecked((offset_base_o + 32)..(offset_base_o + 48))
+            });
             idx0 = idx0 + vp0 + vo0 + vo0;
             idx1 = idx1 + vp1 + vo1 + vo1;
             idx2 = idx2 + vp2 + vo2 + vo2;
@@ -397,9 +415,9 @@ impl Evaluator {
     #[cfg(not(target_feature = "avx2"))]
     fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
         let mut offsets = [0u16; 48];
-        vidx[0].copy_to_slice(&mut offsets[0..16]);
-        vidx[1].copy_to_slice(&mut offsets[16..32]);
-        vidx[2].copy_to_slice(&mut offsets[32..48]);
+        vidx[0].copy_to_slice(unsafe { offsets.get_unchecked_mut(0..16) });
+        vidx[1].copy_to_slice(unsafe { offsets.get_unchecked_mut(16..32) });
+        vidx[2].copy_to_slice(unsafe { offsets.get_unchecked_mut(32..48) });
         let mut sum = 0i32;
         for (idx, poffset) in offsets.iter().zip(param.offsets.iter()) {
             let offset = *idx as u32 + *poffset;
@@ -414,7 +432,7 @@ impl Evaluator {
             .max(*self.stones_range.start() as usize)
             .min(*self.stones_range.end() as usize);
         let param_index = stones - *self.stones_range.start() as usize;
-        let param = &self.params[param_index];
+        let param = unsafe { self.params.get_unchecked(param_index) };
 
         // non-pattern scores
         let mut score = param.constant_score;
