@@ -35,7 +35,7 @@ pub const BOARD_SIZE: usize = 64;
 #[cfg(all(target_feature = "avx512cd", target_feature = "avx512vl"))]
 fn smart_upper_bit(x: u64x4) -> u64x4 {
     let y = x.leading_zeros();
-    0x8000_0000_0000_0000u64 >> y
+    Simd::splat(0x8000_0000_0000_0000u64) >> y
 }
 
 #[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
