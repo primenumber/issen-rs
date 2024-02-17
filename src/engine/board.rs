@@ -4,10 +4,10 @@ use crate::engine::bits::*;
 use crate::engine::hand::*;
 use anyhow::Result;
 use clap::ArgMatches;
-use core::arch::x86_64::*;
 use std::cmp::min;
 use std::fmt;
 use std::io::{BufWriter, Write};
+use std::simd::prelude::*;
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -33,21 +33,18 @@ pub struct PlayIterator {
 pub const BOARD_SIZE: usize = 64;
 
 #[cfg(all(target_feature = "avx512cd", target_feature = "avx512vl"))]
-unsafe fn smart_upper_bit(x: __m256i) -> __m256i {
-    let y = _mm256_lzcnt_epi64(x);
-    _mm256_srlv_epi64(_mm256_set1_epi64x(0x8000_0000_0000_0000u64 as i64), y)
+fn smart_upper_bit(x: u64x4) -> u64x4 {
+    let y = x.leading_zeros();
+    Simd::splat(0x8000_0000_0000_0000u64) >> y
 }
 
-#[cfg(all(
-    target_feature = "avx2",
-    not(all(target_feature = "avx512cd", target_feature = "avx512vl"))
-))]
-unsafe fn smart_upper_bit(mut x: __m256i) -> __m256i {
-    x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9)));
-    x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(16, 2, 14, 18)));
-    x = _mm256_or_si256(x, _mm256_srlv_epi64(x, _mm256_setr_epi64x(32, 4, 28, 36)));
-    let lowers = _mm256_srlv_epi64(x, _mm256_setr_epi64x(8, 1, 7, 9));
-    _mm256_andnot_si256(lowers, x)
+#[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
+fn smart_upper_bit(mut x: u64x4) -> u64x4 {
+    x |= x >> u64x4::from_array([8, 1, 7, 9]);
+    x |= x >> u64x4::from_array([16, 2, 14, 18]);
+    x |= x >> u64x4::from_array([32, 4, 28, 36]);
+    let lowers = x >> Simd::from_array([8, 1, 7, 9]);
+    !lowers & x
 }
 
 const fn smart_upper_bit_scalar(mut x: u64, lane: usize) -> u64 {
@@ -59,27 +56,19 @@ const fn smart_upper_bit_scalar(mut x: u64, lane: usize) -> u64 {
 }
 
 #[allow(dead_code)]
-unsafe fn upper_bit(mut x: __m256i) -> __m256i {
-    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 1));
-    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 2));
-    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 4));
-    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 8));
-    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 16));
-    x = _mm256_or_si256(x, _mm256_srli_epi64(x, 32));
-    let lowers = _mm256_srli_epi64(x, 1);
-    _mm256_andnot_si256(lowers, x)
+fn upper_bit(mut x: u64x4) -> u64x4 {
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    x |= x >> 32;
+    let lowers = x >> 1;
+    !lowers & x
 }
 
-#[cfg(target_feature = "avx2")]
-unsafe fn iszero(x: __m256i) -> __m256i {
-    let zero = _mm256_setzero_si256();
-    _mm256_cmpeq_epi64(x, zero)
-}
-
-#[cfg(target_feature = "avx2")]
-unsafe fn reduce_or(x: __m256i) -> u64 {
-    let xh = _mm_or_si128(_mm256_castsi256_si128(x), _mm256_extracti128_si256(x, 1));
-    (_mm_cvtsi128_si64(xh) | _mm_extract_epi64(xh, 1)) as u64
+fn iszero(x: u64x4) -> u64x4 {
+    x.simd_eq(Simd::splat(0u64)).to_int().cast()
 }
 
 impl Board {
@@ -97,45 +86,35 @@ impl Board {
         }
     }
 
-    #[cfg(target_feature = "avx2")]
-    unsafe fn flip_simd(&self, pos: usize) -> u64 {
-        let p = _mm256_set1_epi64x(self.player as i64);
-        let o = _mm256_set1_epi64x(self.opponent as i64);
-        let omask = _mm256_setr_epi64x(
-            0xFFFFFFFFFFFFFFFFu64 as i64,
-            0x7E7E7E7E7E7E7E7Eu64 as i64,
-            0x7E7E7E7E7E7E7E7Eu64 as i64,
-            0x7E7E7E7E7E7E7E7Eu64 as i64,
-        );
-        let om = _mm256_and_si256(o, omask);
-        let mask1 = _mm256_setr_epi64x(
-            0x0080808080808080u64 as i64,
-            0x7f00000000000000u64 as i64,
-            0x0102040810204000u64 as i64,
-            0x0040201008040201u64 as i64,
-        );
-        let mut mask = _mm256_srlv_epi64(mask1, _mm256_set1_epi64x((63 - pos) as i64));
-        let mut outflank = _mm256_and_si256(smart_upper_bit(_mm256_andnot_si256(om, mask)), p);
-        let mut flipped = _mm256_and_si256(
-            _mm256_slli_epi64(_mm256_sub_epi64(_mm256_setzero_si256(), outflank), 1),
-            mask,
-        );
-        let mask2 = _mm256_setr_epi64x(
-            0x0101010101010100u64 as i64,
-            0x00000000000000feu64 as i64,
-            0x0002040810204080u64 as i64,
-            0x8040201008040200u64 as i64,
-        );
-        mask = _mm256_sllv_epi64(mask2, _mm256_set1_epi64x(pos as i64));
-        outflank = _mm256_andnot_si256(
-            _mm256_sub_epi64(_mm256_andnot_si256(om, mask), _mm256_set1_epi64x(1)),
-            _mm256_and_si256(mask, p),
-        );
-        flipped = _mm256_or_si256(
-            flipped,
-            _mm256_andnot_si256(_mm256_sub_epi64(iszero(outflank), outflank), mask),
-        );
-        reduce_or(flipped)
+    fn flip_simd(&self, pos: usize) -> u64 {
+        let p = Simd::splat(self.player);
+        let o = Simd::splat(self.opponent);
+        let omask = Simd::from_array([
+            0xFFFFFFFFFFFFFFFFu64,
+            0x7E7E7E7E7E7E7E7Eu64,
+            0x7E7E7E7E7E7E7E7Eu64,
+            0x7E7E7E7E7E7E7E7Eu64,
+        ]);
+        let om = o & omask;
+        let mask1 = Simd::from_array([
+            0x0080808080808080u64,
+            0x7f00000000000000u64,
+            0x0102040810204000u64,
+            0x0040201008040201u64,
+        ]);
+        let mut mask = mask1 >> ((63 - pos) as u64);
+        let mut outflank = smart_upper_bit(!om & mask) & p;
+        let mut flipped = ((Simd::splat(0) - outflank) << 1) & mask;
+        let mask2 = Simd::from_array([
+            0x0101010101010100u64,
+            0x00000000000000feu64,
+            0x0002040810204080u64,
+            0x8040201008040200u64,
+        ]);
+        mask = mask2 << (pos as u64);
+        outflank = !((!om & mask) - Simd::splat(1)) & mask & p;
+        flipped |= !(iszero(outflank) - outflank) & mask;
+        flipped.reduce_or()
     }
 
     pub const fn flip_scalar(&self, pos: usize) -> u64 {
@@ -178,14 +157,8 @@ impl Board {
         flipped
     }
 
-    #[cfg(target_feature = "avx2")]
     pub fn flip_unchecked(&self, pos: usize) -> u64 {
-        unsafe { self.flip_simd(pos) }
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    pub fn flip_unchecked(&self, pos: usize) -> u64 {
-        self.flip_scalar(pos)
+        self.flip_simd(pos)
     }
 
     pub fn flip(&self, pos: usize) -> u64 {
@@ -260,90 +233,35 @@ impl Board {
         !(self.player | self.opponent)
     }
 
-    #[cfg(target_feature = "avx2")]
-    unsafe fn mobility_bits_simd(&self) -> u64 {
-        let shift1 = _mm256_setr_epi64x(1, 7, 9, 8);
-        let mask = _mm256_setr_epi64x(
-            0x7e7e7e7e7e7e7e7eu64 as i64,
-            0x7e7e7e7e7e7e7e7eu64 as i64,
-            0x7e7e7e7e7e7e7e7eu64 as i64,
-            0xffffffffffffffffu64 as i64,
-        );
-        let v_player = _mm256_set1_epi64x(self.player as i64);
-        let masked_op = _mm256_and_si256(_mm256_set1_epi64x(self.opponent as i64), mask);
-        let mut flip_l = _mm256_and_si256(masked_op, _mm256_sllv_epi64(v_player, shift1));
-        let mut flip_r = _mm256_and_si256(masked_op, _mm256_srlv_epi64(v_player, shift1));
-        flip_l = _mm256_or_si256(
-            flip_l,
-            _mm256_and_si256(masked_op, _mm256_sllv_epi64(flip_l, shift1)),
-        );
-        flip_r = _mm256_or_si256(
-            flip_r,
-            _mm256_and_si256(masked_op, _mm256_srlv_epi64(flip_r, shift1)),
-        );
-        let pre_l = _mm256_and_si256(masked_op, _mm256_sllv_epi64(masked_op, shift1));
-        let pre_r = _mm256_srlv_epi64(pre_l, shift1);
-        let shift2 = _mm256_add_epi64(shift1, shift1);
-        flip_l = _mm256_or_si256(
-            flip_l,
-            _mm256_and_si256(pre_l, _mm256_sllv_epi64(flip_l, shift2)),
-        );
-        flip_r = _mm256_or_si256(
-            flip_r,
-            _mm256_and_si256(pre_r, _mm256_srlv_epi64(flip_r, shift2)),
-        );
-        flip_l = _mm256_or_si256(
-            flip_l,
-            _mm256_and_si256(pre_l, _mm256_sllv_epi64(flip_l, shift2)),
-        );
-        flip_r = _mm256_or_si256(
-            flip_r,
-            _mm256_and_si256(pre_r, _mm256_srlv_epi64(flip_r, shift2)),
-        );
-        let mut res = _mm256_sllv_epi64(flip_l, shift1);
-        res = _mm256_or_si256(res, _mm256_srlv_epi64(flip_r, shift1));
-        res = _mm256_and_si256(res, _mm256_set1_epi64x(self.empty() as i64));
-        reduce_or(res)
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    fn mobility_bits_scalar(&self) -> u64 {
-        let shift1 = [1, 7, 9, 8];
-        let mask = [
+    fn mobility_bits_simd(&self) -> u64 {
+        let shift1 = Simd::from_array([1, 7, 9, 8]);
+        let mask = Simd::from_array([
             0x7e7e7e7e7e7e7e7eu64,
             0x7e7e7e7e7e7e7e7eu64,
             0x7e7e7e7e7e7e7e7eu64,
             0xffffffffffffffffu64,
-        ];
-        let mut res = 0;
-        for i in 0..4 {
-            let masked_op = self.opponent & mask[i];
-            let mut flip_l = masked_op & (self.player << shift1[i]);
-            let mut flip_r = masked_op & (self.player << shift1[i]);
-            flip_l |= masked_op & (flip_l << shift1[i]);
-            flip_r |= masked_op & (flip_r >> shift1[i]);
-            let pre_l = masked_op & (masked_op << shift1[i]);
-            let pre_r = pre_l >> shift1[i];
-            let shift2 = shift1[i] * 2;
-            flip_l |= pre_l & (flip_l << shift2);
-            flip_r |= pre_r & (flip_r >> shift2);
-            flip_l |= pre_l & (flip_l << shift2);
-            flip_r |= pre_r & (flip_r >> shift2);
-            res |= flip_l << shift1[i];
-            res |= flip_r >> shift1[i];
-        }
-        res &= self.empty();
-        res
+        ]);
+        let v_player = Simd::splat(self.player);
+        let masked_op = Simd::splat(self.opponent) & mask;
+        let mut flip_l = masked_op & (v_player << shift1);
+        let mut flip_r = masked_op & (v_player >> shift1);
+        flip_l |= masked_op & (flip_l << shift1);
+        flip_r |= masked_op & (flip_r >> shift1);
+        let pre_l = masked_op & (masked_op << shift1);
+        let pre_r = pre_l >> shift1;
+        let shift2 = shift1 + shift1;
+        flip_l |= pre_l & (flip_l << shift2);
+        flip_r |= pre_r & (flip_r >> shift2);
+        flip_l |= pre_l & (flip_l << shift2);
+        flip_r |= pre_r & (flip_r >> shift2);
+        let mut res = flip_l << shift1;
+        res |= flip_r >> shift1;
+        let res = res.reduce_or();
+        res & self.empty()
     }
 
-    #[cfg(target_feature = "avx2")]
     pub fn mobility_bits(&self) -> u64 {
-        unsafe { self.mobility_bits_simd() }
-    }
-
-    #[cfg(not(target_feature = "avx2"))]
-    pub fn mobility_bits(&self) -> u64 {
-        self.mobility_bits_scalar()
+        self.mobility_bits_simd()
     }
 
     pub fn mobility(&self) -> Vec<usize> {
@@ -414,10 +332,10 @@ impl Board {
         const MASKS: [u64; 4] = [MASK_TOP, MASK_BOTTOM, MASK_LEFT, MASK_RIGHT];
         let mut res = 0;
         for mask in &MASKS {
-            let me = pext(self.player, *mask) as usize;
-            let op = pext(self.opponent, *mask) as usize;
+            let me = self.player.pext(*mask) as usize;
+            let op = self.opponent.pext(*mask) as usize;
             let base3 = BASE3[me] + 2 * BASE3[op];
-            res |= pdep(STABLE[base3], *mask);
+            res |= STABLE[base3].pdep(*mask);
         }
         let filled = !self.empty();
         let mut filled_v = filled;
@@ -572,6 +490,7 @@ impl BoardWithColor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn pass(&self) -> Option<BoardWithColor> {
         Some(BoardWithColor {
             board: self.board.pass()?,

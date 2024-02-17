@@ -1,4 +1,58 @@
+#[cfg(target_feature = "bmi2")]
 use core::arch::x86_64::{_pdep_u64, _pext_u64};
+
+pub trait BitManip {
+    fn pext(&self, mask: Self) -> Self;
+    fn pdep(&self, mask: Self) -> Self;
+}
+
+impl BitManip for u64 {
+    #[cfg(target_feature = "avx2")]
+    fn pext(&self, mask: u64) -> u64 {
+        unsafe { _pext_u64(*self, mask) }
+    }
+
+    #[cfg(not(target_feature = "avx2"))]
+    fn pext(&self, mut mask: u64) -> u64 {
+        let mut x = *self;
+        x = x & mask;
+        let mut mk = !mask << 1;
+        for i in 0..6 {
+            let mut mp = mk ^ (mk << 1);
+            mp ^= mp << 2;
+            mp ^= mp << 4;
+            mp ^= mp << 8;
+            mp ^= mp << 16;
+            mp ^= mp << 32;
+            let mv = mp & mask;
+            mask = mask ^ mv | (mv >> (1 << i));
+            let t = x & mv;
+            x = x ^ t | (t >> (1 << i));
+            mk = mk & !mp;
+        }
+        x
+    }
+
+    #[cfg(target_feature = "bmi1")]
+    fn pdep(&self, mask: u64) -> u64 {
+        unsafe { _pdep_u64(*self, mask) }
+    }
+
+    #[cfg(not(target_feature = "bmi2"))]
+    fn pdep(&self, mut mask: u64) -> u64 {
+        let mut x = *self;
+        let mut res = 0;
+        while mask != 0 {
+            let bit = mask & mask.wrapping_neg();
+            if (x & 1) == 1 {
+                res |= bit;
+            }
+            x >>= 1;
+            mask ^= bit;
+        }
+        res
+    }
+}
 
 pub fn popcnt(x: u64) -> i8 {
     x.count_ones() as i8
@@ -19,6 +73,13 @@ pub fn flip_horizontal(mut x: u64) -> u64 {
     x
 }
 
+// delta swap: bit swapping with mask
+//    MSB F              0 LSB
+// x:    [ponmlkjihgfedcba]
+// mask: [0011000010000000]
+// delta swap with shift = 3
+// res:  [pokjlnmiegfhdcba]
+//          ^^ ^^ ^  ^
 pub fn delta_swap(x: u64, mask: u64, delta: isize) -> u64 {
     let tmp = mask & (x ^ (x << delta));
     x ^ tmp ^ (tmp >> delta)
@@ -41,15 +102,6 @@ pub fn mirror_under_8(mut x: u64) -> u64 {
     x = ((x >> 2) & 0x33) | ((x << 2) & 0xCC);
     x = ((x >> 1) & 0x55) | ((x << 1) & 0xAA);
     x
-}
-
-pub fn pext(x: u64, mask: u64) -> u64 {
-    unsafe { _pext_u64(x, mask) }
-}
-
-#[allow(dead_code)]
-pub fn pdep(x: u64, mask: u64) -> u64 {
-    unsafe { _pdep_u64(x, mask) }
 }
 
 pub const BASE3: [usize; 256] = {

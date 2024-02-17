@@ -265,8 +265,8 @@ impl WeightedPattern {
     fn generate_indices_impl(&self, board: &Board) -> Vec<u32> {
         let mut indices = Vec::new();
         for (idx, pattern) in self.patterns.iter().enumerate() {
-            let pbit = pext(board.player, *pattern) as usize;
-            let obit = pext(board.opponent, *pattern) as usize;
+            let pbit = board.player.pext(*pattern) as usize;
+            let obit = board.opponent.pext(*pattern) as usize;
             let pattern_index = self.base3_converter.to_base3(pbit, obit) + self.pattern_starts[idx];
             indices.push(pattern_index as u32);
         }
