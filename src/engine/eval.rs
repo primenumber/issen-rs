@@ -141,6 +141,7 @@ impl Parameters {
             pattern_weights.extend(ex_weights);
             patterns.push(pattern);
         }
+        pattern_weights.push(0);
         while offsets.len() % 16 != 0 {
             offsets.push(offset as u32);
         }
