@@ -63,50 +63,52 @@ impl LastCache {
         }
     }
 
-    unsafe fn solve_last_impl(&self, board: Board) -> (i8, usize) {
-        let pos = board.empty().trailing_zeros() as usize;
-        let row = pos >> 3;
-        let col = pos & 0b111;
-        let row_bits = (board.player >> (row * 8)) & 0xff;
-        let &(col_mask, diag1_mask, diag2_mask) = self.masks.get_unchecked(pos);
-        let &(diag1_idx, diag2_idx) = self.indices.get_unchecked(pos);
-        let &row_score = self.table.get_unchecked((row_bits as usize) * 8 + col);
-        let col_bits = board.player.pext(col_mask);
-        let &col_score = self.table.get_unchecked((col_bits as usize) * 8 + row);
-        let diag1_bits = board.player.pext(diag1_mask);
-        let &diag1_score = self
-            .table
-            .get_unchecked((diag1_bits as usize) * 8 + diag1_idx as usize);
-        let diag2_bits = board.player.pext(diag2_mask);
-        let &diag2_score = self
-            .table
-            .get_unchecked((diag2_bits as usize) * 8 + diag2_idx as usize);
-        let pcnt = popcnt(board.player);
-        let ocnt = 63 - pcnt;
-        let diff_first = row_score.0 + col_score.0 + diag1_score.0 + diag2_score.0;
-        if diff_first > 0 {
-            (pcnt - ocnt + 2 * diff_first + 1, 1)
-        } else {
-            let diag1_bits_second = board.opponent.pext(diag1_mask);
-            let &diag1_score_second = self
+    fn solve_last_impl(&self, board: Board) -> (i8, usize) {
+        unsafe {
+            let pos = board.empty().trailing_zeros() as usize;
+            let row = pos >> 3;
+            let col = pos & 0b111;
+            let row_bits = (board.player >> (row * 8)) & 0xff;
+            let &(col_mask, diag1_mask, diag2_mask) = self.masks.get_unchecked(pos);
+            let &(diag1_idx, diag2_idx) = self.indices.get_unchecked(pos);
+            let &row_score = self.table.get_unchecked((row_bits as usize) * 8 + col);
+            let col_bits = board.player.pext(col_mask);
+            let &col_score = self.table.get_unchecked((col_bits as usize) * 8 + row);
+            let diag1_bits = board.player.pext(diag1_mask);
+            let &diag1_score = self
                 .table
-                .get_unchecked((diag1_bits_second as usize) * 8 + diag1_idx as usize);
-            let diag2_bits_second = board.opponent.pext(diag2_mask);
-            let &diag2_score_second = self
+                .get_unchecked((diag1_bits as usize) * 8 + diag1_idx as usize);
+            let diag2_bits = board.player.pext(diag2_mask);
+            let &diag2_score = self
                 .table
-                .get_unchecked((diag2_bits_second as usize) * 8 + diag2_idx as usize);
-            let diff_second = row_score.1 + col_score.1 + diag1_score_second.0 + diag2_score_second.0;
-            if diff_second > 0 {
-                (pcnt - ocnt - 2 * diff_second - 1, 2)
-            } else if pcnt > ocnt {
-                (64 - 2 * ocnt, 0)
+                .get_unchecked((diag2_bits as usize) * 8 + diag2_idx as usize);
+            let pcnt = popcnt(board.player);
+            let ocnt = 63 - pcnt;
+            let diff_first = row_score.0 + col_score.0 + diag1_score.0 + diag2_score.0;
+            if diff_first > 0 {
+                (pcnt - ocnt + 2 * diff_first + 1, 1)
             } else {
-                (2 * pcnt - 64, 0)
+                let diag1_bits_second = board.opponent.pext(diag1_mask);
+                let &diag1_score_second = self
+                    .table
+                    .get_unchecked((diag1_bits_second as usize) * 8 + diag1_idx as usize);
+                let diag2_bits_second = board.opponent.pext(diag2_mask);
+                let &diag2_score_second = self
+                    .table
+                    .get_unchecked((diag2_bits_second as usize) * 8 + diag2_idx as usize);
+                let diff_second = row_score.1 + col_score.1 + diag1_score_second.0 + diag2_score_second.0;
+                if diff_second > 0 {
+                    (pcnt - ocnt - 2 * diff_second - 1, 2)
+                } else if pcnt > ocnt {
+                    (64 - 2 * ocnt, 0)
+                } else {
+                    (2 * pcnt - 64, 0)
+                }
             }
         }
     }
 
     pub fn solve_last(&self, board: Board) -> (i8, usize) {
-        unsafe { self.solve_last_impl(board) }
+        self.solve_last_impl(board)
     }
 }
