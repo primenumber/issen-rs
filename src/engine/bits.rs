@@ -1,3 +1,4 @@
+#[cfg(target_feature = "bmi2")]
 use core::arch::x86_64::{_pdep_u64, _pext_u64};
 
 pub trait BitManip {
@@ -6,12 +7,50 @@ pub trait BitManip {
 }
 
 impl BitManip for u64 {
+    #[cfg(target_feature = "avx2")]
     fn pext(&self, mask: u64) -> u64 {
         unsafe { _pext_u64(*self, mask) }
     }
 
+    #[cfg(not(target_feature = "avx2"))]
+    fn pext(&self, mut mask: u64) -> u64 {
+        let mut x = *self;
+        x = x & mask;
+        let mut mk = !mask << 1;
+        for i in 0..6 {
+            let mut mp = mk ^ (mk << 1);
+            mp ^= mp << 2;
+            mp ^= mp << 4;
+            mp ^= mp << 8;
+            mp ^= mp << 16;
+            mp ^= mp << 32;
+            let mv = mp & mask;
+            mask = mask ^ mv | (mv >> (1 << i));
+            let t = x & mv;
+            x = x ^ t | (t >> (1 << i));
+            mk = mk & !mp;
+        }
+        x
+    }
+
+    #[cfg(target_feature = "bmi1")]
     fn pdep(&self, mask: u64) -> u64 {
         unsafe { _pdep_u64(*self, mask) }
+    }
+
+    #[cfg(not(target_feature = "bmi2"))]
+    fn pdep(&self, mut mask: u64) -> u64 {
+        let mut x = *self;
+        let mut res = 0;
+        while mask != 0 {
+            let bit = mask & mask.wrapping_neg();
+            if (x & 1) == 1 {
+                res |= bit;
+            }
+            x >>= 1;
+            mask ^= bit;
+        }
+        res
     }
 }
 
