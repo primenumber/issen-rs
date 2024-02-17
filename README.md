@@ -8,7 +8,8 @@ GPLv3
 
 ## prerequirements
 
-AVX2 and BMI2 enabled x86\_64 CPU (Intel: Haswell or later, AMD: Excavator or later)
+~~AVX2 and BMI2 enabled x86\_64 CPU (Intel: Haswell or later, AMD: Excavator or later)~~
+issen-rs is now portable! We have confirmed that it works on x86\_64 (AMD64) and AArch64.
 
 ## Setup
 
