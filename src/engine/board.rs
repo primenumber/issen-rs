@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod test;
+#[cfg(target_feature = "neon")]
+use std::arch::aarch64::*;
 use crate::engine::bits::*;
 use crate::engine::hand::*;
 use anyhow::Result;
@@ -38,7 +40,22 @@ fn smart_upper_bit(x: u64x4) -> u64x4 {
     Simd::splat(0x8000_0000_0000_0000u64) >> y
 }
 
-#[cfg(not(all(target_feature = "avx512cd", target_feature = "avx512vl")))]
+#[cfg(target_feature = "neon")]
+fn smart_upper_bit(x: u64x4) -> u64x4 {
+    unsafe {
+        let x0 = vreinterpretq_u8_u64(x.resize::<2>(0).into());
+        let x1 = vreinterpretq_u8_u64(x.rotate_elements_right::<2>().resize::<2>(0).into());
+        let y0 = vreinterpretq_s64_u8(vrev64q_u8(vrbitq_u8(x0)));
+        let y1 = vreinterpretq_s64_u8(vrev64q_u8(vrbitq_u8(x1)));
+        let z0 = vandq_s64(y0, vnegq_s64(y0));
+        let z1 = vandq_s64(y1, vnegq_s64(y1));
+        let w0: u64x2 = vreinterpretq_u64_u8(vrev64q_u8(vrbitq_u8(vreinterpretq_u8_s64(z0)))).into();
+        let w1: u64x2 = vreinterpretq_u64_u8(vrev64q_u8(vrbitq_u8(vreinterpretq_u8_s64(z1)))).into();
+        simd_swizzle!(w0, w1, [0, 1, 2, 3])
+    }
+}
+
+#[cfg(not(any(target_feature = "neon", all(target_feature = "avx512cd", target_feature = "avx512vl"))))]
 fn smart_upper_bit(mut x: u64x4) -> u64x4 {
     x |= x >> u64x4::from_array([8, 1, 7, 9]);
     x |= x >> u64x4::from_array([16, 2, 14, 18]);
