@@ -41,10 +41,10 @@ async fn worker_body() {
         parallel_depth_limit: 12,
         parallel_empties_limit: 16,
         eval_ordering_limit: 15,
-        res_cache_limit: 11,
+        res_cache_limit: 12,
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
-        static_ordering_limit: 3,
+        static_ordering_limit: 5,
     };
     let evaluator = Arc::new(Evaluator::new("table-220710"));
     let res_cache = Arc::new(ResCacheTable::new(256, 65536));
