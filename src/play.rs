@@ -9,8 +9,6 @@ use crate::setup::*;
 use crate::train::*;
 use clap::ArgMatches;
 use rand::prelude::*;
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::prelude::*;
