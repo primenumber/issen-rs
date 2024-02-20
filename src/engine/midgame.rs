@@ -5,7 +5,6 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use dashmap::DashSet;
-use num_cpus;
 use std::cmp::max;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
