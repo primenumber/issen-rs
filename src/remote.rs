@@ -38,7 +38,7 @@ async fn shutdown_signal() {
 async fn worker_body() {
     let search_params = SearchParams {
         reduce: false,
-        parallel_depth_limit: 12,
+        parallel_depth_limit: 16,
         parallel_empties_limit: 16,
         eval_ordering_limit: 15,
         res_cache_limit: 12,
