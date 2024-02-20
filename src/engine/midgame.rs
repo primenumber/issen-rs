@@ -97,7 +97,7 @@ fn simplified_abdada_intro(
     depth: i8,
 ) -> Option<(i8, Option<Hand>)> {
     let rem = popcnt(board.empty());
-    if depth >= ctx.solve_obj.params.ybwc_depth_limit || rem < ctx.solve_obj.params.ybwc_empties_limit {
+    if depth >= ctx.solve_obj.params.parallel_depth_limit || rem < ctx.solve_obj.params.parallel_empties_limit {
         let (res, stat) = solve_inner(&mut ctx.solve_obj, board, (alpha, beta), passed);
         ctx.stats.merge(stat);
         return Some((res, None));

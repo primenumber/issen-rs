@@ -239,7 +239,7 @@ fn play_with_book(
 fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result<()> {
     let book = Arc::new(Mutex::new(Book::import(in_book_path)?));
     let mut solve_obj = setup_default();
-    solve_obj.params.ybwc_empties_limit = 64;
+    solve_obj.params.parallel_empties_limit = 64;
     let sub_solver = Arc::new(SubSolver::new(&[]));
     (0..repeat).into_par_iter().for_each(|i| {
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
