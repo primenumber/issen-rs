@@ -28,11 +28,10 @@ fn simplified_abdada_body(
     if v.is_empty() {
         if passed {
             return Some((board.score(), Some(Hand::Pass)));
-        } else {
-            let (child_res, _child_best) =
-                simplified_abdada_intro(ctx, board.pass_unchecked(), (-beta, -alpha), true, depth)?;
-            return Some((-child_res, Some(Hand::Pass)));
         }
+        let (child_res, _child_best) =
+            simplified_abdada_intro(ctx, board.pass_unchecked(), (-beta, -alpha), true, depth)?;
+        return Some((-child_res, Some(Hand::Pass)));
     }
     let mut res = -(BOARD_SIZE as i8);
     let mut best = None;
