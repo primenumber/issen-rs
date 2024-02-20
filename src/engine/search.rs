@@ -36,10 +36,8 @@ pub struct SolveResponse {
 #[derive(Clone)]
 pub struct SearchParams {
     pub reduce: bool,
-    pub ybwc_depth_limit: i8,
-    pub ybwc_elder_add: i8,
-    pub ybwc_younger_add: i8,
-    pub ybwc_empties_limit: i8,
+    pub parallel_depth_limit: i8,
+    pub parallel_empties_limit: i8,
     pub eval_ordering_limit: i8,
     pub res_cache_limit: i8,
     pub stability_cut_limit: i8,
