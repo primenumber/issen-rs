@@ -4,7 +4,6 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 #[cfg(target_feature = "avx2")]
 use core::arch::x86_64::*;
-use std::cmp::max;
 use std::fs::File;
 use std::io::Read;
 use std::mem;
@@ -43,6 +42,27 @@ impl EvaluatorConfig {
 
 const NON_PATTERN_SCORES: usize = 4;
 
+const BASE_2_TO_3_TABLE_BITS: usize = 13;
+// interprete base-2 number as base-3 number
+// y = radix_parse(radix_fmt(x, 2), 3)
+// BASE_2_TO_3[198] = BASE_2_TO_3[11001010_(2)] = 11001010_(3) = 2946
+const BASE_2_TO_3: [usize; 1 << BASE_2_TO_3_TABLE_BITS] = {
+    let mut table = [0usize; 1 << BASE_2_TO_3_TABLE_BITS];
+    let mut i = 0;
+    while i < table.len() {
+        let mut j = i;
+        let mut base3 = 0;
+        while j > 0 {
+            base3 *= 3;
+            base3 += j % 2;
+            j /= 2;
+        }
+        table[i] = base3;
+        i += 1;
+    }
+    table
+};
+
 struct EvaluatorPattern {
     mask: u64,
     offset: usize,
@@ -77,7 +97,7 @@ impl Parameters {
         indices
     }
 
-    fn expand_weights_by_d4(weights: &[i16], pattern: u64, b3conv: &[usize]) -> Vec<(u64, Vec<i16>)> {
+    fn expand_weights_by_d4(weights: &[i16], pattern: u64) -> Vec<(u64, Vec<i16>)> {
         let mut permuted_weights = vec![vec![0; weights.len()]; 8];
         let perm = Self::permute_indices(pattern);
         let pattern_size = pattern.count_ones();
@@ -86,11 +106,11 @@ impl Parameters {
                 if (pidx & oidx) != 0 {
                     continue;
                 }
-                let orig_index = b3conv[pidx] + b3conv[oidx] * 2;
+                let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
                 for i in 0..8 {
                     let t_pidx = perm[i][pidx];
                     let t_oidx = perm[i][oidx];
-                    let index = b3conv[t_pidx] + b3conv[t_oidx] * 2;
+                    let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
                     permuted_weights[i][index] = weights[orig_index];
                 }
             }
@@ -105,14 +125,13 @@ impl Parameters {
         patterns_by_d4.into_iter().zip(permuted_weights).collect()
     }
 
-    fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern], b3conv: &[usize]) -> Option<Parameters> {
+    fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern]) -> Option<Parameters> {
         let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
         for pattern in orig_patterns.iter() {
             let expanded = if pattern.mask != 0 {
                 Self::expand_weights_by_d4(
                     &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
                     pattern.mask,
-                    b3conv,
                 )
             } else {
                 // non-pattern scores should not be expanded
@@ -225,13 +244,13 @@ impl Evaluator {
         result
     }
 
-    fn generate_indices_table(patterns: &[u64], b3conv: &[usize]) -> Vec<u16> {
+    fn generate_indices_table(patterns: &[u64]) -> Vec<u16> {
         let mut result = Vec::new();
         for row in 0..8 {
             for row_bits in 0..256 {
                 let bits = row_bits << (row * 8);
                 for &pattern in patterns {
-                    let index = b3conv[bits.pext(pattern) as usize];
+                    let index = BASE_2_TO_3[bits.pext(pattern) as usize];
                     result.push(index as u16);
                 }
                 while result.len() % 16 != 0 {
@@ -240,20 +259,6 @@ impl Evaluator {
             }
         }
         result
-    }
-
-    fn generate_base3_vec(max_bits: i8) -> Vec<usize> {
-        let mut base3 = vec![0; 1 << max_bits];
-        for (i, item) in base3.iter_mut().enumerate() {
-            let mut sum = 0;
-            for j in 0..max_bits {
-                if ((i >> j) & 1) != 0 {
-                    sum += pow3(j);
-                }
-            }
-            *item = sum;
-        }
-        base3
     }
 
     fn load_all_weights(table_path: &Path, config: &EvaluatorConfig, length: usize) -> Vec<Vec<i16>> {
@@ -265,10 +270,9 @@ impl Evaluator {
         weights
     }
 
-    fn load_patterns(config: &EvaluatorConfig) -> (Vec<EvaluatorPattern>, usize, i8) {
+    fn load_patterns(config: &EvaluatorConfig) -> (Vec<EvaluatorPattern>, usize) {
         let mut patterns = Vec::new();
         let mut offset = 0;
-        let mut max_bits = 0;
         for pattern_str in config.masks.iter() {
             let mask = u64::from_str_radix(pattern_str, 2).unwrap();
             let mask_size = popcnt(mask);
@@ -279,7 +283,6 @@ impl Evaluator {
                 pattern_count,
             });
             offset += pattern_count;
-            max_bits = max(max_bits, mask_size);
         }
 
         patterns.push(EvaluatorPattern {
@@ -288,28 +291,27 @@ impl Evaluator {
             pattern_count: NON_PATTERN_SCORES,
         });
         offset += NON_PATTERN_SCORES;
-        (patterns, offset, max_bits)
+        (patterns, offset)
     }
 
     pub fn new(table_dirname: &str) -> Evaluator {
         let table_path = Path::new(table_dirname);
         let config_path = table_path.join("config.yaml");
         let config = EvaluatorConfig::new(&config_path).unwrap();
-        let (patterns, length, max_bits) = Self::load_patterns(&config);
+        let (patterns, length) = Self::load_patterns(&config);
         let weights = Self::load_all_weights(table_path, &config, length);
         let smoothed_weights = Self::smooth_weight(&weights, length, 1);
-        let base3 = Self::generate_base3_vec(max_bits);
         let params: Vec<_> = smoothed_weights
             .iter()
             .enumerate()
             .map(|(i, w)| {
-                let mut param = Parameters::new(w, &patterns, &base3).unwrap();
+                let mut param = Parameters::new(w, &patterns).unwrap();
                 param.fold_parity(i as i8 + config.stones_range.start());
                 param
             })
             .collect();
 
-        let line_to_indices = Self::generate_indices_table(&params.first().unwrap().patterns, &base3);
+        let line_to_indices = Self::generate_indices_table(&params.first().unwrap().patterns);
 
         Evaluator {
             stones_range: config.stones_range,
