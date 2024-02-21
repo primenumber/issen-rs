@@ -52,9 +52,10 @@ const BASE_2_TO_3: [usize; 1 << BASE_2_TO_3_TABLE_BITS] = {
     while i < table.len() {
         let mut j = i;
         let mut base3 = 0;
+        let mut pow3 = 1;
         while j > 0 {
-            base3 *= 3;
-            base3 += j % 2;
+            base3 += (j % 2) * pow3;
+            pow3 *= 3;
             j /= 2;
         }
         table[i] = base3;
