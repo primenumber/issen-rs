@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn test_smooth() {
-        for raw in -10000..=10000 {
+        for raw in -60000..=60000 {
             let smoothed = Evaluator::smooth_val(raw);
             assert!(smoothed > EVAL_SCORE_MIN);
             assert!(smoothed < EVAL_SCORE_MAX);
