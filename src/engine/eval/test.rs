@@ -1,7 +1,6 @@
 extern crate test;
 use super::*;
 use crate::setup::*;
-use std::fs::File;
 use std::io::{BufRead, BufReader};
 use test::Bencher;
 
