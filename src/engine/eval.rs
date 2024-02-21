@@ -193,19 +193,15 @@ const INDICES_VECTORIZER_VECTOR_COUNT: usize = 3;
 const INDICES_VECTORIZER_LEN: usize = INDICES_VECTORIZER_VECTOR_COUNT * INDICES_VECTORIZER_VECTOR_ELEMENTS;
 
 struct IndicesVectorizer<const W: usize> {
-    chunk_count: usize,
-    shifts: Vec<usize>,
     indices: Vec<u16>,
 }
 
 impl<const W: usize> IndicesVectorizer<W> {
     fn new(patterns: &[u64]) -> Self {
         let chunk_count = (64 + W - 1) / W;
-        let mut shifts = Vec::new();
         let mut indices = Vec::new();
         for chunk_idx in 0..chunk_count {
             let shift = chunk_idx * W;
-            shifts.push(shift);
             for bits in 0..(1 << W) {
                 let chunk_bits = bits << shift;
                 for &pattern in patterns {
@@ -217,52 +213,31 @@ impl<const W: usize> IndicesVectorizer<W> {
                 }
             }
         }
-        Self {
-            chunk_count,
-            shifts,
-            indices,
-        }
+        Self { indices }
     }
 
     fn feature_indices(&self, board: Board) -> [u16x16; INDICES_VECTORIZER_VECTOR_COUNT] {
-        let mut idx0 = Simd::splat(0);
-        let mut idx1 = Simd::splat(0);
-        let mut idx2 = Simd::splat(0);
+        let mut indices = [Simd::splat(0); INDICES_VECTORIZER_VECTOR_COUNT];
         let mask: u64 = (1 << W) - 1;
-        for chunk_idx in 0..self.chunk_count {
+        let chunk_count = (64 + W - 1) / W;
+        for chunk_idx in 0..chunk_count {
             let pidx = ((board.player >> (chunk_idx * W)) & mask) as usize;
             let oidx = ((board.opponent >> (chunk_idx * W)) & mask) as usize;
             let offset_base_p = INDICES_VECTORIZER_LEN * (pidx + (1 << W) * chunk_idx);
             let offset_base_o = INDICES_VECTORIZER_LEN * (oidx + (1 << W) * chunk_idx);
-            let vp0 = Simd::from_slice(unsafe {
-                self.indices
-                    .get_unchecked(offset_base_p..(offset_base_p + 16))
-            });
-            let vp1 = Simd::from_slice(unsafe {
-                self.indices
-                    .get_unchecked((offset_base_p + 16)..(offset_base_p + 32))
-            });
-            let vp2 = Simd::from_slice(unsafe {
-                self.indices
-                    .get_unchecked((offset_base_p + 32)..(offset_base_p + 48))
-            });
-            let vo0 = Simd::from_slice(unsafe {
-                self.indices
-                    .get_unchecked(offset_base_o..(offset_base_o + 16))
-            });
-            let vo1 = Simd::from_slice(unsafe {
-                self.indices
-                    .get_unchecked((offset_base_o + 16)..(offset_base_o + 32))
-            });
-            let vo2 = Simd::from_slice(unsafe {
-                self.indices
-                    .get_unchecked((offset_base_o + 32)..(offset_base_o + 48))
-            });
-            idx0 = idx0 + vp0 + vo0 + vo0;
-            idx1 = idx1 + vp1 + vo1 + vo1;
-            idx2 = idx2 + vp2 + vo2 + vo2;
+            for (vidx, idx) in indices.iter_mut().enumerate() {
+                let vp = Simd::from_slice(unsafe {
+                    self.indices
+                        .get_unchecked((offset_base_p + 16 * vidx)..(offset_base_p + 16 * (vidx + 1)))
+                });
+                let vo = Simd::from_slice(unsafe {
+                    self.indices
+                        .get_unchecked((offset_base_o + 16 * vidx)..(offset_base_o + 16 * (vidx + 1)))
+                });
+                *idx += vp + vo + vo;
+            }
         }
-        [idx0, idx1, idx2]
+        indices
     }
 }
 
@@ -409,13 +384,13 @@ impl Evaluator {
                 let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
                 (lo, hi)
             }
-            let (idxh0, idxh1) = unpack_idx(vidx[0].into());
-            let (idxh2, idxh3) = unpack_idx(vidx[1].into());
-            let (idxh4, idxh5) = unpack_idx(vidx[2].into());
+            let (idxh0, idxh1) = unpack_idx((*vidx.get_unchecked(0)).into());
+            let (idxh2, idxh3) = unpack_idx((*vidx.get_unchecked(1)).into());
+            let (idxh4, idxh5) = unpack_idx((*vidx.get_unchecked(2)).into());
             unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
                 let offset = _mm256_add_epi32(
                     idx,
-                    _mm256_loadu_si256(&param.offsets[start] as *const u32 as *const __m256i),
+                    _mm256_loadu_si256(param.offsets.get_unchecked(start) as *const u32 as *const __m256i),
                 );
                 _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
             }
