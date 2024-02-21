@@ -425,21 +425,20 @@ impl Evaluator {
             let vw3 = gather_weight(param, idxh3, 24);
             let vw4 = gather_weight(param, idxh4, 32);
             let vw5 = gather_weight(param, idxh5, 40);
-            unsafe fn reduce_sum(v0: __m256i, v1: __m256i, v2: __m256i, v3: __m256i, v4: __m256i, v5: __m256i) -> i32 {
+            unsafe fn vector_sum(
+                v0: __m256i,
+                v1: __m256i,
+                v2: __m256i,
+                v3: __m256i,
+                v4: __m256i,
+                v5: __m256i,
+            ) -> u16x16 {
                 let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
                 let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
                 let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
-                let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
-                let sum = _mm_add_epi16(
-                    _mm256_castsi256_si128(sum),
-                    _mm256_extracti128_si256(sum, 1),
-                );
-                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-                _mm_cvtsi128_si32(sum) as u16 as i16 as i32
+                _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2).into()
             }
-            reduce_sum(vw0, vw1, vw2, vw3, vw4, vw5)
+            vector_sum(vw0, vw1, vw2, vw3, vw4, vw5).reduce_sum() as i16 as i32
         }
     }
 
