@@ -185,10 +185,92 @@ impl Parameters {
     }
 }
 
+// not configuable
+const INDICES_VECTORIZER_VECTOR_ELEMENTS: usize = 16;
+const INDICES_VECTORIZER_VECTOR_COUNT: usize = 3;
+const INDICES_VECTORIZER_LEN: usize = INDICES_VECTORIZER_VECTOR_COUNT * INDICES_VECTORIZER_VECTOR_ELEMENTS;
+
+struct IndicesVectorizer<const W: usize> {
+    chunk_count: usize,
+    shifts: Vec<usize>,
+    indices: Vec<u16>,
+}
+
+impl<const W: usize> IndicesVectorizer<W> {
+    fn new(patterns: &[u64]) -> Self {
+        let chunk_count = (64 + W - 1) / W;
+        let mut shifts = Vec::new();
+        let mut indices = Vec::new();
+        for chunk_idx in 0..chunk_count {
+            let shift = chunk_idx * W;
+            shifts.push(shift);
+            for bits in 0..(1 << W) {
+                let chunk_bits = bits << shift;
+                for &pattern in patterns {
+                    let index = BASE_2_TO_3[chunk_bits.pext(pattern) as usize];
+                    indices.push(index as u16);
+                }
+                while indices.len() % INDICES_VECTORIZER_VECTOR_ELEMENTS != 0 {
+                    indices.push(0);
+                }
+            }
+        }
+        Self {
+            chunk_count,
+            shifts,
+            indices,
+        }
+    }
+
+    fn feature_indices(&self, board: Board) -> [u16x16; INDICES_VECTORIZER_VECTOR_COUNT] {
+        let mut idx0 = Simd::splat(0);
+        let mut idx1 = Simd::splat(0);
+        let mut idx2 = Simd::splat(0);
+        let mask: u64 = (1 << W) - 1;
+        for chunk_idx in 0..self.chunk_count {
+            let pidx = ((board.player >> (chunk_idx * W)) & mask) as usize;
+            let oidx = ((board.opponent >> (chunk_idx * W)) & mask) as usize;
+            let offset_base_p = INDICES_VECTORIZER_LEN * (pidx + (1 << W) * chunk_idx);
+            let offset_base_o = INDICES_VECTORIZER_LEN * (oidx + (1 << W) * chunk_idx);
+            let vp0 = Simd::from_slice(unsafe {
+                self.indices
+                    .get_unchecked(offset_base_p..(offset_base_p + 16))
+            });
+            let vp1 = Simd::from_slice(unsafe {
+                self.indices
+                    .get_unchecked((offset_base_p + 16)..(offset_base_p + 32))
+            });
+            let vp2 = Simd::from_slice(unsafe {
+                self.indices
+                    .get_unchecked((offset_base_p + 32)..(offset_base_p + 48))
+            });
+            let vo0 = Simd::from_slice(unsafe {
+                self.indices
+                    .get_unchecked(offset_base_o..(offset_base_o + 16))
+            });
+            let vo1 = Simd::from_slice(unsafe {
+                self.indices
+                    .get_unchecked((offset_base_o + 16)..(offset_base_o + 32))
+            });
+            let vo2 = Simd::from_slice(unsafe {
+                self.indices
+                    .get_unchecked((offset_base_o + 32)..(offset_base_o + 48))
+            });
+            idx0 = idx0 + vp0 + vo0 + vo0;
+            idx1 = idx1 + vp1 + vo1 + vo1;
+            idx2 = idx2 + vp2 + vo2 + vo2;
+        }
+        [idx0, idx1, idx2]
+    }
+}
+
+// configuable
+const INDICES_VECTORIZER_PACK_SIZE: usize = 8;
+
 pub struct Evaluator {
     stones_range: RangeInclusive<i8>,
     params: Vec<Parameters>,
-    line_to_indices: Vec<u16>,
+    vectorizer: IndicesVectorizer<INDICES_VECTORIZER_PACK_SIZE>,
 }
 
 fn pow3(x: i8) -> usize {
@@ -245,23 +327,6 @@ impl Evaluator {
         result
     }
 
-    fn generate_indices_table(patterns: &[u64]) -> Vec<u16> {
-        let mut result = Vec::new();
-        for row in 0..8 {
-            for row_bits in 0..256 {
-                let bits = row_bits << (row * 8);
-                for &pattern in patterns {
-                    let index = BASE_2_TO_3[bits.pext(pattern) as usize];
-                    result.push(index as u16);
-                }
-                while result.len() % 16 != 0 {
-                    result.push(0);
-                }
-            }
-        }
-        result
-    }
-
     fn load_all_weights(table_path: &Path, config: &EvaluatorConfig, length: usize) -> Vec<Vec<i16>> {
         let mut weights = Vec::new();
         for num in config.stones_range.clone() {
@@ -312,12 +377,12 @@ impl Evaluator {
             })
             .collect();
 
-        let line_to_indices = Self::generate_indices_table(&params.first().unwrap().patterns);
+        let vectorizer = IndicesVectorizer::<INDICES_VECTORIZER_PACK_SIZE>::new(&params.first().unwrap().patterns);
 
         Evaluator {
             stones_range: config.stones_range,
             params,
-            line_to_indices,
+            vectorizer,
         }
     }
 
@@ -330,46 +395,6 @@ impl Evaluator {
         } else {
             raw_score
         }) as i16
-    }
-
-    fn feature_indices(&self, board: Board) -> [u16x16; 3] {
-        let mut idx0 = Simd::splat(0);
-        let mut idx1 = Simd::splat(0);
-        let mut idx2 = Simd::splat(0);
-        for row in 0..8 {
-            let pidx = ((board.player >> (row * 8)) & 0xff) as usize;
-            let oidx = ((board.opponent >> (row * 8)) & 0xff) as usize;
-            let offset_base_p = 48 * (pidx + 256 * row);
-            let offset_base_o = 48 * (oidx + 256 * row);
-            let vp0 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked(offset_base_p..(offset_base_p + 16))
-            });
-            let vp1 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_p + 16)..(offset_base_p + 32))
-            });
-            let vp2 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_p + 32)..(offset_base_p + 48))
-            });
-            let vo0 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked(offset_base_o..(offset_base_o + 16))
-            });
-            let vo1 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_o + 16)..(offset_base_o + 32))
-            });
-            let vo2 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_o + 32)..(offset_base_o + 48))
-            });
-            idx0 = idx0 + vp0 + vo0 + vo0;
-            idx1 = idx1 + vp1 + vo1 + vo1;
-            idx2 = idx2 + vp2 + vo2 + vo2;
-        }
-        [idx0, idx1, idx2]
     }
 
     #[cfg(target_feature = "avx2")]
@@ -445,7 +470,7 @@ impl Evaluator {
         let mut score = score as i32;
 
         // pattern-based scores
-        let vidx = self.feature_indices(board);
+        let vidx = self.vectorizer.feature_indices(board);
         score += self.eval_gather(param, vidx);
         score
     }
