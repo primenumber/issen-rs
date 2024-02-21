@@ -40,25 +40,27 @@ impl EvaluatorConfig {
     }
 }
 
+// interprete base-2 number as base-3 number
+// base_2_to_3(x) := radix_parse(radix_fmt(x, 2), 3)
+const fn base_2_to_3(mut x: usize) -> usize {
+    let mut base3 = 0;
+    let mut pow3 = 1;
+    while x > 0 {
+        base3 += (x % 2) * pow3;
+        pow3 *= 3;
+        x /= 2;
+    }
+    base3
+}
+
 const NON_PATTERN_SCORES: usize = 4;
 
 const BASE_2_TO_3_TABLE_BITS: usize = 13;
-// interprete base-2 number as base-3 number
-// y = radix_parse(radix_fmt(x, 2), 3)
-// BASE_2_TO_3[198] = BASE_2_TO_3[11001010_(2)] = 11001010_(3) = 2946
 const BASE_2_TO_3: [usize; 1 << BASE_2_TO_3_TABLE_BITS] = {
     let mut table = [0usize; 1 << BASE_2_TO_3_TABLE_BITS];
     let mut i = 0;
     while i < table.len() {
-        let mut j = i;
-        let mut base3 = 0;
-        let mut pow3 = 1;
-        while j > 0 {
-            base3 += (j % 2) * pow3;
-            pow3 *= 3;
-            j /= 2;
-        }
-        table[i] = base3;
+        table[i] = base_2_to_3(i);
         i += 1;
     }
     table
