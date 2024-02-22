@@ -113,52 +113,63 @@ struct EvaluatorPattern {
     pattern_count: usize,
 }
 
+struct PatternPermutation {
+    perms: Vec<(u64, Vec<usize>)>,
+}
+
 impl EvaluatorPattern {
-    fn permute_indices_base2(&self) -> Vec<(u64, Vec<usize>)> {
+    fn permute_indices_base2(&self) -> PatternPermutation {
         let pattern_size = self.mask.count_ones();
         let table_size = (1 << pattern_size) as usize;
-        let square_operations = SquareGroup::all_elements();
-        square_operations
-            .iter()
-            .map(|op| {
-                let pattern = op.apply(self.mask);
-                let permutation = (0..table_size)
-                    .into_iter()
-                    .map(|pidx| {
-                        let bits = (pidx as u64).pdep(self.mask);
-                        op.apply(bits).pext(pattern) as usize
-                    })
-                    .collect();
-                (pattern, permutation)
-            })
-            .collect()
+        PatternPermutation {
+            perms: SquareGroup::all_elements()
+                .iter()
+                .map(|op| {
+                    let pattern = op.apply(self.mask);
+                    let permutation = (0..table_size)
+                        .into_iter()
+                        .map(|pidx| {
+                            let bits = (pidx as u64).pdep(self.mask);
+                            op.apply(bits).pext(pattern) as usize
+                        })
+                        .collect();
+                    (pattern, permutation)
+                })
+                .collect(),
+        }
     }
 
-    fn permute_indices(&self) -> Vec<(u64, Vec<usize>)> {
+    fn permute_indices(&self) -> PatternPermutation {
         let pattern_size = self.mask.count_ones();
-        self.permute_indices_base2()
-            .iter()
-            .map(|(pattern, perm_base2)| {
-                let mut perm_base3 = vec![0; pow3(pattern_size as i8)];
-                for pidx in 0..(1 << pattern_size) {
-                    for oidx in 0..(1 << pattern_size) {
-                        if (pidx & oidx) != 0 {
-                            continue;
+        PatternPermutation {
+            perms: self
+                .permute_indices_base2()
+                .perms
+                .iter()
+                .map(|(pattern, perm_base2)| {
+                    let mut perm_base3 = vec![0; pow3(pattern_size as i8)];
+                    for pidx in 0..(1 << pattern_size) {
+                        for oidx in 0..(1 << pattern_size) {
+                            if (pidx & oidx) != 0 {
+                                continue;
+                            }
+                            let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
+                            let t_pidx = perm_base2[pidx];
+                            let t_oidx = perm_base2[oidx];
+                            let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
+                            perm_base3[index] = orig_index;
                         }
-                        let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
-                        let t_pidx = perm_base2[pidx];
-                        let t_oidx = perm_base2[oidx];
-                        let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
-                        perm_base3[index] = orig_index;
                     }
-                }
-                (*pattern, perm_base3)
-            })
-            .collect()
+                    (*pattern, perm_base3)
+                })
+                .collect(),
+        }
     }
+}
 
+impl PatternPermutation {
     fn expand_weights_by_d4(&self, weights: &[i16]) -> Vec<(u64, Vec<i16>)> {
-        self.permute_indices()
+        self.perms
             .iter()
             .map(|(pattern, perm_base3)| {
                 let mut permuted_weights = vec![0; perm_base3.len()];
@@ -168,6 +179,23 @@ impl EvaluatorPattern {
                 (*pattern, permuted_weights)
             })
             .collect()
+    }
+
+    fn expand_weights_with_compaction(&self, weights: &[i16]) -> Vec<(u64, Vec<i16>)> {
+        let mut result = Vec::new();
+        for (pattern, permed_weights) in self.expand_weights_by_d4(weights) {
+            if let Some((_, same_pattern_v)) = result
+                .iter_mut()
+                .find(|(res_pattern, _)| *res_pattern == pattern)
+            {
+                for (&mut w, &e) in same_pattern_v.iter_mut().zip(permed_weights.iter()) {
+                    w += e;
+                }
+            } else {
+                result.push((pattern, permed_weights));
+            }
+        }
+        result
     }
 }
 
