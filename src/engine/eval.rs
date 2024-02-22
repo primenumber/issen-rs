@@ -66,10 +66,109 @@ const BASE_2_TO_3: [usize; 1 << BASE_2_TO_3_TABLE_BITS] = {
     table
 };
 
+// x = R^rot M ^ mirror
+struct SquareGroup {
+    rot: u8,
+    mirror: u8,
+}
+
+impl SquareGroup {
+    #[allow(dead_code)]
+    fn compose(&self, rhs: &Self) -> Self {
+        let rot = if self.mirror != 0 {
+            (4 + self.rot - rhs.rot) % 4
+        } else {
+            (self.rot + rhs.rot) % 4
+        };
+        Self {
+            rot,
+            mirror: (self.mirror + rhs.mirror) % 2,
+        }
+    }
+
+    fn apply(&self, mut bits: u64) -> u64 {
+        if self.mirror != 0 {
+            bits = flip_diag(bits);
+        }
+        for _ in 0..self.rot {
+            bits = rot90(bits);
+        }
+        bits
+    }
+
+    fn all_elements() -> Vec<Self> {
+        let mut res = Vec::new();
+        for rot in 0..4 {
+            for mirror in 0..2 {
+                res.push(Self { rot, mirror });
+            }
+        }
+        res
+    }
+}
+
 struct EvaluatorPattern {
     mask: u64,
     offset: usize,
     pattern_count: usize,
+}
+
+impl EvaluatorPattern {
+    fn permute_indices_base2(&self) -> Vec<(u64, Vec<usize>)> {
+        let pattern_size = self.mask.count_ones();
+        let table_size = (1 << pattern_size) as usize;
+        let square_operations = SquareGroup::all_elements();
+        square_operations
+            .iter()
+            .map(|op| {
+                let pattern = op.apply(self.mask);
+                let permutation = (0..table_size)
+                    .into_iter()
+                    .map(|pidx| {
+                        let bits = (pidx as u64).pdep(self.mask);
+                        op.apply(bits).pext(pattern) as usize
+                    })
+                    .collect();
+                (pattern, permutation)
+            })
+            .collect()
+    }
+
+    fn permute_indices(&self) -> Vec<(u64, Vec<usize>)> {
+        let pattern_size = self.mask.count_ones();
+        self.permute_indices_base2()
+            .iter()
+            .map(|(pattern, perm_base2)| {
+                let mut perm_base3 = vec![0; BASE_2_TO_3[1 << pattern_size]];
+                for pidx in 0..(1 << pattern_size) {
+                    for oidx in 0..(1 << pattern_size) {
+                        if (pidx & oidx) != 0 {
+                            continue;
+                        }
+                        let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
+                        let t_pidx = perm_base2[pidx];
+                        let t_oidx = perm_base2[oidx];
+                        let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
+                        perm_base3[index] = orig_index;
+                    }
+                }
+                (*pattern, perm_base3)
+            })
+            .collect()
+    }
+
+    fn expand_weights_by_d4(&self, weights: &[i16]) -> Vec<(u64, Vec<i16>)> {
+        self.permute_indices()
+            .iter()
+            .map(|(pattern, perm_base3)| {
+                let mut permuted_weights = vec![0; perm_base3.len()];
+                for (i, &p) in perm_base3.iter().enumerate() {
+                    permuted_weights[i] = weights[p];
+                }
+                (*pattern, permuted_weights)
+            })
+            .collect()
+    }
 }
 
 struct Parameters {
@@ -83,59 +182,11 @@ struct Parameters {
 }
 
 impl Parameters {
-    fn permute_indices(pattern: u64) -> Vec<Vec<usize>> {
-        let pattern_size = pattern.count_ones();
-        let table_size = 1 << pattern_size;
-        let mut indices = vec![Vec::new(); 8];
-        for i in 0..table_size {
-            let mut t_pattern = pattern;
-            let mut t_bits = (i as u64).pdep(t_pattern);
-            for dir in 0..4 {
-                indices[dir * 2].push(t_bits.pext(t_pattern) as usize);
-                indices[dir * 2 + 1].push(flip_diag(t_bits).pext(flip_diag(t_pattern)) as usize);
-                t_bits = rot90(t_bits);
-                t_pattern = rot90(t_pattern);
-            }
-        }
-        indices
-    }
-
-    fn expand_weights_by_d4(weights: &[i16], pattern: u64) -> Vec<(u64, Vec<i16>)> {
-        let mut permuted_weights = vec![vec![0; weights.len()]; 8];
-        let perm = Self::permute_indices(pattern);
-        let pattern_size = pattern.count_ones();
-        for pidx in 0..(1 << pattern_size) {
-            for oidx in 0..(1 << pattern_size) {
-                if (pidx & oidx) != 0 {
-                    continue;
-                }
-                let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
-                for i in 0..8 {
-                    let t_pidx = perm[i][pidx];
-                    let t_oidx = perm[i][oidx];
-                    let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
-                    permuted_weights[i][index] = weights[orig_index];
-                }
-            }
-        }
-        let mut patterns_by_d4 = Vec::new();
-        let mut pattern_bits = pattern;
-        for _ in 0..4 {
-            patterns_by_d4.push(pattern_bits);
-            patterns_by_d4.push(flip_diag(pattern_bits));
-            pattern_bits = rot90(pattern_bits);
-        }
-        patterns_by_d4.into_iter().zip(permuted_weights).collect()
-    }
-
     fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern]) -> Option<Parameters> {
         let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
         for pattern in orig_patterns.iter() {
             let expanded = if pattern.mask != 0 {
-                Self::expand_weights_by_d4(
-                    &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
-                    pattern.mask,
-                )
+                pattern.expand_weights_by_d4(&orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)])
             } else {
                 // non-pattern scores should not be expanded
                 vec![(
