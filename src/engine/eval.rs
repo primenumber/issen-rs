@@ -13,7 +13,7 @@ use std::simd::prelude::*;
 use yaml_rust::yaml;
 
 struct EvaluatorConfig {
-    masks: Vec<String>,
+    masks: Vec<u64>,
     stones_range: RangeInclusive<i8>,
 }
 
@@ -27,7 +27,7 @@ impl EvaluatorConfig {
         let masks = config["masks"]
             .as_vec()?
             .iter()
-            .map(|e| e.as_str().unwrap().to_string())
+            .map(|e| u64::from_str_radix(e.as_str().unwrap(), 2).unwrap())
             .collect();
         let stones_range_yaml = &config["stone_counts"];
         let from = stones_range_yaml["from"].as_i64()? as i8;
@@ -42,8 +42,7 @@ impl EvaluatorConfig {
     fn load_patterns(&self) -> (Vec<EvaluatorPattern>, usize) {
         let mut patterns = Vec::new();
         let mut offset = 0;
-        for pattern_str in self.masks.iter() {
-            let mask = u64::from_str_radix(pattern_str, 2).unwrap();
+        for &mask in self.masks.iter() {
             let mask_size = popcnt(mask);
             let pattern_count = pow3(mask_size);
             patterns.push(EvaluatorPattern {
