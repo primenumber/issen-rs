@@ -18,7 +18,7 @@ struct EvaluatorConfig {
 }
 
 impl EvaluatorConfig {
-    fn new(config_path: &Path) -> Option<EvaluatorConfig> {
+    fn from_file(config_path: &Path) -> Option<EvaluatorConfig> {
         let mut config_file = File::open(config_path).ok()?;
         let mut config_string = String::new();
         config_file.read_to_string(&mut config_string).ok()?;
@@ -36,6 +36,101 @@ impl EvaluatorConfig {
         Some(EvaluatorConfig {
             masks,
             stones_range,
+        })
+    }
+
+    fn load_patterns(&self) -> (Vec<EvaluatorPattern>, usize) {
+        let mut patterns = Vec::new();
+        let mut offset = 0;
+        for pattern_str in self.masks.iter() {
+            let mask = u64::from_str_radix(pattern_str, 2).unwrap();
+            let mask_size = popcnt(mask);
+            let pattern_count = pow3(mask_size);
+            patterns.push(EvaluatorPattern {
+                mask,
+                offset,
+                pattern_count,
+            });
+            offset += pattern_count;
+        }
+
+        patterns.push(EvaluatorPattern {
+            mask: 0,
+            offset,
+            pattern_count: NON_PATTERN_SCORES,
+        });
+        offset += NON_PATTERN_SCORES;
+        (patterns, offset)
+    }
+}
+
+struct FoldedEvaluator {
+    config: EvaluatorConfig,
+    patterns: Vec<EvaluatorPattern>,
+    weights: Vec<Vec<i16>>,
+}
+
+impl FoldedEvaluator {
+    fn load_weight(path: &Path, length: usize) -> Option<Vec<i16>> {
+        let mut value_file = File::open(path).ok()?;
+        let mut buf = vec![0u8; length * 8];
+        value_file.read_exact(&mut buf).ok()?;
+        let mut v = Vec::with_capacity(length);
+        for i in 0usize..length {
+            let mut ary: [u8; 8] = Default::default();
+            ary.copy_from_slice(&buf[(8 * i)..(8 * (i + 1))]);
+            let raw_weight = unsafe { mem::transmute::<[u8; 8], f64>(ary) };
+            v.push(
+                (SCALE as f64 * raw_weight)
+                    .max(SCALE as f64 * -64.0)
+                    .min(SCALE as f64 * 64.0)
+                    .round() as i16,
+            );
+        }
+        Some(v)
+    }
+
+    fn smooth_weight(weights: &[Vec<i16>], length: usize, window_size: i8) -> Vec<Vec<i16>> {
+        assert_eq!(window_size % 2, 1);
+        let half_window = window_size / 2;
+        let mut result = vec![vec![0; length]; weights.len()];
+        for (i, w) in result.iter_mut().enumerate() {
+            for (k, e) in w.iter_mut().enumerate() {
+                for d in -half_window..=half_window {
+                    let j = i as isize + d as isize;
+                    let j = if j < 0 { 0 } else { j as usize };
+                    let j = if j >= weights.len() {
+                        weights.len() - 1
+                    } else {
+                        j
+                    };
+                    *e += weights[j][k];
+                }
+                *e /= window_size as i16;
+            }
+        }
+        result
+    }
+
+    fn load_all_weights(table_path: &Path, config: &EvaluatorConfig, length: usize) -> Vec<Vec<i16>> {
+        let mut weights = Vec::new();
+        for num in config.stones_range.clone() {
+            let path = table_path.join(format!("value{}", num));
+            weights.push(Self::load_weight(&path, length).unwrap());
+        }
+        weights
+    }
+
+    fn load(path: &Path) -> Option<FoldedEvaluator> {
+        let config_path = path.join("config.yaml");
+        let config = EvaluatorConfig::from_file(&config_path)?;
+        let (patterns, length) = config.load_patterns();
+        let weights = Self::load_all_weights(path, &config, length);
+        let smoothed_weights = Self::smooth_weight(&weights, length, 1);
+        Some(FoldedEvaluator {
+            config,
+            patterns,
+            weights: smoothed_weights,
         })
     }
 }
@@ -182,14 +277,14 @@ impl PatternPermutation {
     }
 
     fn expand_weights_with_compaction(&self, weights: &[i16]) -> Vec<(u64, Vec<i16>)> {
-        let mut result = Vec::new();
+        let mut result: Vec<(u64, Vec<i16>)> = Vec::new();
         for (pattern, permed_weights) in self.expand_weights_by_d4(weights) {
             if let Some((_, same_pattern_v)) = result
                 .iter_mut()
                 .find(|(res_pattern, _)| *res_pattern == pattern)
             {
-                for (&mut w, &e) in same_pattern_v.iter_mut().zip(permed_weights.iter()) {
-                    w += e;
+                for (w, &e) in same_pattern_v.iter_mut().zip(permed_weights.iter()) {
+                    *w += e;
                 }
             } else {
                 result.push((pattern, permed_weights));
@@ -213,24 +308,18 @@ impl Parameters {
     fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern]) -> Option<Parameters> {
         let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
         for pattern in orig_patterns.iter() {
-            let expanded = if pattern.mask != 0 {
-                pattern.expand_weights_by_d4(&orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)])
-            } else {
+            let perm = pattern.permute_indices();
+            if pattern.mask == 0 {
                 // non-pattern scores should not be expanded
-                vec![(
+                v.push((
                     pattern.mask,
                     orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)].to_vec(),
-                )]
-            };
-            for (t_pattern, t_weights) in expanded {
-                if let Some((_, vw)) = v.iter_mut().find(|(p, _)| *p == t_pattern) {
-                    for (w, &e) in vw.iter_mut().zip(t_weights.iter()) {
-                        *w += e;
-                    }
-                } else {
-                    v.push((t_pattern, t_weights));
-                }
+                ));
+                continue;
             }
+            v.extend(perm.expand_weights_with_compaction(
+                &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
+            ));
         }
         let mut pattern_weights = Vec::new();
         let mut patterns = Vec::new();
@@ -342,93 +431,19 @@ pub const EVAL_SCORE_MAX: i16 = BOARD_SIZE as i16 * SCALE;
 pub const EVAL_SCORE_MIN: i16 = -EVAL_SCORE_MAX;
 
 impl Evaluator {
-    fn load_weight(path: &Path, length: usize) -> Option<Vec<i16>> {
-        let mut value_file = File::open(path).ok()?;
-        let mut buf = vec![0u8; length * 8];
-        value_file.read_exact(&mut buf).ok()?;
-        let mut v = Vec::with_capacity(length);
-        for i in 0usize..length {
-            let mut ary: [u8; 8] = Default::default();
-            ary.copy_from_slice(&buf[(8 * i)..(8 * (i + 1))]);
-            let raw_weight = unsafe { mem::transmute::<[u8; 8], f64>(ary) };
-            v.push(
-                (SCALE as f64 * raw_weight)
-                    .max(SCALE as f64 * -64.0)
-                    .min(SCALE as f64 * 64.0)
-                    .round() as i16,
-            );
-        }
-        Some(v)
+    pub fn load(path: &Path) -> Option<Evaluator> {
+        let folded = FoldedEvaluator::load(path)?;
+        Some(Self::from_folded(&folded))
     }
 
-    fn smooth_weight(weights: &[Vec<i16>], length: usize, window_size: i8) -> Vec<Vec<i16>> {
-        assert_eq!(window_size % 2, 1);
-        let half_window = window_size / 2;
-        let mut result = vec![vec![0; length]; weights.len()];
-        for (i, w) in result.iter_mut().enumerate() {
-            for (k, e) in w.iter_mut().enumerate() {
-                for d in -half_window..=half_window {
-                    let j = i as isize + d as isize;
-                    let j = if j < 0 { 0 } else { j as usize };
-                    let j = if j >= weights.len() {
-                        weights.len() - 1
-                    } else {
-                        j
-                    };
-                    *e += weights[j][k];
-                }
-                *e /= window_size as i16;
-            }
-        }
-        result
-    }
-
-    fn load_all_weights(table_path: &Path, config: &EvaluatorConfig, length: usize) -> Vec<Vec<i16>> {
-        let mut weights = Vec::new();
-        for num in config.stones_range.clone() {
-            let path = table_path.join(format!("value{}", num));
-            weights.push(Self::load_weight(&path, length).unwrap());
-        }
-        weights
-    }
-
-    fn load_patterns(config: &EvaluatorConfig) -> (Vec<EvaluatorPattern>, usize) {
-        let mut patterns = Vec::new();
-        let mut offset = 0;
-        for pattern_str in config.masks.iter() {
-            let mask = u64::from_str_radix(pattern_str, 2).unwrap();
-            let mask_size = popcnt(mask);
-            let pattern_count = pow3(mask_size);
-            patterns.push(EvaluatorPattern {
-                mask,
-                offset,
-                pattern_count,
-            });
-            offset += pattern_count;
-        }
-
-        patterns.push(EvaluatorPattern {
-            mask: 0,
-            offset,
-            pattern_count: NON_PATTERN_SCORES,
-        });
-        offset += NON_PATTERN_SCORES;
-        (patterns, offset)
-    }
-
-    pub fn new(table_dirname: &str) -> Evaluator {
-        let table_path = Path::new(table_dirname);
-        let config_path = table_path.join("config.yaml");
-        let config = EvaluatorConfig::new(&config_path).unwrap();
-        let (patterns, length) = Self::load_patterns(&config);
-        let weights = Self::load_all_weights(table_path, &config, length);
-        let smoothed_weights = Self::smooth_weight(&weights, length, 1);
-        let params: Vec<_> = smoothed_weights
+    fn from_folded(folded: &FoldedEvaluator) -> Evaluator {
+        let params: Vec<_> = folded
+            .weights
             .iter()
             .enumerate()
             .map(|(i, w)| {
-                let mut param = Parameters::new(w, &patterns).unwrap();
-                param.fold_parity(i as i8 + config.stones_range.start());
+                let mut param = Parameters::new(w, &folded.patterns).unwrap();
+                param.fold_parity(i as i8 + folded.config.stones_range.start());
                 param
             })
             .collect();
@@ -436,7 +451,7 @@ impl Evaluator {
         let vectorizer = IndicesVectorizer::<INDICES_VECTORIZER_PACK_SIZE>::new(&params.first().unwrap().patterns);
 
         Evaluator {
-            stones_range: config.stones_range,
+            stones_range: folded.config.stones_range.clone(),
             params,
             vectorizer,
         }

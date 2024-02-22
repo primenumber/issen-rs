@@ -12,6 +12,7 @@ use std::cmp::min;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::Path;
 use std::str;
 use std::sync::Arc;
 
@@ -493,7 +494,7 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
     let dataset: Vec<_> = dataset.into_iter().take(8192).collect();
 
     eprintln!("Computing...");
-    let evaluator = Arc::new(Evaluator::new("table-single"));
+    let evaluator = Arc::new(Evaluator::load(Path::new("table-single"))?);
     let depth_max = 8;
     let scores: Vec<_> = dataset
         .par_iter()
