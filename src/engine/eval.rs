@@ -139,7 +139,7 @@ impl EvaluatorPattern {
         self.permute_indices_base2()
             .iter()
             .map(|(pattern, perm_base2)| {
-                let mut perm_base3 = vec![0; BASE_2_TO_3[1 << pattern_size]];
+                let mut perm_base3 = vec![0; pow3(pattern_size as i8)];
                 for pidx in 0..(1 << pattern_size) {
                     for oidx in 0..(1 << pattern_size) {
                         if (pidx & oidx) != 0 {
