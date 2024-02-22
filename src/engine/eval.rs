@@ -222,7 +222,6 @@ impl EvaluatorPattern {
                 .map(|op| {
                     let pattern = op.apply(self.mask);
                     let permutation = (0..table_size)
-                        .into_iter()
                         .map(|pidx| {
                             let bits = (pidx as u64).pdep(self.mask);
                             op.apply(bits).pext(pattern) as usize
