@@ -4,7 +4,6 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 #[cfg(target_feature = "avx2")]
 use core::arch::x86_64::*;
-use std::cmp::max;
 use std::fs::File;
 use std::io::Read;
 use std::mem;
@@ -14,12 +13,18 @@ use std::simd::prelude::*;
 use yaml_rust::yaml;
 
 struct EvaluatorConfig {
-    masks: Vec<String>,
+    masks: Vec<u64>,
     stones_range: RangeInclusive<i8>,
 }
 
+struct EvaluatorPattern {
+    mask: u64,
+    offset: usize,
+    pattern_count: usize,
+}
+
 impl EvaluatorConfig {
-    fn new(config_path: &Path) -> Option<EvaluatorConfig> {
+    fn from_file(config_path: &Path) -> Option<EvaluatorConfig> {
         let mut config_file = File::open(config_path).ok()?;
         let mut config_string = String::new();
         config_file.read_to_string(&mut config_string).ok()?;
@@ -28,7 +33,7 @@ impl EvaluatorConfig {
         let masks = config["masks"]
             .as_vec()?
             .iter()
-            .map(|e| e.as_str().unwrap().to_string())
+            .map(|e| u64::from_str_radix(e.as_str().unwrap(), 2).unwrap())
             .collect();
         let stones_range_yaml = &config["stone_counts"];
         let from = stones_range_yaml["from"].as_i64()? as i8;
@@ -39,151 +44,43 @@ impl EvaluatorConfig {
             stones_range,
         })
     }
+
+    fn pattern_info(&self) -> (Vec<EvaluatorPattern>, usize, usize) {
+        let mut patterns = Vec::new();
+        let mut offset = 0;
+        for &mask in self.masks.iter() {
+            let mask_size = popcnt(mask);
+            let pattern_count = pow3(mask_size);
+            patterns.push(EvaluatorPattern {
+                mask,
+                offset,
+                pattern_count,
+            });
+            offset += pattern_count;
+        }
+        (patterns, offset, NON_PATTERN_SCORES)
+    }
 }
 
-const NON_PATTERN_SCORES: usize = 4;
-
-struct EvaluatorPattern {
+struct PatternWeightTable {
     mask: u64,
-    offset: usize,
-    pattern_count: usize,
+    weights: Vec<i16>,
 }
 
-struct Parameters {
-    pattern_weights: Vec<i16>,
-    patterns: Vec<u64>,
-    offsets: Vec<u32>,
+struct WeightTable {
+    pattern_tables: Vec<PatternWeightTable>,
     p_mobility_score: i16,
     o_mobility_score: i16,
     parity_score: i16,
     constant_score: i16,
 }
 
-impl Parameters {
-    fn permute_indices(pattern: u64) -> Vec<Vec<usize>> {
-        let pattern_size = pattern.count_ones();
-        let table_size = 1 << pattern_size;
-        let mut indices = vec![Vec::new(); 8];
-        for i in 0..table_size {
-            let mut t_pattern = pattern;
-            let mut t_bits = (i as u64).pdep(t_pattern);
-            for dir in 0..4 {
-                indices[dir * 2].push(t_bits.pext(t_pattern) as usize);
-                indices[dir * 2 + 1].push(flip_diag(t_bits).pext(flip_diag(t_pattern)) as usize);
-                t_bits = rot90(t_bits);
-                t_pattern = rot90(t_pattern);
-            }
-        }
-        indices
-    }
-
-    fn expand_weights_by_d4(weights: &[i16], pattern: u64, b3conv: &[usize]) -> Vec<(u64, Vec<i16>)> {
-        let mut permuted_weights = vec![vec![0; weights.len()]; 8];
-        let perm = Self::permute_indices(pattern);
-        let pattern_size = pattern.count_ones();
-        for pidx in 0..(1 << pattern_size) {
-            for oidx in 0..(1 << pattern_size) {
-                if (pidx & oidx) != 0 {
-                    continue;
-                }
-                let orig_index = b3conv[pidx] + b3conv[oidx] * 2;
-                for i in 0..8 {
-                    let t_pidx = perm[i][pidx];
-                    let t_oidx = perm[i][oidx];
-                    let index = b3conv[t_pidx] + b3conv[t_oidx] * 2;
-                    permuted_weights[i][index] = weights[orig_index];
-                }
-            }
-        }
-        let mut patterns_by_d4 = Vec::new();
-        let mut pattern_bits = pattern;
-        for _ in 0..4 {
-            patterns_by_d4.push(pattern_bits);
-            patterns_by_d4.push(flip_diag(pattern_bits));
-            pattern_bits = rot90(pattern_bits);
-        }
-        patterns_by_d4.into_iter().zip(permuted_weights).collect()
-    }
-
-    fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern], b3conv: &[usize]) -> Option<Parameters> {
-        let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
-        for pattern in orig_patterns.iter() {
-            let expanded = if pattern.mask != 0 {
-                Self::expand_weights_by_d4(
-                    &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
-                    pattern.mask,
-                    b3conv,
-                )
-            } else {
-                // non-pattern scores should not be expanded
-                vec![(
-                    pattern.mask,
-                    orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)].to_vec(),
-                )]
-            };
-            for (t_pattern, t_weights) in expanded {
-                if let Some((_, vw)) = v.iter_mut().find(|(p, _)| *p == t_pattern) {
-                    for (w, &e) in vw.iter_mut().zip(t_weights.iter()) {
-                        *w += e;
-                    }
-                } else {
-                    v.push((t_pattern, t_weights));
-                }
-            }
-        }
-        let mut pattern_weights = Vec::new();
-        let mut patterns = Vec::new();
-        let mut offsets = Vec::new();
-        let mut offset = 0;
-        for (pattern, ex_weights) in v {
-            offsets.push(offset as u32);
-            offset += ex_weights.len();
-            pattern_weights.extend(ex_weights);
-            patterns.push(pattern);
-        }
-        pattern_weights.push(0);
-        while offsets.len() % 16 != 0 {
-            offsets.push(offset as u32);
-        }
-        let non_patterns_offset = orig_patterns.last().unwrap().offset;
-        Some(Parameters {
-            pattern_weights,
-            patterns,
-            offsets,
-            p_mobility_score: orig_weights[non_patterns_offset],
-            o_mobility_score: orig_weights[non_patterns_offset + 1],
-            parity_score: orig_weights[non_patterns_offset + 2],
-            constant_score: orig_weights[non_patterns_offset + 3],
-        })
-    }
-
-    fn fold_parity(&mut self, stone_count: i8) {
-        if stone_count % 2 == 1 {
-            self.constant_score += self.parity_score;
-        }
-        self.parity_score = 0;
-    }
+struct FoldedEvaluator {
+    config: EvaluatorConfig,
+    weights: Vec<WeightTable>,
 }
 
-pub struct Evaluator {
-    stones_range: RangeInclusive<i8>,
-    params: Vec<Parameters>,
-    line_to_indices: Vec<u16>,
-}
-
-fn pow3(x: i8) -> usize {
-    if x == 0 {
-        1
-    } else {
-        3 * pow3(x - 1)
-    }
-}
-
-pub const SCALE: i16 = 256;
-pub const EVAL_SCORE_MAX: i16 = BOARD_SIZE as i16 * SCALE;
-pub const EVAL_SCORE_MIN: i16 = -EVAL_SCORE_MAX;
-
-impl Evaluator {
+impl FoldedEvaluator {
     fn load_weight(path: &Path, length: usize) -> Option<Vec<i16>> {
         let mut value_file = File::open(path).ok()?;
         let mut buf = vec![0u8; length * 8];
@@ -225,37 +122,6 @@ impl Evaluator {
         result
     }
 
-    fn generate_indices_table(patterns: &[u64], b3conv: &[usize]) -> Vec<u16> {
-        let mut result = Vec::new();
-        for row in 0..8 {
-            for row_bits in 0..256 {
-                let bits = row_bits << (row * 8);
-                for &pattern in patterns {
-                    let index = b3conv[bits.pext(pattern) as usize];
-                    result.push(index as u16);
-                }
-                while result.len() % 16 != 0 {
-                    result.push(0);
-                }
-            }
-        }
-        result
-    }
-
-    fn generate_base3_vec(max_bits: i8) -> Vec<usize> {
-        let mut base3 = vec![0; 1 << max_bits];
-        for (i, item) in base3.iter_mut().enumerate() {
-            let mut sum = 0;
-            for j in 0..max_bits {
-                if ((i >> j) & 1) != 0 {
-                    sum += pow3(j);
-                }
-            }
-            *item = sum;
-        }
-        base3
-    }
-
     fn load_all_weights(table_path: &Path, config: &EvaluatorConfig, length: usize) -> Vec<Vec<i16>> {
         let mut weights = Vec::new();
         for num in config.stones_range.clone() {
@@ -265,56 +131,348 @@ impl Evaluator {
         weights
     }
 
-    fn load_patterns(config: &EvaluatorConfig) -> (Vec<EvaluatorPattern>, usize, i8) {
-        let mut patterns = Vec::new();
-        let mut offset = 0;
-        let mut max_bits = 0;
-        for pattern_str in config.masks.iter() {
-            let mask = u64::from_str_radix(pattern_str, 2).unwrap();
-            let mask_size = popcnt(mask);
-            let pattern_count = pow3(mask_size);
-            patterns.push(EvaluatorPattern {
-                mask,
-                offset,
-                pattern_count,
+    fn unpack_weights(weights: &[i16], patterns: &[EvaluatorPattern], non_patterns_offset: usize) -> WeightTable {
+        let mut pattern_tables = Vec::new();
+        for pattern in patterns {
+            pattern_tables.push(PatternWeightTable {
+                mask: pattern.mask,
+                weights: weights[pattern.offset..(pattern.offset + pattern.pattern_count)].to_vec(),
             });
-            offset += pattern_count;
-            max_bits = max(max_bits, mask_size);
         }
-
-        patterns.push(EvaluatorPattern {
-            mask: 0,
-            offset,
-            pattern_count: NON_PATTERN_SCORES,
-        });
-        offset += NON_PATTERN_SCORES;
-        (patterns, offset, max_bits)
+        let p_mobility_score = weights[non_patterns_offset];
+        let o_mobility_score = weights[non_patterns_offset + 1];
+        let parity_score = weights[non_patterns_offset + 2];
+        let constant_score = weights[non_patterns_offset + 3];
+        WeightTable {
+            pattern_tables,
+            p_mobility_score,
+            o_mobility_score,
+            parity_score,
+            constant_score,
+        }
     }
 
-    pub fn new(table_dirname: &str) -> Evaluator {
-        let table_path = Path::new(table_dirname);
-        let config_path = table_path.join("config.yaml");
-        let config = EvaluatorConfig::new(&config_path).unwrap();
-        let (patterns, length, max_bits) = Self::load_patterns(&config);
-        let weights = Self::load_all_weights(table_path, &config, length);
-        let smoothed_weights = Self::smooth_weight(&weights, length, 1);
-        let base3 = Self::generate_base3_vec(max_bits);
-        let params: Vec<_> = smoothed_weights
+    fn load(path: &Path) -> Option<FoldedEvaluator> {
+        let config_path = path.join("config.yaml");
+        let config = EvaluatorConfig::from_file(&config_path)?;
+        let (patterns, pettern_weights_length, non_patterns_count) = config.pattern_info();
+        let packed_weights = Self::load_all_weights(path, &config, pettern_weights_length + non_patterns_count);
+        let smoothed_packed_weights = Self::smooth_weight(
+            &packed_weights,
+            pettern_weights_length + non_patterns_count,
+            1,
+        );
+        let weights = smoothed_packed_weights
+            .iter()
+            .map(|packed| Self::unpack_weights(packed, &patterns, pettern_weights_length))
+            .collect();
+        Some(FoldedEvaluator { config, weights })
+    }
+}
+
+// interprete base-2 number as base-3 number
+// base_2_to_3(x) := radix_parse(radix_fmt(x, 2), 3)
+const fn base_2_to_3(mut x: usize) -> usize {
+    let mut base3 = 0;
+    let mut pow3 = 1;
+    while x > 0 {
+        base3 += (x % 2) * pow3;
+        pow3 *= 3;
+        x /= 2;
+    }
+    base3
+}
+
+const NON_PATTERN_SCORES: usize = 4;
+
+const BASE_2_TO_3_TABLE_BITS: usize = 13;
+const BASE_2_TO_3: [usize; 1 << BASE_2_TO_3_TABLE_BITS] = {
+    let mut table = [0usize; 1 << BASE_2_TO_3_TABLE_BITS];
+    let mut i = 0;
+    while i < table.len() {
+        table[i] = base_2_to_3(i);
+        i += 1;
+    }
+    table
+};
+
+// x = R^rot M ^ mirror
+struct SquareGroup {
+    rot: u8,
+    mirror: u8,
+}
+
+impl SquareGroup {
+    #[allow(dead_code)]
+    fn compose(&self, rhs: &Self) -> Self {
+        let rot = if self.mirror != 0 {
+            (4 + self.rot - rhs.rot) % 4
+        } else {
+            (self.rot + rhs.rot) % 4
+        };
+        Self {
+            rot,
+            mirror: (self.mirror + rhs.mirror) % 2,
+        }
+    }
+
+    fn apply(&self, mut bits: u64) -> u64 {
+        if self.mirror != 0 {
+            bits = flip_diag(bits);
+        }
+        for _ in 0..self.rot {
+            bits = rot90(bits);
+        }
+        bits
+    }
+
+    fn all_elements() -> Vec<Self> {
+        let mut res = Vec::new();
+        for rot in 0..4 {
+            for mirror in 0..2 {
+                res.push(Self { rot, mirror });
+            }
+        }
+        res
+    }
+}
+
+struct PatternPermutation {
+    perms: Vec<(u64, Vec<usize>)>,
+}
+
+impl PatternPermutation {
+    fn permute_indices_base2(mask: u64) -> PatternPermutation {
+        let pattern_size = mask.count_ones();
+        let table_size = (1 << pattern_size) as usize;
+        PatternPermutation {
+            perms: SquareGroup::all_elements()
+                .iter()
+                .map(|op| {
+                    let pattern = op.apply(mask);
+                    let permutation = (0..table_size)
+                        .map(|pidx| {
+                            let bits = (pidx as u64).pdep(mask);
+                            op.apply(bits).pext(pattern) as usize
+                        })
+                        .collect();
+                    (pattern, permutation)
+                })
+                .collect(),
+        }
+    }
+
+    fn permute_indices(mask: u64) -> PatternPermutation {
+        let pattern_size = mask.count_ones();
+        PatternPermutation {
+            perms: Self::permute_indices_base2(mask)
+                .perms
+                .iter()
+                .map(|(pattern, perm_base2)| {
+                    let mut perm_base3 = vec![0; pow3(pattern_size as i8)];
+                    for pidx in 0..(1 << pattern_size) {
+                        let remain = ((1 << pattern_size) - 1) ^ pidx;
+                        let mut oidx = (1 << pattern_size) - 1;
+                        while oidx as isize >= 0 {
+                            oidx &= remain;
+                            let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
+                            let t_pidx = perm_base2[pidx];
+                            let t_oidx = perm_base2[oidx];
+                            let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
+                            perm_base3[index] = orig_index;
+                            oidx -= 1;
+                        }
+                    }
+                    (*pattern, perm_base3)
+                })
+                .collect(),
+        }
+    }
+
+    fn expand_weights_by_d4(&self, weights: &[i16]) -> Vec<PatternWeightTable> {
+        self.perms
+            .iter()
+            .map(|(pattern, perm_base3)| {
+                let mut permuted_weights = vec![0; perm_base3.len()];
+                for (i, &p) in perm_base3.iter().enumerate() {
+                    permuted_weights[i] = weights[p];
+                }
+                PatternWeightTable {
+                    mask: *pattern,
+                    weights: permuted_weights,
+                }
+            })
+            .collect()
+    }
+
+    fn expand_weights_with_compaction(&self, weights: &[i16]) -> Vec<PatternWeightTable> {
+        let mut result: Vec<PatternWeightTable> = Vec::new();
+        for table in self.expand_weights_by_d4(weights) {
+            if let Some(ref_table) = result
+                .iter_mut()
+                .find(|ref_table| ref_table.mask == table.mask)
+            {
+                for (w, &e) in ref_table.weights.iter_mut().zip(table.weights.iter()) {
+                    *w += e;
+                }
+            } else {
+                result.push(table);
+            }
+        }
+        result
+    }
+}
+
+struct Parameters {
+    pattern_weights: Vec<i16>,
+    patterns: Vec<u64>,
+    offsets: Vec<u32>,
+    p_mobility_score: i16,
+    o_mobility_score: i16,
+    parity_score: i16,
+    constant_score: i16,
+}
+
+impl Parameters {
+    fn new(table: &WeightTable) -> Option<Parameters> {
+        let mut v: Vec<PatternWeightTable> = Vec::new();
+        for table in table.pattern_tables.iter() {
+            let perm = PatternPermutation::permute_indices(table.mask);
+            v.extend(perm.expand_weights_with_compaction(&table.weights));
+        }
+        let mut pattern_weights = Vec::new();
+        let mut patterns = Vec::new();
+        let mut offsets = Vec::new();
+        let mut offset = 0;
+        for table in v {
+            offsets.push(offset as u32);
+            offset += table.weights.len();
+            pattern_weights.extend(table.weights);
+            patterns.push(table.mask);
+        }
+        // padding for vectorization
+        pattern_weights.push(0);
+        while offsets.len() % 16 != 0 {
+            offsets.push(offset as u32);
+        }
+        Some(Parameters {
+            pattern_weights,
+            patterns,
+            offsets,
+            p_mobility_score: table.p_mobility_score,
+            o_mobility_score: table.o_mobility_score,
+            parity_score: table.parity_score,
+            constant_score: table.constant_score,
+        })
+    }
+
+    fn fold_parity(&mut self, stone_count: i8) {
+        if stone_count % 2 == 1 {
+            self.constant_score += self.parity_score;
+        }
+        self.parity_score = 0;
+    }
+}
+
+// not configuable
+const INDICES_VECTORIZER_VECTOR_ELEMENTS: usize = 16;
+const INDICES_VECTORIZER_VECTOR_COUNT: usize = 3;
+const INDICES_VECTORIZER_LEN: usize = INDICES_VECTORIZER_VECTOR_COUNT * INDICES_VECTORIZER_VECTOR_ELEMENTS;
+
+struct IndicesVectorizer<const W: usize> {
+    indices: Vec<u16>,
+}
+
+impl<const W: usize> IndicesVectorizer<W> {
+    fn new(patterns: &[u64]) -> Self {
+        let chunk_count = (64 + W - 1) / W;
+        let mut indices = Vec::new();
+        for chunk_idx in 0..chunk_count {
+            let shift = chunk_idx * W;
+            for bits in 0..(1 << W) {
+                let chunk_bits = bits << shift;
+                for &pattern in patterns {
+                    let index = BASE_2_TO_3[chunk_bits.pext(pattern) as usize];
+                    indices.push(index as u16);
+                }
+                while indices.len() % INDICES_VECTORIZER_VECTOR_ELEMENTS != 0 {
+                    indices.push(0);
+                }
+            }
+        }
+        Self { indices }
+    }
+
+    fn feature_indices(&self, board: Board) -> [u16x16; INDICES_VECTORIZER_VECTOR_COUNT] {
+        let mut indices = [Simd::splat(0); INDICES_VECTORIZER_VECTOR_COUNT];
+        let mask: u64 = (1 << W) - 1;
+        let chunk_count = (64 + W - 1) / W;
+        for chunk_idx in 0..chunk_count {
+            let pidx = ((board.player >> (chunk_idx * W)) & mask) as usize;
+            let oidx = ((board.opponent >> (chunk_idx * W)) & mask) as usize;
+            let offset_base_p = INDICES_VECTORIZER_LEN * (pidx + (1 << W) * chunk_idx);
+            let offset_base_o = INDICES_VECTORIZER_LEN * (oidx + (1 << W) * chunk_idx);
+            for (vidx, idx) in indices.iter_mut().enumerate() {
+                let vp = Simd::from_slice(unsafe {
+                    self.indices
+                        .get_unchecked((offset_base_p + 16 * vidx)..(offset_base_p + 16 * (vidx + 1)))
+                });
+                let vo = Simd::from_slice(unsafe {
+                    self.indices
+                        .get_unchecked((offset_base_o + 16 * vidx)..(offset_base_o + 16 * (vidx + 1)))
+                });
+                *idx += vp + vo + vo;
+            }
+        }
+        indices
+    }
+}
+
+// configuable
+const INDICES_VECTORIZER_PACK_SIZE: usize = 8;
+
+pub struct Evaluator {
+    stones_range: RangeInclusive<i8>,
+    params: Vec<Parameters>,
+    vectorizer: IndicesVectorizer<INDICES_VECTORIZER_PACK_SIZE>,
+}
+
+fn pow3(x: i8) -> usize {
+    if x == 0 {
+        1
+    } else {
+        3 * pow3(x - 1)
+    }
+}
+
+pub const SCALE: i16 = 256;
+pub const EVAL_SCORE_MAX: i16 = BOARD_SIZE as i16 * SCALE;
+pub const EVAL_SCORE_MIN: i16 = -EVAL_SCORE_MAX;
+
+impl Evaluator {
+    pub fn load(path: &Path) -> Option<Evaluator> {
+        let folded = FoldedEvaluator::load(path)?;
+        Some(Self::from_folded(&folded))
+    }
+
+    fn from_folded(folded: &FoldedEvaluator) -> Evaluator {
+        let params: Vec<_> = folded
+            .weights
             .iter()
             .enumerate()
-            .map(|(i, w)| {
-                let mut param = Parameters::new(w, &patterns, &base3).unwrap();
-                param.fold_parity(i as i8 + config.stones_range.start());
+            .map(|(i, table)| {
+                let mut param = Parameters::new(table).unwrap();
+                param.fold_parity(i as i8 + folded.config.stones_range.start());
                 param
             })
             .collect();
 
-        let line_to_indices = Self::generate_indices_table(&params.first().unwrap().patterns, &base3);
+        let vectorizer = IndicesVectorizer::<INDICES_VECTORIZER_PACK_SIZE>::new(&params.first().unwrap().patterns);
 
         Evaluator {
-            stones_range: config.stones_range,
+            stones_range: folded.config.stones_range.clone(),
             params,
-            line_to_indices,
+            vectorizer,
         }
     }
 
@@ -329,48 +487,8 @@ impl Evaluator {
         }) as i16
     }
 
-    fn feature_indices(&self, board: Board) -> [u16x16; 3] {
-        let mut idx0 = Simd::splat(0);
-        let mut idx1 = Simd::splat(0);
-        let mut idx2 = Simd::splat(0);
-        for row in 0..8 {
-            let pidx = ((board.player >> (row * 8)) & 0xff) as usize;
-            let oidx = ((board.opponent >> (row * 8)) & 0xff) as usize;
-            let offset_base_p = 48 * (pidx + 256 * row);
-            let offset_base_o = 48 * (oidx + 256 * row);
-            let vp0 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked(offset_base_p..(offset_base_p + 16))
-            });
-            let vp1 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_p + 16)..(offset_base_p + 32))
-            });
-            let vp2 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_p + 32)..(offset_base_p + 48))
-            });
-            let vo0 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked(offset_base_o..(offset_base_o + 16))
-            });
-            let vo1 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_o + 16)..(offset_base_o + 32))
-            });
-            let vo2 = Simd::from_slice(unsafe {
-                self.line_to_indices
-                    .get_unchecked((offset_base_o + 32)..(offset_base_o + 48))
-            });
-            idx0 = idx0 + vp0 + vo0 + vo0;
-            idx1 = idx1 + vp1 + vo1 + vo1;
-            idx2 = idx2 + vp2 + vo2 + vo2;
-        }
-        [idx0, idx1, idx2]
-    }
-
     #[cfg(target_feature = "avx2")]
-    fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
+    fn lookup_patterns(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
         unsafe {
             unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
                 const MM_PERM_ACBD: i32 = 0b11011000;
@@ -379,13 +497,13 @@ impl Evaluator {
                 let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
                 (lo, hi)
             }
-            let (idxh0, idxh1) = unpack_idx(vidx[0].into());
-            let (idxh2, idxh3) = unpack_idx(vidx[1].into());
-            let (idxh4, idxh5) = unpack_idx(vidx[2].into());
+            let (idxh0, idxh1) = unpack_idx((*vidx.get_unchecked(0)).into());
+            let (idxh2, idxh3) = unpack_idx((*vidx.get_unchecked(1)).into());
+            let (idxh4, idxh5) = unpack_idx((*vidx.get_unchecked(2)).into());
             unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
                 let offset = _mm256_add_epi32(
                     idx,
-                    _mm256_loadu_si256(&param.offsets[start] as *const u32 as *const __m256i),
+                    _mm256_loadu_si256(param.offsets.get_unchecked(start) as *const u32 as *const __m256i),
                 );
                 _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
             }
@@ -395,26 +513,25 @@ impl Evaluator {
             let vw3 = gather_weight(param, idxh3, 24);
             let vw4 = gather_weight(param, idxh4, 32);
             let vw5 = gather_weight(param, idxh5, 40);
-            unsafe fn reduce_sum(v0: __m256i, v1: __m256i, v2: __m256i, v3: __m256i, v4: __m256i, v5: __m256i) -> i32 {
+            unsafe fn vector_sum(
+                v0: __m256i,
+                v1: __m256i,
+                v2: __m256i,
+                v3: __m256i,
+                v4: __m256i,
+                v5: __m256i,
+            ) -> u16x16 {
                 let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
                 let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
                 let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
-                let sum = _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2);
-                let sum = _mm_add_epi16(
-                    _mm256_castsi256_si128(sum),
-                    _mm256_extracti128_si256(sum, 1),
-                );
-                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-                let sum = _mm_hadd_epi16(sum, _mm_setzero_si128());
-                _mm_cvtsi128_si32(sum) as u16 as i16 as i32
+                _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2).into()
             }
-            reduce_sum(vw0, vw1, vw2, vw3, vw4, vw5)
+            vector_sum(vw0, vw1, vw2, vw3, vw4, vw5).reduce_sum() as i16 as i32
         }
     }
 
     #[cfg(not(target_feature = "avx2"))]
-    fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
+    fn lookup_patterns(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
         let mut offsets = [0u16; 48];
         vidx[0].copy_to_slice(unsafe { offsets.get_unchecked_mut(0..16) });
         vidx[1].copy_to_slice(unsafe { offsets.get_unchecked_mut(16..32) });
@@ -437,13 +554,16 @@ impl Evaluator {
 
         // non-pattern scores
         let mut score = param.constant_score;
+        // Since parity_score s absorbed into constant_score, parity_score can be assumed to be 0
+        // here.
+        // score += param.parity_score;
         score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
         score += param.o_mobility_score * popcnt(board.pass_unchecked().mobility_bits()) as i16;
         let mut score = score as i32;
 
         // pattern-based scores
-        let vidx = self.feature_indices(board);
-        score += self.eval_gather(param, vidx);
+        let vidx = self.vectorizer.feature_indices(board);
+        score += self.lookup_patterns(param, vidx);
         score
     }
 
@@ -458,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_smooth() {
-        for raw in -10000..=10000 {
+        for raw in -60000..=60000 {
             let smoothed = Evaluator::smooth_val(raw);
             assert!(smoothed > EVAL_SCORE_MIN);
             assert!(smoothed < EVAL_SCORE_MAX);
