@@ -17,6 +17,12 @@ struct EvaluatorConfig {
     stones_range: RangeInclusive<i8>,
 }
 
+struct EvaluatorPattern {
+    mask: u64,
+    offset: usize,
+    pattern_count: usize,
+}
+
 impl EvaluatorConfig {
     fn from_file(config_path: &Path) -> Option<EvaluatorConfig> {
         let mut config_file = File::open(config_path).ok()?;
@@ -59,12 +65,6 @@ impl EvaluatorConfig {
 struct PatternWeightTable {
     mask: u64,
     weights: Vec<i16>,
-}
-
-struct EvaluatorPattern {
-    mask: u64,
-    offset: usize,
-    pattern_count: usize,
 }
 
 struct WeightTable {
@@ -271,15 +271,16 @@ impl PatternPermutation {
                 .map(|(pattern, perm_base2)| {
                     let mut perm_base3 = vec![0; pow3(pattern_size as i8)];
                     for pidx in 0..(1 << pattern_size) {
-                        for oidx in 0..(1 << pattern_size) {
-                            if (pidx & oidx) != 0 {
-                                continue;
-                            }
+                        let remain = ((1 << pattern_size) - 1) ^ pidx;
+                        let mut oidx = (1 << pattern_size) - 1;
+                        while oidx as isize >= 0 {
+                            oidx &= remain;
                             let orig_index = BASE_2_TO_3[pidx] + BASE_2_TO_3[oidx] * 2;
                             let t_pidx = perm_base2[pidx];
                             let t_oidx = perm_base2[oidx];
                             let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
                             perm_base3[index] = orig_index;
+                            oidx -= 1;
                         }
                     }
                     (*pattern, perm_base3)
@@ -287,9 +288,7 @@ impl PatternPermutation {
                 .collect(),
         }
     }
-}
 
-impl PatternPermutation {
     fn expand_weights_by_d4(&self, weights: &[i16]) -> Vec<PatternWeightTable> {
         self.perms
             .iter()
@@ -489,7 +488,7 @@ impl Evaluator {
     }
 
     #[cfg(target_feature = "avx2")]
-    fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
+    fn lookup_patterns(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
         unsafe {
             unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
                 const MM_PERM_ACBD: i32 = 0b11011000;
@@ -532,7 +531,7 @@ impl Evaluator {
     }
 
     #[cfg(not(target_feature = "avx2"))]
-    fn eval_gather(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
+    fn lookup_patterns(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
         let mut offsets = [0u16; 48];
         vidx[0].copy_to_slice(unsafe { offsets.get_unchecked_mut(0..16) });
         vidx[1].copy_to_slice(unsafe { offsets.get_unchecked_mut(16..32) });
@@ -564,7 +563,7 @@ impl Evaluator {
 
         // pattern-based scores
         let vidx = self.vectorizer.feature_indices(board);
-        score += self.eval_gather(param, vidx);
+        score += self.lookup_patterns(param, vidx);
         score
     }
 
