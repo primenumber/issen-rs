@@ -137,11 +137,11 @@ impl LastCache {
             if diff_first > 0 {
                 (pcnt - ocnt + 2 * diff_first + 1, 1)
             } else {
-                let diag1_bits_second = board.opponent.pext(diag1_mask);
+                let diag1_bits_second = Self::get_diag1_bits(board.opponent, diag1_mask, row, col);
                 let &diag1_score_second = self
                     .table
                     .get_unchecked((diag1_bits_second as usize) * 8 + diag1_idx as usize);
-                let diag2_bits_second = board.opponent.pext(diag2_mask);
+                let diag2_bits_second = Self::get_diag2_bits(board.opponent, diag2_mask, row, col);
                 let &diag2_score_second = self
                     .table
                     .get_unchecked((diag2_bits_second as usize) * 8 + diag2_idx as usize);
