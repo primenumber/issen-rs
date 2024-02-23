@@ -39,7 +39,7 @@ impl EvaluatorConfig {
         })
     }
 
-    fn load_patterns(&self) -> (Vec<EvaluatorPattern>, usize) {
+    fn pattern_info(&self) -> (Vec<EvaluatorPattern>, usize, usize) {
         let mut patterns = Vec::new();
         let mut offset = 0;
         for &mask in self.masks.iter() {
@@ -52,21 +52,32 @@ impl EvaluatorConfig {
             });
             offset += pattern_count;
         }
-
-        patterns.push(EvaluatorPattern {
-            mask: 0,
-            offset,
-            pattern_count: NON_PATTERN_SCORES,
-        });
-        offset += NON_PATTERN_SCORES;
-        (patterns, offset)
+        (patterns, offset, NON_PATTERN_SCORES)
     }
+}
+
+struct PatternWeightTable {
+    mask: u64,
+    weights: Vec<i16>,
+}
+
+struct EvaluatorPattern {
+    mask: u64,
+    offset: usize,
+    pattern_count: usize,
+}
+
+struct WeightTable {
+    pattern_tables: Vec<PatternWeightTable>,
+    p_mobility_score: i16,
+    o_mobility_score: i16,
+    parity_score: i16,
+    constant_score: i16,
 }
 
 struct FoldedEvaluator {
     config: EvaluatorConfig,
-    patterns: Vec<EvaluatorPattern>,
-    weights: Vec<Vec<i16>>,
+    weights: Vec<WeightTable>,
 }
 
 impl FoldedEvaluator {
@@ -120,17 +131,42 @@ impl FoldedEvaluator {
         weights
     }
 
+    fn unpack_weights(weights: &[i16], patterns: &[EvaluatorPattern], non_patterns_offset: usize) -> WeightTable {
+        let mut pattern_tables = Vec::new();
+        for pattern in patterns {
+            pattern_tables.push(PatternWeightTable {
+                mask: pattern.mask,
+                weights: weights[pattern.offset..(pattern.offset + pattern.pattern_count)].to_vec(),
+            });
+        }
+        let p_mobility_score = weights[non_patterns_offset];
+        let o_mobility_score = weights[non_patterns_offset + 1];
+        let parity_score = weights[non_patterns_offset + 2];
+        let constant_score = weights[non_patterns_offset + 3];
+        WeightTable {
+            pattern_tables,
+            p_mobility_score,
+            o_mobility_score,
+            parity_score,
+            constant_score,
+        }
+    }
+
     fn load(path: &Path) -> Option<FoldedEvaluator> {
         let config_path = path.join("config.yaml");
         let config = EvaluatorConfig::from_file(&config_path)?;
-        let (patterns, length) = config.load_patterns();
-        let weights = Self::load_all_weights(path, &config, length);
-        let smoothed_weights = Self::smooth_weight(&weights, length, 1);
-        Some(FoldedEvaluator {
-            config,
-            patterns,
-            weights: smoothed_weights,
-        })
+        let (patterns, pettern_weights_length, non_patterns_count) = config.pattern_info();
+        let packed_weights = Self::load_all_weights(path, &config, pettern_weights_length + non_patterns_count);
+        let smoothed_packed_weights = Self::smooth_weight(
+            &packed_weights,
+            pettern_weights_length + non_patterns_count,
+            1,
+        );
+        let weights = smoothed_packed_weights
+            .iter()
+            .map(|packed| Self::unpack_weights(packed, &patterns, pettern_weights_length))
+            .collect();
+        Some(FoldedEvaluator { config, weights })
     }
 }
 
@@ -201,28 +237,22 @@ impl SquareGroup {
     }
 }
 
-struct EvaluatorPattern {
-    mask: u64,
-    offset: usize,
-    pattern_count: usize,
-}
-
 struct PatternPermutation {
     perms: Vec<(u64, Vec<usize>)>,
 }
 
-impl EvaluatorPattern {
-    fn permute_indices_base2(&self) -> PatternPermutation {
-        let pattern_size = self.mask.count_ones();
+impl PatternPermutation {
+    fn permute_indices_base2(mask: u64) -> PatternPermutation {
+        let pattern_size = mask.count_ones();
         let table_size = (1 << pattern_size) as usize;
         PatternPermutation {
             perms: SquareGroup::all_elements()
                 .iter()
                 .map(|op| {
-                    let pattern = op.apply(self.mask);
+                    let pattern = op.apply(mask);
                     let permutation = (0..table_size)
                         .map(|pidx| {
-                            let bits = (pidx as u64).pdep(self.mask);
+                            let bits = (pidx as u64).pdep(mask);
                             op.apply(bits).pext(pattern) as usize
                         })
                         .collect();
@@ -232,11 +262,10 @@ impl EvaluatorPattern {
         }
     }
 
-    fn permute_indices(&self) -> PatternPermutation {
-        let pattern_size = self.mask.count_ones();
+    fn permute_indices(mask: u64) -> PatternPermutation {
+        let pattern_size = mask.count_ones();
         PatternPermutation {
-            perms: self
-                .permute_indices_base2()
+            perms: Self::permute_indices_base2(mask)
                 .perms
                 .iter()
                 .map(|(pattern, perm_base2)| {
@@ -261,7 +290,7 @@ impl EvaluatorPattern {
 }
 
 impl PatternPermutation {
-    fn expand_weights_by_d4(&self, weights: &[i16]) -> Vec<(u64, Vec<i16>)> {
+    fn expand_weights_by_d4(&self, weights: &[i16]) -> Vec<PatternWeightTable> {
         self.perms
             .iter()
             .map(|(pattern, perm_base3)| {
@@ -269,23 +298,26 @@ impl PatternPermutation {
                 for (i, &p) in perm_base3.iter().enumerate() {
                     permuted_weights[i] = weights[p];
                 }
-                (*pattern, permuted_weights)
+                PatternWeightTable {
+                    mask: *pattern,
+                    weights: permuted_weights,
+                }
             })
             .collect()
     }
 
-    fn expand_weights_with_compaction(&self, weights: &[i16]) -> Vec<(u64, Vec<i16>)> {
-        let mut result: Vec<(u64, Vec<i16>)> = Vec::new();
-        for (pattern, permed_weights) in self.expand_weights_by_d4(weights) {
-            if let Some((_, same_pattern_v)) = result
+    fn expand_weights_with_compaction(&self, weights: &[i16]) -> Vec<PatternWeightTable> {
+        let mut result: Vec<PatternWeightTable> = Vec::new();
+        for table in self.expand_weights_by_d4(weights) {
+            if let Some(ref_table) = result
                 .iter_mut()
-                .find(|(res_pattern, _)| *res_pattern == pattern)
+                .find(|ref_table| ref_table.mask == table.mask)
             {
-                for (w, &e) in same_pattern_v.iter_mut().zip(permed_weights.iter()) {
+                for (w, &e) in ref_table.weights.iter_mut().zip(table.weights.iter()) {
                     *w += e;
                 }
             } else {
-                result.push((pattern, permed_weights));
+                result.push(table);
             }
         }
         result
@@ -303,45 +335,35 @@ struct Parameters {
 }
 
 impl Parameters {
-    fn new(orig_weights: &[i16], orig_patterns: &[EvaluatorPattern]) -> Option<Parameters> {
-        let mut v: Vec<(u64, Vec<i16>)> = Vec::new();
-        for pattern in orig_patterns.iter() {
-            let perm = pattern.permute_indices();
-            if pattern.mask == 0 {
-                // non-pattern scores should not be expanded
-                v.push((
-                    pattern.mask,
-                    orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)].to_vec(),
-                ));
-                continue;
-            }
-            v.extend(perm.expand_weights_with_compaction(
-                &orig_weights[pattern.offset..(pattern.offset + pattern.pattern_count)],
-            ));
+    fn new(table: &WeightTable) -> Option<Parameters> {
+        let mut v: Vec<PatternWeightTable> = Vec::new();
+        for table in table.pattern_tables.iter() {
+            let perm = PatternPermutation::permute_indices(table.mask);
+            v.extend(perm.expand_weights_with_compaction(&table.weights));
         }
         let mut pattern_weights = Vec::new();
         let mut patterns = Vec::new();
         let mut offsets = Vec::new();
         let mut offset = 0;
-        for (pattern, ex_weights) in v {
+        for table in v {
             offsets.push(offset as u32);
-            offset += ex_weights.len();
-            pattern_weights.extend(ex_weights);
-            patterns.push(pattern);
+            offset += table.weights.len();
+            pattern_weights.extend(table.weights);
+            patterns.push(table.mask);
         }
+        // padding for vectorization
         pattern_weights.push(0);
         while offsets.len() % 16 != 0 {
             offsets.push(offset as u32);
         }
-        let non_patterns_offset = orig_patterns.last().unwrap().offset;
         Some(Parameters {
             pattern_weights,
             patterns,
             offsets,
-            p_mobility_score: orig_weights[non_patterns_offset],
-            o_mobility_score: orig_weights[non_patterns_offset + 1],
-            parity_score: orig_weights[non_patterns_offset + 2],
-            constant_score: orig_weights[non_patterns_offset + 3],
+            p_mobility_score: table.p_mobility_score,
+            o_mobility_score: table.o_mobility_score,
+            parity_score: table.parity_score,
+            constant_score: table.constant_score,
         })
     }
 
@@ -439,8 +461,8 @@ impl Evaluator {
             .weights
             .iter()
             .enumerate()
-            .map(|(i, w)| {
-                let mut param = Parameters::new(w, &folded.patterns).unwrap();
+            .map(|(i, table)| {
+                let mut param = Parameters::new(table).unwrap();
                 param.fold_parity(i as i8 + folded.config.stones_range.start());
                 param
             })
@@ -533,6 +555,9 @@ impl Evaluator {
 
         // non-pattern scores
         let mut score = param.constant_score;
+        // Since parity_score s absorbed into constant_score, parity_score can be assumed to be 0
+        // here.
+        // score += param.parity_score;
         score += param.p_mobility_score * popcnt(board.mobility_bits()) as i16;
         score += param.o_mobility_score * popcnt(board.pass_unchecked().mobility_bits()) as i16;
         let mut score = score as i32;
