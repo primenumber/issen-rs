@@ -9,7 +9,6 @@ use crate::setup::*;
 use anyhow::Result;
 use clap::ArgMatches;
 use rand::prelude::*;
-use rayon::prelude::*;
 use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -180,14 +179,14 @@ fn search(board: Board, think_time_limit: u128, solve_obj: &mut SolveObj, sub_so
             period: start,
             time_limit: think_time_limit,
         };
-        let mut searcher = Searcher {
+        let searcher = Searcher {
             evaluator: solve_obj.evaluator.clone(),
             cache: solve_obj.eval_cache.clone(),
             timer: Some(timer),
             node_count: 0,
             cache_gen: solve_obj.cache_gen,
         };
-        let (_score, hand, _depth) = searcher.iterative_think(board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+        let (_score, hand, _depth) = think_parallel(&searcher, board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
         hand
     }
 }
@@ -238,12 +237,12 @@ fn play_with_book(
 
 fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result<()> {
     let book = Arc::new(Mutex::new(Book::import(in_book_path)?));
-    let mut solve_obj = setup_default();
-    solve_obj.params.parallel_empties_limit = 64;
+    let solve_obj = setup_default();
+    //solve_obj.params.parallel_empties_limit = 64;
     let sub_solver = Arc::new(SubSolver::new(&[]));
-    (0..repeat).into_par_iter().for_each(|i| {
+    (0..repeat).into_iter().for_each(|i| {
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
-        let think_time_limit = 1 << rng.gen_range(7..=9);
+        let think_time_limit = 1 << rng.gen_range(7..=10);
         eprintln!("i={}, tl={}", i, think_time_limit);
         let mut solve_obj = SolveObj::new(
             Arc::new(ResCacheTable::new(256, 4096)),
