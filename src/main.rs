@@ -2,6 +2,7 @@
 #![feature(portable_simd)]
 #![feature(test)]
 mod book;
+mod compression;
 mod engine;
 mod play;
 mod record;
@@ -12,6 +13,7 @@ mod sparse_mat;
 mod train;
 
 use crate::book::*;
+use crate::compression::*;
 use crate::engine::board::*;
 use crate::engine::search::*;
 use crate::play::*;
