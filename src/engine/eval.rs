@@ -280,7 +280,7 @@ impl PatternPermutation {
                             let t_oidx = perm_base2[oidx];
                             let index = BASE_2_TO_3[t_pidx] + BASE_2_TO_3[t_oidx] * 2;
                             perm_base3[index] = orig_index;
-                            oidx -= 1;
+                            oidx = oidx.wrapping_sub(1);
                         }
                     }
                     (*pattern, perm_base3)
