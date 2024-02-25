@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod test;
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use clap::ArgMatches;
