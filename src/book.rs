@@ -240,9 +240,9 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
     let solve_obj = setup_default();
     //solve_obj.params.parallel_empties_limit = 64;
     let sub_solver = Arc::new(SubSolver::new(&[]));
-    (0..repeat).into_iter().for_each(|i| {
+    for i in 0..repeat {
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
-        let think_time_limit = 1 << rng.gen_range(7..=10);
+        let think_time_limit = 1 << rng.gen_range(8..=12);
         eprintln!("i={}, tl={}", i, think_time_limit);
         let mut solve_obj = SolveObj::new(
             Arc::new(ResCacheTable::new(256, 4096)),
@@ -258,7 +258,7 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
             &mut rng,
             &sub_solver.clone(),
         );
-    });
+    }
     book.lock().unwrap().export(out_book_path)?;
     Ok(())
 }
