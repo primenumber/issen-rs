@@ -35,9 +35,9 @@ pub fn encode_utf16(mut input: u32) -> Result<char, EncodeError> {
         return Err(EncodeError::OutOfRange);
     }
     input += 0x800;
-    if input >= 0x202A {
+    if input >= 0x2028 {
         // skip 0x202A - 0x202E
-        input += 5;
+        input += 7;
     }
     if input >= 0x2066 {
         // skip 0x2066 - 0x2069
