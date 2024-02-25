@@ -47,7 +47,7 @@ pub fn encode_utf16(mut input: u32) -> Result<char, EncodeError> {
     Ok(char::from_u32(u32data).unwrap())
 }
 
-fn encode_bits(bits: i16, length: usize) -> Vec<bool> {
+fn encode_bits(bits: i32, length: usize) -> Vec<bool> {
     let mut result = Vec::new();
     for i in 0..length {
         let bit = (bits >> (length - 1 - i)) & 1;
@@ -61,7 +61,7 @@ fn compress_word(data: i16) -> Vec<bool> {
         vec![false, false]
     } else {
         let sign = data < 0;
-        let data_abs = data.abs();
+        let data_abs = (data as i32).abs();
         if data_abs <= 8 {
             let mut result = vec![false, true, false, sign];
             let bits = data_abs - 1;
