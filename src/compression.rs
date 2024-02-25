@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test;
-use crate::serialize::*;
+use crate::serializer::*;
 use clap::ArgMatches;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
