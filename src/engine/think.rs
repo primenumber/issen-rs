@@ -4,6 +4,7 @@ use crate::engine::hand::*;
 use crate::engine::table::*;
 use std::cmp::max;
 use std::sync::Arc;
+use std::thread;
 use std::time::Instant;
 
 #[derive(Clone)]
@@ -18,6 +19,7 @@ impl Timer {
     }
 }
 
+#[derive(Clone)]
 pub struct Searcher {
     pub evaluator: Arc<Evaluator>,
     pub cache: Arc<EvalCacheTable>,
@@ -279,8 +281,15 @@ impl Searcher {
         }
     }
 
-    pub fn iterative_think(&mut self, board: Board, alpha: i16, beta: i16, passed: bool) -> (i16, Hand, i8) {
-        let min_depth = 3;
+    pub fn iterative_think(
+        &mut self,
+        board: Board,
+        alpha: i16,
+        beta: i16,
+        passed: bool,
+        min_depth: i32,
+        thread_id: usize,
+    ) -> (i16, Hand, i8) {
         let max_depth = 60;
         let mut current_depth = min_depth;
 
@@ -292,7 +301,16 @@ impl Searcher {
             return (score, hand, current_depth as i8);
         }
 
+        let skip_size = [1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4];
+        let skip_phase = [0, 1, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7];
+
         for depth in (min_depth + 1)..=max_depth {
+            if thread_id > 0 {
+                let idx = (thread_id - 1) % 20;
+                if ((depth + skip_phase[idx]) / skip_size[idx]) % 2 == 1 {
+                    continue;
+                }
+            }
             let t = match self.think_with_move(board, alpha, beta, passed, depth * DEPTH_SCALE) {
                 Some(t) => t,
                 _ => return (score, hand, current_depth as i8),
@@ -303,4 +321,28 @@ impl Searcher {
         }
         (score, hand, current_depth as i8)
     }
+}
+
+pub fn think_parallel(searcher: &Searcher, board: Board, alpha: i16, beta: i16, passed: bool) -> (i16, Hand, i8) {
+    thread::scope(|s| {
+        let mut handles = Vec::new();
+        for i in 0..num_cpus::get() {
+            handles.push(s.spawn(move || {
+                let mut ctx = searcher.clone();
+                ctx.iterative_think(board, alpha, beta, passed, 3, i)
+            }));
+        }
+        let mut result_depth = 0;
+        let mut result_score = None;
+        let mut result_hand = None;
+        for h in handles {
+            let (tscore, thand, tdepth) = h.join().unwrap();
+            if tdepth > result_depth {
+                result_depth = tdepth;
+                result_score = Some(tscore);
+                result_hand = Some(thand);
+            }
+        }
+        (result_score.unwrap(), result_hand.unwrap(), result_depth)
+    })
 }

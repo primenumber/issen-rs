@@ -532,14 +532,17 @@ impl Evaluator {
 
     #[cfg(not(target_feature = "avx2"))]
     fn lookup_patterns(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
-        let mut offsets = [0u16; 48];
-        vidx[0].copy_to_slice(unsafe { offsets.get_unchecked_mut(0..16) });
-        vidx[1].copy_to_slice(unsafe { offsets.get_unchecked_mut(16..32) });
-        vidx[2].copy_to_slice(unsafe { offsets.get_unchecked_mut(32..48) });
         let mut sum = 0i32;
-        for (idx, poffset) in offsets.iter().zip(param.offsets.iter()) {
-            let offset = *idx as u32 + *poffset;
-            sum += *unsafe { param.pattern_weights.get_unchecked(offset as usize) } as i32;
+        for (i, idx_vec) in vidx.iter().enumerate() {
+            for (j, idx) in idx_vec.as_array().iter().enumerate() {
+                unsafe {
+                    let offset = *idx as u32
+                        + *param
+                            .offsets
+                            .get_unchecked(i * INDICES_VECTORIZER_VECTOR_ELEMENTS + j);
+                    sum += *param.pattern_weights.get_unchecked(offset as usize) as i32;
+                }
+            }
         }
         sum
     }
