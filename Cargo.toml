@@ -11,16 +11,16 @@ futures = { version = "0.3", features = ["std"] }
 yaml-rust = "0.4"
 spin = "0.7"
 clap = "4.2"
-rayon = "1.5.3"
+rayon = "1.5"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.40"
-tokio = { version = "1.2" , features = ["full"] }
+serde_json = "1.0"
+tokio = { version = "1.36" , features = ["full"] }
 hyper = { version = "0.14", features = ["server"] }
-reqwest = { version = "0.11.12", features = ["json"], default-features = false }
-crc64 = "2.0.0"
+reqwest = { version = "0.11", features = ["json"], default-features = false }
+crc64 = "2.0"
 anyhow = "1.0"
 thiserror = "1.0"
-arrayvec = "0.7.4"
-num_cpus = "1.16.0"
+arrayvec = "0.7"
+num_cpus = "1.16"
 async-recursion = "1.0"
-dashmap = "5.5.3"
+dashmap = "5.5"

@@ -2,21 +2,23 @@
 #![feature(portable_simd)]
 #![feature(test)]
 mod book;
+mod compression;
 mod engine;
 mod play;
 mod record;
 mod remote;
-mod serialize;
+mod serializer;
 mod setup;
 mod sparse_mat;
 mod train;
 
 use crate::book::*;
+use crate::compression::*;
 use crate::engine::board::*;
 use crate::engine::search::*;
 use crate::play::*;
 use crate::remote::*;
-use crate::serialize::*;
+use crate::serializer::*;
 use crate::setup::*;
 use crate::train::*;
 use clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
