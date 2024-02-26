@@ -4,7 +4,6 @@ use crate::engine::eval::*;
 use crate::engine::hand::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
-use crate::serialize::*;
 use crate::sparse_mat::*;
 use clap::ArgMatches;
 use rayon::prelude::*;
@@ -15,8 +14,6 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
-
-const PACKED_SCALE: i32 = 256;
 
 // parse pos string [A-H][1-8]
 fn parse_pos(s: &[u8]) -> Option<usize> {
@@ -421,50 +418,6 @@ pub fn binarize_weights(matches: &ArgMatches) {
         reader.read_line(&mut input_line).unwrap();
         let weight = input_line.trim().parse::<f64>().unwrap();
         writer.write(&weight.to_le_bytes()).unwrap();
-    }
-}
-
-pub fn pack_weights(matches: &ArgMatches) {
-    let input_path = matches.get_one::<String>("INPUT").unwrap();
-    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
-
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let out_f = File::create(output_path).unwrap();
-    let mut writer = BufWriter::new(out_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_weight = input_line.trim().parse().unwrap();
-    let scale = PACKED_SCALE as f64;
-
-    let mut weights = Vec::new();
-    for _i in 0..num_weight {
-        input_line.clear();
-        reader.read_line(&mut input_line).unwrap();
-        let weight = input_line.trim().parse::<f64>().unwrap();
-        let weight_scaled = (weight * scale).round() as i16;
-        weights.push(weight_scaled);
-    }
-
-    let orig_len = weights.len();
-    let mut compressed = compress(&weights);
-
-    write!(&mut writer, "{}\n", orig_len).unwrap();
-
-    while compressed.len() % 15 != 0 {
-        compressed.push(false);
-    }
-    for chunk in compressed.chunks(15) {
-        let mut bits = 0u32;
-        for (idx, &bit) in chunk.iter().enumerate() {
-            if bit {
-                bits |= 1 << idx;
-            }
-        }
-        let c = encode_utf16(bits).unwrap();
-        write!(&mut writer, "{}", c).unwrap();
     }
 }
 
