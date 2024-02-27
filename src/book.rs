@@ -5,6 +5,7 @@ use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::record::*;
+use crate::serializer::*;
 use crate::setup::*;
 use anyhow::Result;
 use clap::ArgMatches;
@@ -296,5 +297,24 @@ pub fn gen_book_v2(matches: &ArgMatches) -> Option<()> {
     let orig_book = Book::import(Path::new(input_path)).unwrap();
     let new_book = orig_book.filter_record(min_count);
     new_book.export(Path::new(output_path)).unwrap();
+    Some(())
+}
+
+pub fn pack_book(matches: &ArgMatches) -> Option<()> {
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let output_path = matches.get_one::<String>("OUTPUT").unwrap();
+    let in_f = File::open(input_path).ok()?;
+    let out_f = File::create(output_path).ok()?;
+    let reader = BufReader::new(in_f);
+    let mut writer = BufWriter::new(out_f);
+    for line in reader.lines() {
+        for pos_data in line.unwrap().as_bytes().chunks(2) {
+            let col = pos_data[0] - b'A';
+            let row = pos_data[1] - b'1';
+            let index = row * 8 + col;
+            write!(writer, "{}", encode_base64_impl(index).unwrap() as char).unwrap();
+        }
+        write!(writer, ">").unwrap();
+    }
     Some(())
 }
