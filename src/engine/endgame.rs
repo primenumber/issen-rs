@@ -207,7 +207,7 @@ pub fn solve_inner(
             };
             let (res, stat) = fastest_first(solve_obj, board, (alpha, beta), passed);
             let record = make_record(
-                solve_obj.cache_gen,
+                solve_obj.local_cache_gen,
                 board,
                 res,
                 None,

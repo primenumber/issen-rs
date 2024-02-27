@@ -99,6 +99,7 @@ fn simplified_abdada_intro(
     if depth >= ctx.solve_obj.params.parallel_depth_limit || rem < ctx.solve_obj.params.parallel_empties_limit {
         let (res, stat) = solve_inner(&mut ctx.solve_obj, board, (alpha, beta), passed);
         ctx.stats.merge(stat);
+        ctx.solve_obj.local_cache_gen += 1;
         return Some((res, None));
     }
     ctx.stats.merge(SolveStat::one());
