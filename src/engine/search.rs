@@ -40,6 +40,7 @@ pub struct SearchParams {
     pub parallel_empties_limit: i8,
     pub eval_ordering_limit: i8,
     pub res_cache_limit: i8,
+    pub local_res_cache_limit: i8,
     pub stability_cut_limit: i8,
     pub ffs_ordering_limit: i8,
     pub static_ordering_limit: i8,
@@ -49,6 +50,7 @@ pub struct SearchParams {
 pub struct SolveObj {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
+    pub local_res_cache: CacheArray<ResCache>,
     pub evaluator: Arc<Evaluator>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
@@ -66,6 +68,7 @@ impl SolveObj {
         SolveObj {
             res_cache,
             eval_cache,
+            local_res_cache: CacheArray::<ResCache>::new(16384),
             evaluator,
             last_cache: Arc::new(LastCache::new()),
             params,

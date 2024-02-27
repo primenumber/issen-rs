@@ -6,7 +6,9 @@ use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use arrayvec::ArrayVec;
+use crc64::Crc64;
 use std::cmp::max;
+use std::io::Write;
 
 fn near_leaf(solve_obj: &mut SolveObj, board: Board) -> (i8, SolveStat) {
     let (score, node_count) = solve_obj.last_cache.solve_last(board);
@@ -190,8 +192,30 @@ pub fn solve_inner(
                 CutType::LessThanAlpha(v) => return (v, SolveStat::one_stcut()),
             }
         }
-        if rem < solve_obj.params.res_cache_limit {
+        if rem < solve_obj.params.local_res_cache_limit {
             fastest_first(solve_obj, board, (alpha, beta), passed)
+        } else if rem < solve_obj.params.res_cache_limit {
+            let mut crc64 = Crc64::new();
+            crc64.write(&board.player.to_le_bytes()).unwrap();
+            crc64.write(&board.opponent.to_le_bytes()).unwrap();
+            let hash = crc64.get();
+            let res_cache = solve_obj.local_res_cache.get(board, hash);
+            let lookup_result = make_lookup_result(res_cache, (&mut alpha, &mut beta));
+            let (lower, upper) = match lookup_result {
+                CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),
+                CacheLookupResult::NoCut(l, u, _) => (l, u),
+            };
+            let (res, stat) = fastest_first(solve_obj, board, (alpha, beta), passed);
+            let record = make_record(
+                solve_obj.cache_gen,
+                board,
+                res,
+                None,
+                (alpha, beta),
+                (lower, upper),
+            );
+            solve_obj.local_res_cache.update(&record, hash);
+            (res, stat)
         } else if rem < solve_obj.params.eval_ordering_limit {
             let (lower, upper) = match lookup_table(solve_obj, board, (&mut alpha, &mut beta)) {
                 CacheLookupResult::Cut(v) => return (v, SolveStat::zero()),

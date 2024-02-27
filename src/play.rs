@@ -263,6 +263,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         parallel_empties_limit: 16,
         eval_ordering_limit: 15,
         res_cache_limit: 12,
+        local_res_cache_limit: 9,
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 5,
