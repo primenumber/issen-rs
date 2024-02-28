@@ -344,6 +344,12 @@ fn main() {
                 .arg(arg_output_file.clone()),
         )
         .subcommand(
+            Command::new("pack-book")
+                .about("Pack book file")
+                .arg(arg_input_file.clone())
+                .arg(arg_output_file.clone()),
+        )
+        .subcommand(
             Command::new("last-table")
                 .about("Generate last move flip count table")
                 .arg(arg_output_file.clone()),
@@ -403,6 +409,9 @@ fn main() {
         }
         Some(("pack", matches)) => {
             pack_weights(matches);
+        }
+        Some(("pack-book", matches)) => {
+            pack_book(matches);
         }
         Some(("last-table", matches)) => {
             gen_last_table(matches);
