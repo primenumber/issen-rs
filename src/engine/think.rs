@@ -19,18 +19,29 @@ impl Timer {
     }
 }
 
-#[derive(Clone)]
-pub struct Searcher {
-    pub evaluator: Arc<Evaluator>,
+pub struct Searcher<Eval: Evaluator> {
+    pub evaluator: Arc<Eval>,
     pub cache: Arc<EvalCacheTable>,
     pub timer: Option<Timer>,
     pub node_count: usize,
     pub cache_gen: u32,
 }
 
+impl<Eval: Evaluator> Clone for Searcher<Eval> {
+    fn clone(&self) -> Self {
+        Searcher::<Eval> {
+            evaluator: self.evaluator.clone(),
+            cache: self.cache.clone(),
+            timer: self.timer.clone(),
+            node_count: self.node_count.clone(),
+            cache_gen: self.cache_gen.clone(),
+        }
+    }
+}
+
 pub const DEPTH_SCALE: i32 = 256;
 
-impl Searcher {
+impl<Eval: Evaluator> Searcher<Eval> {
     fn think_naive(
         &mut self,
         board: Board,
@@ -323,7 +334,13 @@ impl Searcher {
     }
 }
 
-pub fn think_parallel(searcher: &Searcher, board: Board, alpha: i16, beta: i16, passed: bool) -> (i16, Hand, i8) {
+pub fn think_parallel<Eval: Evaluator>(
+    searcher: &Searcher<Eval>,
+    board: Board,
+    alpha: i16,
+    beta: i16,
+    passed: bool,
+) -> (i16, Hand, i8) {
     thread::scope(|s| {
         let mut handles = Vec::new();
         for i in 0..num_cpus::get() {

@@ -1,6 +1,7 @@
 use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::endgame::*;
+use crate::engine::eval::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
@@ -10,15 +11,15 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::thread;
 
-struct ABDADAContext {
-    solve_obj: SolveObj,
+struct ABDADAContext<Eval: Evaluator> {
+    solve_obj: SolveObj<Eval>,
     cs_hash: Arc<DashSet<Board>>,
     finished: Arc<AtomicBool>,
     stats: SolveStat,
 }
 
-fn simplified_abdada_body(
-    ctx: &mut ABDADAContext,
+fn simplified_abdada_body<Eval: Evaluator>(
+    ctx: &mut ABDADAContext<Eval>,
     board: Board,
     (mut alpha, beta): (i8, i8),
     passed: bool,
@@ -88,8 +89,8 @@ fn simplified_abdada_body(
     Some((res, best))
 }
 
-fn simplified_abdada_intro(
-    ctx: &mut ABDADAContext,
+fn simplified_abdada_intro<Eval: Evaluator>(
+    ctx: &mut ABDADAContext<Eval>,
     board: Board,
     (mut alpha, mut beta): (i8, i8),
     passed: bool,
@@ -141,8 +142,8 @@ fn defer_search(board: Board, cs_hash: &Arc<DashSet<Board>>) -> bool {
     cs_hash.contains(&board)
 }
 
-pub fn simplified_abdada(
-    solve_obj: &mut SolveObj,
+pub fn simplified_abdada<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
     board: Board,
     (alpha, beta): (i8, i8),
     passed: bool,

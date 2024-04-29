@@ -45,24 +45,36 @@ pub struct SearchParams {
     pub static_ordering_limit: i8,
 }
 
-#[derive(Clone)]
-pub struct SolveObj {
+pub struct SolveObj<Eval: Evaluator> {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
-    pub evaluator: Arc<Evaluator>,
+    pub evaluator: Arc<Eval>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
     pub cache_gen: u32,
 }
 
-impl SolveObj {
+impl<Eval: Evaluator> Clone for SolveObj<Eval> {
+    fn clone(&self) -> Self {
+        SolveObj::<Eval> {
+            res_cache: self.res_cache.clone(),
+            eval_cache: self.eval_cache.clone(),
+            evaluator: self.evaluator.clone(),
+            last_cache: self.last_cache.clone(),
+            params: self.params.clone(),
+            cache_gen: self.cache_gen.clone(),
+        }
+    }
+}
+
+impl<Eval: Evaluator> SolveObj<Eval> {
     pub fn new(
         res_cache: Arc<ResCacheTable>,
         eval_cache: Arc<EvalCacheTable>,
-        evaluator: Arc<Evaluator>,
+        evaluator: Arc<Eval>,
         params: SearchParams,
         cache_gen: u32,
-    ) -> SolveObj {
+    ) -> SolveObj<Eval> {
         SolveObj {
             res_cache,
             eval_cache,
@@ -177,7 +189,11 @@ pub fn make_lookup_result(res_cache: Option<ResCache>, (alpha, beta): (&mut i8, 
     }
 }
 
-pub fn lookup_table(solve_obj: &mut SolveObj, board: Board, (alpha, beta): (&mut i8, &mut i8)) -> CacheLookupResult {
+pub fn lookup_table<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    (alpha, beta): (&mut i8, &mut i8),
+) -> CacheLookupResult {
     let res_cache = solve_obj.res_cache.get(board);
     make_lookup_result(res_cache, (alpha, beta))
 }
@@ -211,7 +227,11 @@ fn calc_max_depth(rem: i8) -> i8 {
     max_depth
 }
 
-pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Option<Hand>) -> Vec<(Hand, Board)> {
+pub fn move_ordering_impl<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    _old_best: Option<Hand>,
+) -> Vec<(Hand, Board)> {
     const MAX_NEXT_COUNT: usize = 32;
     let mut nexts = ArrayVec::<_, MAX_NEXT_COUNT>::new();
     for (next, pos) in board.next_iter() {
@@ -267,8 +287,8 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
     }
 }
 
-pub fn solve(
-    solve_obj: &mut SolveObj,
+pub fn solve<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
     _worker_urls: &[String],
     board: Board,
     (alpha, beta): (i8, i8),
@@ -278,7 +298,11 @@ pub fn solve(
     simplified_abdada(solve_obj, board, (alpha, beta), passed, depth)
 }
 
-pub fn solve_with_move(board: Board, solve_obj: &mut SolveObj, _sub_solver: &Arc<SubSolver>) -> Hand {
+pub fn solve_with_move<Eval: Evaluator>(
+    board: Board,
+    solve_obj: &mut SolveObj<Eval>,
+    _sub_solver: &Arc<SubSolver>,
+) -> Hand {
     if let Some(best) = simplified_abdada(
         solve_obj,
         board,

@@ -431,7 +431,11 @@ impl<const W: usize> IndicesVectorizer<W> {
 // configuable
 const INDICES_VECTORIZER_PACK_SIZE: usize = 8;
 
-pub struct Evaluator {
+pub trait Evaluator: Send + Sync {
+    fn eval(&self, board: Board) -> i16;
+}
+
+pub struct PatternLinearEvaluator {
     stones_range: RangeInclusive<i8>,
     params: Vec<Parameters>,
     vectorizer: IndicesVectorizer<INDICES_VECTORIZER_PACK_SIZE>,
@@ -449,13 +453,13 @@ pub const SCALE: i16 = 256;
 pub const EVAL_SCORE_MAX: i16 = BOARD_SIZE as i16 * SCALE;
 pub const EVAL_SCORE_MIN: i16 = -EVAL_SCORE_MAX;
 
-impl Evaluator {
-    pub fn load(path: &Path) -> Option<Evaluator> {
+impl PatternLinearEvaluator {
+    pub fn load(path: &Path) -> Option<Self> {
         let folded = FoldedEvaluator::load(path)?;
         Some(Self::from_folded(&folded))
     }
 
-    fn from_folded(folded: &FoldedEvaluator) -> Evaluator {
+    fn from_folded(folded: &FoldedEvaluator) -> Self {
         let params: Vec<_> = folded
             .weights
             .iter()
@@ -469,7 +473,7 @@ impl Evaluator {
 
         let vectorizer = IndicesVectorizer::<INDICES_VECTORIZER_PACK_SIZE>::new(&params.first().unwrap().patterns);
 
-        Evaluator {
+        Self {
             stones_range: folded.config.stones_range.clone(),
             params,
             vectorizer,
@@ -569,8 +573,10 @@ impl Evaluator {
         score += self.lookup_patterns(param, vidx);
         score
     }
+}
 
-    pub fn eval(&self, board: Board) -> i16 {
+impl Evaluator for PatternLinearEvaluator {
+    fn eval(&self, board: Board) -> i16 {
         Self::smooth_val(self.eval_impl(board))
     }
 }
@@ -582,7 +588,7 @@ mod tests {
     #[test]
     fn test_smooth() {
         for raw in -60000..=60000 {
-            let smoothed = Evaluator::smooth_val(raw);
+            let smoothed = PatternLinearEvaluator::smooth_val(raw);
             assert!(smoothed > EVAL_SCORE_MIN);
             assert!(smoothed < EVAL_SCORE_MAX);
         }

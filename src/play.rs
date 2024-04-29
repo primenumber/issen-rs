@@ -137,7 +137,11 @@ pub fn self_play(matches: &ArgMatches) -> Board {
     board.board
 }
 
-fn self_play_worker(mut solve_obj: SolveObj, sub_solver: Arc<SubSolver>, initial_record: &[Hand]) -> (String, i8) {
+fn self_play_worker<Eval: Evaluator>(
+    mut solve_obj: SolveObj<Eval>,
+    sub_solver: Arc<SubSolver>,
+    initial_record: &[Hand],
+) -> (String, i8) {
     use std::fmt::Write;
     let mut board = BoardWithColor::initial_state();
     let mut record_str = String::new();
@@ -256,7 +260,7 @@ macro_rules! parse_input {
 pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let res_cache = Arc::new(ResCacheTable::new(512, 4096));
     let eval_cache = Arc::new(EvalCacheTable::new(512, 4096));
-    let evaluator = Arc::new(Evaluator::load(Path::new("table-220710")).unwrap());
+    let evaluator = Arc::new(PatternLinearEvaluator::load(Path::new("table-220710")).unwrap());
     let search_params = SearchParams {
         reduce: false,
         parallel_depth_limit: 16,

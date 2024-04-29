@@ -15,6 +15,7 @@ mod train;
 use crate::book::*;
 use crate::compression::*;
 use crate::engine::board::*;
+use crate::engine::eval::*;
 use crate::engine::search::*;
 use crate::play::*;
 use crate::remote::*;
@@ -65,7 +66,12 @@ struct Stat {
     correct: bool,
 }
 
-fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &[String]) -> Vec<Stat> {
+fn solve_ffo<Eval: Evaluator>(
+    name: &str,
+    index: &mut usize,
+    solve_obj: &mut SolveObj<Eval>,
+    workers: &[String],
+) -> Vec<Stat> {
     let file = File::open(name).unwrap();
     let reader = BufReader::new(file);
     let mut total_nodes = 0;
