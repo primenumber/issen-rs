@@ -3,6 +3,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::pattern_eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
@@ -57,9 +58,15 @@ pub fn play(matches: &ArgMatches) -> Board {
                     node_count: 0,
                     cache_gen: solve_obj.cache_gen,
                 };
-                let (score, best, depth) =
-                    searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false, 3, 0);
-                let scaled_score = score as f64 / SCALE as f64;
+                let (score, best, depth) = searcher.iterative_think(
+                    board.board,
+                    searcher.evaluator.score_min(),
+                    searcher.evaluator.score_max(),
+                    false,
+                    3,
+                    0,
+                );
+                let scaled_score = score as f64 / solve_obj.evaluator.score_scale() as f64;
                 eprintln!("Estimated result: {}, Depth: {}", scaled_score, depth);
                 best
             } else {
@@ -109,8 +116,14 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 node_count: 0,
                 cache_gen: solve_obj.cache_gen,
             };
-            let (score, best, depth) =
-                searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false, 3, 0);
+            let (score, best, depth) = searcher.iterative_think(
+                board.board,
+                searcher.evaluator.score_min(),
+                searcher.evaluator.score_max(),
+                false,
+                3,
+                0,
+            );
             let secs = start.elapsed().as_secs_f64();
             let nps = (searcher.node_count as f64 / secs) as u64;
             eprintln!(
@@ -172,8 +185,14 @@ fn self_play_worker<Eval: Evaluator>(
                 node_count: 0,
                 cache_gen: solve_obj.cache_gen,
             };
-            let (_score, best, _depth) =
-                searcher.iterative_think(board.board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false, 3, 0);
+            let (_score, best, _depth) = searcher.iterative_think(
+                board.board,
+                searcher.evaluator.score_min(),
+                searcher.evaluator.score_max(),
+                false,
+                3,
+                0,
+            );
             best
         } else {
             let mut obj = solve_obj.clone();
@@ -341,8 +360,8 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             let (score, best, depth) = think_parallel(
                 &searcher,
                 board.board,
-                EVAL_SCORE_MIN,
-                EVAL_SCORE_MAX,
+                searcher.evaluator.score_min(),
+                searcher.evaluator.score_max(),
                 false,
             );
             eprintln!(

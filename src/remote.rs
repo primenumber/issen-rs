@@ -1,6 +1,7 @@
 use crate::engine::board::*;
 use crate::engine::endgame::*;
 use crate::engine::eval::*;
+use crate::engine::pattern_eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;

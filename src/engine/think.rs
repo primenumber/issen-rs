@@ -50,7 +50,7 @@ impl<Eval: Evaluator> Searcher<Eval> {
         passed: bool,
         depth: i32,
     ) -> Option<(i16, Hand)> {
-        let mut res = EVAL_SCORE_MIN - 1;
+        let mut res = self.evaluator.score_min() - 1;
         let mut best = None;
         for (i, (next, pos)) in board.next_iter().enumerate() {
             if i == 0 {
@@ -87,7 +87,10 @@ impl<Eval: Evaluator> Searcher<Eval> {
         }
         if best == None {
             if passed {
-                return Some(((board.score() as i16) * SCALE, Hand::Pass));
+                return Some((
+                    (board.score() as i16) * self.evaluator.score_scale(),
+                    Hand::Pass,
+                ));
             } else {
                 return Some((
                     -self
@@ -113,7 +116,7 @@ impl<Eval: Evaluator> Searcher<Eval> {
         for (next, pos) in board.next_iter() {
             let use_eval_depth = 4;
             let bonus = if Some(pos) == old_best {
-                -16 * SCALE
+                -16 * self.evaluator.score_scale()
             } else {
                 0
             };
@@ -125,13 +128,13 @@ impl<Eval: Evaluator> Searcher<Eval> {
             v.push((
                 next,
                 pos,
-                bonus + weighted_mobility(&next) as i16 * SCALE + eval_score as i16,
+                bonus + weighted_mobility(&next) as i16 * self.evaluator.score_scale() + eval_score as i16,
                 eval_score,
                 0,
             ));
         }
         v.sort_by(|a, b| (a.2, a.3, a.4).cmp(&(b.2, b.3, b.4)));
-        let mut res = EVAL_SCORE_MIN;
+        let mut res = self.evaluator.score_min();
         let mut best = None;
         for (i, &(next, pos, _, eval_score, _)) in v.iter().enumerate() {
             if i == 0 {
@@ -140,11 +143,11 @@ impl<Eval: Evaluator> Searcher<Eval> {
                     .0;
                 best = Some(pos);
             } else {
-                let reduce = if -eval_score < alpha - 8 * SCALE {
+                let reduce = if -eval_score < alpha - 8 * self.evaluator.score_scale() {
                     4 * DEPTH_SCALE
-                } else if -eval_score < alpha - 5 * SCALE {
+                } else if -eval_score < alpha - 5 * self.evaluator.score_scale() {
                     3 * DEPTH_SCALE
-                } else if -eval_score < alpha - 3 * SCALE {
+                } else if -eval_score < alpha - 3 * self.evaluator.score_scale() {
                     2 * DEPTH_SCALE
                 } else {
                     DEPTH_SCALE
@@ -174,7 +177,10 @@ impl<Eval: Evaluator> Searcher<Eval> {
         }
         if v.is_empty() {
             if passed {
-                return Some(((board.score() as i16) * SCALE, Hand::Pass));
+                return Some((
+                    (board.score() as i16) * self.evaluator.score_scale(),
+                    Hand::Pass,
+                ));
             } else {
                 return Some((
                     -self
@@ -217,13 +223,17 @@ impl<Eval: Evaluator> Searcher<Eval> {
                         if entry.depth >= depth {
                             (entry.lower, entry.upper, entry.best)
                         } else {
-                            (EVAL_SCORE_MIN, EVAL_SCORE_MAX, entry.best)
+                            (
+                                self.evaluator.score_min(),
+                                self.evaluator.score_max(),
+                                entry.best,
+                            )
                         }
                     }
-                    None => (EVAL_SCORE_MIN, EVAL_SCORE_MAX, None),
+                    None => (self.evaluator.score_min(), self.evaluator.score_max(), None),
                 }
             } else {
-                (EVAL_SCORE_MIN, EVAL_SCORE_MAX, None)
+                (self.evaluator.score_min(), self.evaluator.score_max(), None)
             };
             let new_alpha = alpha.max(lower);
             let new_beta = beta.min(upper);
@@ -237,9 +247,9 @@ impl<Eval: Evaluator> Searcher<Eval> {
             let (res, best) = self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
             if depth >= min_cache_depth {
                 let range = if res <= new_alpha {
-                    (EVAL_SCORE_MIN, res)
+                    (self.evaluator.score_min(), res)
                 } else if res >= new_beta {
-                    (res, EVAL_SCORE_MAX)
+                    (res, self.evaluator.score_max())
                 } else {
                     (res, res)
                 };
@@ -271,7 +281,7 @@ impl<Eval: Evaluator> Searcher<Eval> {
             return Some((score, b));
         }
 
-        let mut current_score = EVAL_SCORE_MIN - 1;
+        let mut current_score = self.evaluator.score_min() - 1;
         let mut current_hand = None;
         let mut pass = true;
         for (next, hand) in board.next_iter() {

@@ -247,11 +247,11 @@ pub fn move_ordering_impl<Eval: Evaluator>(
         for &(_score, pos, next) in nexts.iter() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
             let bonus = if rem < 18 {
-                mobility_score * SCALE * 1
+                mobility_score * solve_obj.evaluator.score_scale() * 1
             } else if rem < 22 {
-                mobility_score * SCALE / 2
+                mobility_score * solve_obj.evaluator.score_scale() / 2
             } else {
-                mobility_score * SCALE / 4
+                mobility_score * solve_obj.evaluator.score_scale() / 4
             };
             let mut searcher = Searcher {
                 evaluator: solve_obj.evaluator.clone(),
@@ -263,8 +263,8 @@ pub fn move_ordering_impl<Eval: Evaluator>(
             let score = searcher
                 .think(
                     next,
-                    EVAL_SCORE_MIN,
-                    EVAL_SCORE_MAX,
+                    solve_obj.evaluator.score_min(),
+                    solve_obj.evaluator.score_max(),
                     false,
                     think_depth as i32 * DEPTH_SCALE,
                 )
@@ -279,7 +279,7 @@ pub fn move_ordering_impl<Eval: Evaluator>(
         let score_min = nexts[0].0;
         nexts
             .into_iter()
-            .filter(|e| e.0 < score_min + 16 * SCALE)
+            .filter(|e| e.0 < score_min + 16 * solve_obj.evaluator.score_scale())
             .map(|e| (e.1, e.2))
             .collect()
     } else {
