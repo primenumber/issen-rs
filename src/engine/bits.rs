@@ -33,7 +33,7 @@ impl BitManip for u64 {
         x
     }
 
-    #[cfg(target_feature = "bmi1")]
+    #[cfg(target_feature = "bmi2")]
     fn pdep(&self, mask: u64) -> u64 {
         unsafe { _pdep_u64(*self, mask) }
     }
