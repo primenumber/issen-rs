@@ -42,6 +42,7 @@ pub struct NNUEEvaluator {
     config: NNUEConfig,
     embedding: Vec<f32>,
     offsets: Vec<usize>,
+    #[allow(dead_code)]
     pos_to_indices: Vec<[usize; 64]>,
     layer1_weight: Vec<f32>,
     layer1_bias: Vec<f32>,
@@ -64,13 +65,13 @@ impl NNUEEvaluator {
         Some(v)
     }
 
-    fn normalize_vec(v: &mut [f32]) {
+    fn normalize_vec(v: &mut [f32], max_norm: f32) {
         let mut sum = 0.;
         for e in v.iter() {
             sum += *e * *e;
         }
-        if sum > 1.0 {
-            let scale = 1.0 / sum.sqrt();
+        if sum > max_norm {
+            let scale = (max_norm / sum).sqrt();
             for e in v {
                 *e *= scale;
             }
@@ -109,7 +110,7 @@ impl NNUEEvaluator {
         }
         let mut embedding = Self::load_param(&path.join("embedding.weight"), offset * config.front)?;
         for chunk in embedding.chunks_mut(config.front) {
-            Self::normalize_vec(chunk);
+            Self::normalize_vec(chunk, 1.0);
         }
         let embedding = embedding;
         let mut layer1_weight = Self::load_param(
@@ -162,6 +163,29 @@ impl NNUEEvaluator {
     fn score_max() -> i16 {
         Self::score_scale() * BOARD_SIZE as i16
     }
+
+    fn compute_index(&self, board: Board, pattern: u64, offset: usize) -> usize {
+        let pbits = board.player.pext(pattern) as usize;
+        let obits = board.opponent.pext(pattern) as usize;
+        BASE_2_TO_3[pbits] + 2 * BASE_2_TO_3[obits] + offset
+    }
+
+    fn smooth_val(raw_score: i32) -> i16 {
+        let scale32 = Self::score_scale() as i32;
+        (if raw_score > 63 * scale32 {
+            (BOARD_SIZE as i32) * scale32 - scale32 * scale32 / (raw_score - 62 * scale32)
+        } else if raw_score < -63 * scale32 {
+            -(BOARD_SIZE as i32) * scale32 - scale32 * scale32 / (raw_score + 62 * scale32)
+        } else {
+            raw_score
+        }) as i16
+    }
+
+    fn embedding_bag_impl(&self, index: usize, front_vec: &mut [f32]) {
+        for (f, e) in front_vec.iter_mut().zip(self.lookup_vec(index)) {
+            *f += *e;
+        }
+    }
 }
 
 impl Evaluator for NNUEEvaluator {
@@ -169,28 +193,22 @@ impl Evaluator for NNUEEvaluator {
         let mut front_vec = vec![0.0; self.config.front];
         for _ in 0..4 {
             for (pattern, offset) in self.config.patterns.iter().zip(self.offsets.iter()) {
-                let pbits = board.player.pext(*pattern) as usize;
-                let obits = board.opponent.pext(*pattern) as usize;
-                let index = BASE_2_TO_3[pbits] + 2 * BASE_2_TO_3[obits] + offset;
-                for (e, f) in self.lookup_vec(index).into_iter().zip(front_vec.iter_mut()) {
-                    *f += *e;
-                }
+                let index = self.compute_index(board, *pattern, *offset);
+                self.embedding_bag_impl(index, &mut front_vec);
             }
             let board_flip = board.flip_diag();
             for (pattern, offset) in self.config.patterns.iter().zip(self.offsets.iter()) {
-                let pbits = board_flip.player.pext(*pattern) as usize;
-                let obits = board_flip.opponent.pext(*pattern) as usize;
-                let index = BASE_2_TO_3[pbits] + 2 * BASE_2_TO_3[obits] + offset;
-                for (e, f) in self.lookup_vec(index).into_iter().zip(front_vec.iter_mut()) {
-                    *f += *e;
-                }
+                let index = self.compute_index(board_flip, *pattern, *offset);
+                self.embedding_bag_impl(index, &mut front_vec);
             }
             board = board.rot90();
         }
         let mut middle_vec = self.layer1_bias.clone();
-        for (j, fe) in front_vec.iter().enumerate() {
-            for (i, me) in middle_vec.iter_mut().enumerate() {
-                *me += *fe * unsafe { *self.layer1_weight.get_unchecked(i + self.config.middle * j) };
+        let mut index = 0;
+        for fe in front_vec.iter() {
+            for me in middle_vec.iter_mut() {
+                *me += *fe * unsafe { *self.layer1_weight.get_unchecked(index) };
+                index += 1;
             }
         }
         for me in middle_vec.iter_mut() {
@@ -199,9 +217,11 @@ impl Evaluator for NNUEEvaluator {
             }
         }
         let mut back_vec = self.layer2_bias.clone();
-        for (j, me) in middle_vec.iter().enumerate() {
-            for (i, be) in back_vec.iter_mut().enumerate() {
-                *be += *me * unsafe { *self.layer2_weight.get_unchecked(i + self.config.back * j) };
+        let mut index = 0;
+        for me in middle_vec.iter() {
+            for be in back_vec.iter_mut() {
+                *be += *me * unsafe { *self.layer2_weight.get_unchecked(index) };
+                index += 1;
             }
         }
         for be in back_vec.iter_mut() {
@@ -213,7 +233,7 @@ impl Evaluator for NNUEEvaluator {
         for (be, w) in back_vec.iter().zip(self.layer3_weight.iter()) {
             result += *be * *w;
         }
-        (Self::score_scale() as f32 * result.clamp(-64., 64.)).round() as i16
+        Self::smooth_val((Self::score_scale() as f32 * result).round() as i32)
     }
 
     fn score_scale(&self) -> i16 {
