@@ -1,5 +1,3 @@
-#[cfg(test)]
-mod test;
 use crate::engine::board::*;
 
 pub fn pow3(x: i8) -> usize {

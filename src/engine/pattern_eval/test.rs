@@ -1,7 +1,7 @@
 extern crate test;
 use super::*;
-use crate::setup::*;
 use std::io::{BufRead, BufReader};
+use std::sync::Arc;
 use test::Bencher;
 
 fn load_stress_test_set() -> Vec<(Board, i8)> {
@@ -26,13 +26,13 @@ fn load_stress_test_set() -> Vec<(Board, i8)> {
 
 #[bench]
 fn bench_eval(b: &mut Bencher) {
-    let solve_obj = setup_default();
+    let evaluator = Arc::new(PatternLinearEvaluator::load(Path::new("table-220710")).unwrap());
     let dataset = load_stress_test_set();
 
     b.iter(|| {
         dataset
             .iter()
-            .map(|(board, _)| solve_obj.evaluator.eval(*board) as i32)
+            .map(|(board, _)| evaluator.eval(*board) as i32)
             .sum::<i32>()
     });
 }
