@@ -1,5 +1,3 @@
-#[cfg(test)]
-mod test;
 use crate::engine::board::*;
 
 pub trait Evaluator: Send + Sync {
