@@ -183,29 +183,25 @@ impl NNUEEvaluator {
         }) as i16
     }
 
-    fn embedding_bag_impl(&self, index: usize, front_vec: &mut [f32]) {
-        for (f, e) in front_vec.iter_mut().zip(self.lookup_vec(index)) {
-            *f += *e;
+    fn embedding_bag_impl(&self, board: Board, front_vec: &mut [f32]) {
+        for (pattern, offset) in self.config.patterns.iter().zip(self.offsets.iter()) {
+            let index = self.compute_index(board, *pattern, *offset);
+            for (f, e) in front_vec.iter_mut().zip(self.lookup_vec(index)) {
+                *f += *e;
+            }
         }
     }
-}
 
-impl Evaluator for NNUEEvaluator {
-    fn eval(&self, mut board: Board) -> i16 {
-        let mut front_vec = vec![0.0; self.config.front];
+    fn embedding_bag(&self, mut board: Board, front_vec: &mut [f32]) {
         for _ in 0..4 {
-            for (pattern, offset) in self.config.patterns.iter().zip(self.offsets.iter()) {
-                let index = self.compute_index(board, *pattern, *offset);
-                self.embedding_bag_impl(index, &mut front_vec);
-            }
+            self.embedding_bag_impl(board, front_vec);
             let board_flip = board.flip_diag();
-            for (pattern, offset) in self.config.patterns.iter().zip(self.offsets.iter()) {
-                let index = self.compute_index(board_flip, *pattern, *offset);
-                self.embedding_bag_impl(index, &mut front_vec);
-            }
+            self.embedding_bag_impl(board_flip, front_vec);
             board = board.rot90();
         }
-        let mut middle_vec = self.layer1_bias.clone();
+    }
+
+    fn layer_1(&self, front_vec: &[f32], middle_vec: &mut [f32]) {
         let mut index = 0;
         for fe in front_vec.iter() {
             for me in middle_vec.iter_mut() {
@@ -218,7 +214,9 @@ impl Evaluator for NNUEEvaluator {
                 *me = 0.;
             }
         }
-        let mut back_vec = self.layer2_bias.clone();
+    }
+
+    fn layer_2(&self, middle_vec: &[f32], back_vec: &mut [f32]) {
         let mut index = 0;
         for me in middle_vec.iter() {
             for be in back_vec.iter_mut() {
@@ -231,10 +229,26 @@ impl Evaluator for NNUEEvaluator {
                 *be = 0.;
             }
         }
+    }
+
+    fn layer_3(&self, back_vec: &[f32]) -> f32 {
         let mut result = self.layer3_bias[0];
         for (be, w) in back_vec.iter().zip(self.layer3_weight.iter()) {
             result += *be * *w;
         }
+        result
+    }
+}
+
+impl Evaluator for NNUEEvaluator {
+    fn eval(&self, board: Board) -> i16 {
+        let mut front_vec = vec![0.0; self.config.front];
+        self.embedding_bag(board, &mut front_vec);
+        let mut middle_vec = self.layer1_bias.clone();
+        self.layer_1(&front_vec, &mut middle_vec);
+        let mut back_vec = self.layer2_bias.clone();
+        self.layer_2(&middle_vec, &mut back_vec);
+        let result = self.layer_3(&back_vec);
         Self::smooth_val((Self::score_scale() as f32 * result).round() as i32)
     }
 
