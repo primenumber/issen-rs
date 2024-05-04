@@ -272,6 +272,7 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
     }
 }
 
+// num_threads: number of searching threads, use number of cpus when None
 pub fn solve(
     solve_obj: &mut SolveObj,
     _worker_urls: &[String],
@@ -279,17 +280,25 @@ pub fn solve(
     (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
+    num_threads: Option<usize>,
 ) -> (i8, Option<Hand>, SolveStat) {
-    simplified_abdada(solve_obj, board, (alpha, beta), passed, depth)
+    simplified_abdada(solve_obj, board, (alpha, beta), passed, depth, num_threads)
 }
 
-pub fn solve_with_move(board: Board, solve_obj: &mut SolveObj, _sub_solver: &Arc<SubSolver>) -> Hand {
+// num_threads: number of searching threads, use number of cpus when None
+pub fn solve_with_move(
+    board: Board,
+    solve_obj: &mut SolveObj,
+    _sub_solver: &Arc<SubSolver>,
+    num_threads: Option<usize>,
+) -> Hand {
     if let Some(best) = simplified_abdada(
         solve_obj,
         board,
         (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
         false,
         0,
+        num_threads,
     )
     .1
     {
@@ -299,7 +308,15 @@ pub fn solve_with_move(board: Board, solve_obj: &mut SolveObj, _sub_solver: &Arc
     let mut result = -65;
     for pos in board.mobility() {
         let next = board.play(pos).unwrap();
-        let res = -simplified_abdada(solve_obj, next, (-(BOARD_SIZE as i8), -result), false, 0).0;
+        let res = -simplified_abdada(
+            solve_obj,
+            next,
+            (-(BOARD_SIZE as i8), -result),
+            false,
+            0,
+            num_threads,
+        )
+        .0;
         if res > result {
             result = res;
             best_pos = Some(pos);

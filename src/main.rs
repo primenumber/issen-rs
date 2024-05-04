@@ -87,6 +87,7 @@ fn solve_ffo(name: &str, index: &mut usize, solve_obj: &mut SolveObj, workers: &
                     (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
                     false,
                     0,
+                    None,
                 );
                 let end = start.elapsed();
                 let milli_seconds = end.as_millis() + 1; // ceil up, avoid zero-division
