@@ -192,7 +192,7 @@ fn search<Eval: Evaluator>(
             node_count: 0,
             cache_gen: solve_obj.cache_gen,
         };
-        let (_score, hand, _depth) = think_parallel(
+        let (_score, hand, _depth, _node_count) = think_parallel(
             &searcher,
             board,
             solve_obj.evaluator.score_min(),
