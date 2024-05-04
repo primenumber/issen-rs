@@ -2,6 +2,7 @@
 mod test;
 use crate::engine::bits::*;
 use crate::engine::board::*;
+use crate::engine::eval::*;
 use crate::engine::hand::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
@@ -10,7 +11,7 @@ use crc64::Crc64;
 use std::cmp::max;
 use std::io::Write;
 
-fn near_leaf(solve_obj: &mut SolveObj, board: Board) -> (i8, SolveStat) {
+fn near_leaf<Eval: Evaluator>(solve_obj: &mut SolveObj<Eval>, board: Board) -> (i8, SolveStat) {
     let (score, node_count) = solve_obj.last_cache.solve_last(board);
     (
         score,
@@ -21,7 +22,12 @@ fn near_leaf(solve_obj: &mut SolveObj, board: Board) -> (i8, SolveStat) {
     )
 }
 
-fn naive(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
+fn naive<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    (mut alpha, beta): (i8, i8),
+    passed: bool,
+) -> (i8, SolveStat) {
     let mut pass = true;
     let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
@@ -47,7 +53,12 @@ fn naive(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), pa
     (res, stat)
 }
 
-fn static_order(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
+fn static_order<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    (mut alpha, beta): (i8, i8),
+    passed: bool,
+) -> (i8, SolveStat) {
     let mut pass = true;
     let mut res = -(BOARD_SIZE as i8);
     let mut stat = SolveStat::one();
@@ -86,7 +97,12 @@ fn static_order(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, 
     (res, stat)
 }
 
-fn negascout_impl(solve_obj: &mut SolveObj, next: Board, (alpha, beta): (i8, i8), is_first: bool) -> (i8, SolveStat) {
+fn negascout_impl<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    next: Board,
+    (alpha, beta): (i8, i8),
+    is_first: bool,
+) -> (i8, SolveStat) {
     if is_first {
         solve_inner(solve_obj, next, (-beta, -alpha), false)
     } else {
@@ -104,7 +120,12 @@ fn negascout_impl(solve_obj: &mut SolveObj, next: Board, (alpha, beta): (i8, i8)
     }
 }
 
-fn fastest_first(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8, i8), passed: bool) -> (i8, SolveStat) {
+fn fastest_first<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    (mut alpha, beta): (i8, i8),
+    passed: bool,
+) -> (i8, SolveStat) {
     const MAX_FFS_NEXT: usize = 20;
     let mut nexts = ArrayVec::<_, MAX_FFS_NEXT>::new();
     for (next, _pos) in board.next_iter() {
@@ -134,8 +155,8 @@ fn fastest_first(solve_obj: &mut SolveObj, board: Board, (mut alpha, beta): (i8,
     (res, stat)
 }
 
-fn move_ordering_by_eval(
-    solve_obj: &mut SolveObj,
+fn move_ordering_by_eval<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
     board: Board,
     (mut alpha, beta): (i8, i8),
     passed: bool,
@@ -169,8 +190,8 @@ fn move_ordering_by_eval(
     (res, best, stat)
 }
 
-pub fn solve_inner(
-    solve_obj: &mut SolveObj,
+pub fn solve_inner<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
     board: Board,
     (mut alpha, mut beta): (i8, i8),
     passed: bool,

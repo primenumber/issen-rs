@@ -169,7 +169,12 @@ impl Book {
     }
 }
 
-fn search(board: Board, think_time_limit: u128, solve_obj: &mut SolveObj, sub_solver: &Arc<SubSolver>) -> Hand {
+fn search<Eval: Evaluator>(
+    board: Board,
+    think_time_limit: u128,
+    solve_obj: &mut SolveObj<Eval>,
+    sub_solver: &Arc<SubSolver>,
+) -> Hand {
     solve_obj.cache_gen += 1;
     if board.empty().count_ones() <= 18 {
         let mut solve_obj = solve_obj.clone();
@@ -187,7 +192,13 @@ fn search(board: Board, think_time_limit: u128, solve_obj: &mut SolveObj, sub_so
             node_count: 0,
             cache_gen: solve_obj.cache_gen,
         };
-        let (_score, hand, _depth) = think_parallel(&searcher, board, EVAL_SCORE_MIN, EVAL_SCORE_MAX, false);
+        let (_score, hand, _depth, _node_count) = think_parallel(
+            &searcher,
+            board,
+            solve_obj.evaluator.score_min(),
+            solve_obj.evaluator.score_max(),
+            false,
+        );
         hand
     }
 }
@@ -205,10 +216,10 @@ fn gen_opening(rng: &mut SmallRng) -> (Board, Vec<Hand>) {
     (board, hands)
 }
 
-fn play_with_book(
+fn play_with_book<Eval: Evaluator>(
     book: Arc<Mutex<Book>>,
     think_time_limit: u128,
-    solve_obj: &mut SolveObj,
+    solve_obj: &mut SolveObj<Eval>,
     rng: &mut SmallRng,
     sub_solver: &Arc<SubSolver>,
 ) {

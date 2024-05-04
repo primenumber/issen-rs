@@ -46,26 +46,40 @@ pub struct SearchParams {
     pub static_ordering_limit: i8,
 }
 
-#[derive(Clone)]
-pub struct SolveObj {
+pub struct SolveObj<Eval: Evaluator> {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
     pub local_res_cache: CacheArray<ResCache>,
-    pub evaluator: Arc<Evaluator>,
+    pub evaluator: Arc<Eval>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
     pub cache_gen: u32,
     pub local_cache_gen: u32,
 }
 
-impl SolveObj {
+impl<Eval: Evaluator> Clone for SolveObj<Eval> {
+    fn clone(&self) -> Self {
+        SolveObj::<Eval> {
+            res_cache: self.res_cache.clone(),
+            eval_cache: self.eval_cache.clone(),
+            local_res_cache: self.local_res_cache.clone(),
+            evaluator: self.evaluator.clone(),
+            last_cache: self.last_cache.clone(),
+            params: self.params.clone(),
+            cache_gen: self.cache_gen.clone(),
+            local_cache_gen: self.local_cache_gen.clone(),
+        }
+    }
+}
+
+impl<Eval: Evaluator> SolveObj<Eval> {
     pub fn new(
         res_cache: Arc<ResCacheTable>,
         eval_cache: Arc<EvalCacheTable>,
-        evaluator: Arc<Evaluator>,
+        evaluator: Arc<Eval>,
         params: SearchParams,
         cache_gen: u32,
-    ) -> SolveObj {
+    ) -> SolveObj<Eval> {
         SolveObj {
             res_cache,
             eval_cache,
@@ -182,7 +196,11 @@ pub fn make_lookup_result(res_cache: Option<ResCache>, (alpha, beta): (&mut i8, 
     }
 }
 
-pub fn lookup_table(solve_obj: &mut SolveObj, board: Board, (alpha, beta): (&mut i8, &mut i8)) -> CacheLookupResult {
+pub fn lookup_table<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    (alpha, beta): (&mut i8, &mut i8),
+) -> CacheLookupResult {
     let res_cache = solve_obj.res_cache.get(board);
     make_lookup_result(res_cache, (alpha, beta))
 }
@@ -216,7 +234,11 @@ fn calc_max_depth(rem: i8) -> i8 {
     max_depth
 }
 
-pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Option<Hand>) -> Vec<(Hand, Board)> {
+pub fn move_ordering_impl<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
+    board: Board,
+    _old_best: Option<Hand>,
+) -> Vec<(Hand, Board)> {
     const MAX_NEXT_COUNT: usize = 32;
     let mut nexts = ArrayVec::<_, MAX_NEXT_COUNT>::new();
     for (next, pos) in board.next_iter() {
@@ -232,11 +254,11 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
         for &(_score, pos, next) in nexts.iter() {
             let mobility_score = popcnt(next.mobility_bits()) as i16;
             let bonus = if rem < 18 {
-                mobility_score * SCALE * 1
+                mobility_score * solve_obj.evaluator.score_scale() * 1
             } else if rem < 22 {
-                mobility_score * SCALE / 2
+                mobility_score * solve_obj.evaluator.score_scale() / 2
             } else {
-                mobility_score * SCALE / 4
+                mobility_score * solve_obj.evaluator.score_scale() / 4
             };
             let mut searcher = Searcher {
                 evaluator: solve_obj.evaluator.clone(),
@@ -248,8 +270,8 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
             let score = searcher
                 .think(
                     next,
-                    EVAL_SCORE_MIN,
-                    EVAL_SCORE_MAX,
+                    solve_obj.evaluator.score_min(),
+                    solve_obj.evaluator.score_max(),
                     false,
                     think_depth as i32 * DEPTH_SCALE,
                 )
@@ -264,7 +286,7 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
         let score_min = nexts[0].0;
         nexts
             .into_iter()
-            .filter(|e| e.0 < score_min + 16 * SCALE)
+            .filter(|e| e.0 < score_min + 16 * solve_obj.evaluator.score_scale())
             .map(|e| (e.1, e.2))
             .collect()
     } else {
@@ -272,9 +294,8 @@ pub fn move_ordering_impl(solve_obj: &mut SolveObj, board: Board, _old_best: Opt
     }
 }
 
-// num_threads: number of searching threads, use number of cpus when None
-pub fn solve(
-    solve_obj: &mut SolveObj,
+pub fn solve<Eval: Evaluator>(
+    solve_obj: &mut SolveObj<Eval>,
     _worker_urls: &[String],
     board: Board,
     (alpha, beta): (i8, i8),
@@ -286,9 +307,9 @@ pub fn solve(
 }
 
 // num_threads: number of searching threads, use number of cpus when None
-pub fn solve_with_move(
+pub fn solve_with_move<Eval: Evaluator>(
     board: Board,
-    solve_obj: &mut SolveObj,
+    solve_obj: &mut SolveObj<Eval>,
     _sub_solver: &Arc<SubSolver>,
     num_threads: Option<usize>,
 ) -> Hand {

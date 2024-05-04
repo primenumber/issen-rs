@@ -1,6 +1,7 @@
 extern crate test;
 use super::*;
 use crate::setup::*;
+use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use test::Bencher;
@@ -57,5 +58,23 @@ fn bench_solve_inner(b: &mut Bencher) {
                 false,
             );
         }
+    });
+}
+
+#[bench]
+fn bench_solve_inner_parallel(b: &mut Bencher) {
+    let solve_obj = setup_default();
+    let dataset = load_stress_test_set();
+
+    b.iter(|| {
+        dataset.par_iter().for_each(|&(board, _desired)| {
+            let mut obj = solve_obj.clone();
+            let (_res, _stat) = solve_inner(
+                &mut obj,
+                board,
+                (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
+                false,
+            );
+        });
     });
 }

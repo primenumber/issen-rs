@@ -5,6 +5,7 @@ pub mod eval;
 pub mod hand;
 pub mod last_cache;
 pub mod midgame;
+pub mod pattern_eval;
 pub mod search;
 pub mod table;
 pub mod think;

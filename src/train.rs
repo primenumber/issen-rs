@@ -2,6 +2,7 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::eval::*;
 use crate::engine::hand::*;
+use crate::engine::pattern_eval::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::sparse_mat::*;
@@ -447,7 +448,7 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
     let dataset: Vec<_> = dataset.into_iter().take(8192).collect();
 
     eprintln!("Computing...");
-    let evaluator = Arc::new(Evaluator::load(Path::new("table-single"))?);
+    let evaluator = Arc::new(PatternLinearEvaluator::load(Path::new("table-single"))?);
     let depth_max = 8;
     let scores: Vec<_> = dataset
         .par_iter()
@@ -464,8 +465,8 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
             for depth in 1..=depth_max {
                 if let Some((evaluated, _)) = searcher.think(
                     board,
-                    EVAL_SCORE_MIN,
-                    EVAL_SCORE_MAX,
+                    evaluator.score_min(),
+                    evaluator.score_max(),
                     false,
                     depth as i32 * DEPTH_SCALE,
                 ) {
@@ -502,7 +503,11 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
             for idx in 1..=15 {
                 let ratio = 1.0 - 0.7f32.powi(idx);
                 let index = (total as f32 * ratio) as usize;
-                println!("{} {}", ratio, vd[index] as f32 / SCALE as f32);
+                println!(
+                    "{} {}",
+                    ratio,
+                    vd[index] as f32 / evaluator.score_scale() as f32
+                );
             }
         }
     }

@@ -19,18 +19,29 @@ impl Timer {
     }
 }
 
-#[derive(Clone)]
-pub struct Searcher {
-    pub evaluator: Arc<Evaluator>,
+pub struct Searcher<Eval: Evaluator> {
+    pub evaluator: Arc<Eval>,
     pub cache: Arc<EvalCacheTable>,
     pub timer: Option<Timer>,
     pub node_count: usize,
     pub cache_gen: u32,
 }
 
+impl<Eval: Evaluator> Clone for Searcher<Eval> {
+    fn clone(&self) -> Self {
+        Searcher::<Eval> {
+            evaluator: self.evaluator.clone(),
+            cache: self.cache.clone(),
+            timer: self.timer.clone(),
+            node_count: self.node_count.clone(),
+            cache_gen: self.cache_gen.clone(),
+        }
+    }
+}
+
 pub const DEPTH_SCALE: i32 = 256;
 
-impl Searcher {
+impl<Eval: Evaluator> Searcher<Eval> {
     fn think_naive(
         &mut self,
         board: Board,
@@ -39,7 +50,7 @@ impl Searcher {
         passed: bool,
         depth: i32,
     ) -> Option<(i16, Hand)> {
-        let mut res = EVAL_SCORE_MIN - 1;
+        let mut res = self.evaluator.score_min() - 1;
         let mut best = None;
         for (i, (next, pos)) in board.next_iter().enumerate() {
             if i == 0 {
@@ -76,7 +87,10 @@ impl Searcher {
         }
         if best == None {
             if passed {
-                return Some(((board.score() as i16) * SCALE, Hand::Pass));
+                return Some((
+                    (board.score() as i16) * self.evaluator.score_scale(),
+                    Hand::Pass,
+                ));
             } else {
                 return Some((
                     -self
@@ -102,7 +116,7 @@ impl Searcher {
         for (next, pos) in board.next_iter() {
             let use_eval_depth = 4;
             let bonus = if Some(pos) == old_best {
-                -16 * SCALE
+                -16 * self.evaluator.score_scale()
             } else {
                 0
             };
@@ -114,13 +128,13 @@ impl Searcher {
             v.push((
                 next,
                 pos,
-                bonus + weighted_mobility(&next) as i16 * SCALE + eval_score as i16,
+                bonus + weighted_mobility(&next) as i16 * self.evaluator.score_scale() + eval_score as i16,
                 eval_score,
                 0,
             ));
         }
         v.sort_by(|a, b| (a.2, a.3, a.4).cmp(&(b.2, b.3, b.4)));
-        let mut res = EVAL_SCORE_MIN;
+        let mut res = self.evaluator.score_min();
         let mut best = None;
         for (i, &(next, pos, _, eval_score, _)) in v.iter().enumerate() {
             if i == 0 {
@@ -129,11 +143,11 @@ impl Searcher {
                     .0;
                 best = Some(pos);
             } else {
-                let reduce = if -eval_score < alpha - 8 * SCALE {
+                let reduce = if -eval_score < alpha - 8 * self.evaluator.score_scale() {
                     4 * DEPTH_SCALE
-                } else if -eval_score < alpha - 5 * SCALE {
+                } else if -eval_score < alpha - 5 * self.evaluator.score_scale() {
                     3 * DEPTH_SCALE
-                } else if -eval_score < alpha - 3 * SCALE {
+                } else if -eval_score < alpha - 3 * self.evaluator.score_scale() {
                     2 * DEPTH_SCALE
                 } else {
                     DEPTH_SCALE
@@ -163,7 +177,10 @@ impl Searcher {
         }
         if v.is_empty() {
             if passed {
-                return Some(((board.score() as i16) * SCALE, Hand::Pass));
+                return Some((
+                    (board.score() as i16) * self.evaluator.score_scale(),
+                    Hand::Pass,
+                ));
             } else {
                 return Some((
                     -self
@@ -206,13 +223,17 @@ impl Searcher {
                         if entry.depth >= depth {
                             (entry.lower, entry.upper, entry.best)
                         } else {
-                            (EVAL_SCORE_MIN, EVAL_SCORE_MAX, entry.best)
+                            (
+                                self.evaluator.score_min(),
+                                self.evaluator.score_max(),
+                                entry.best,
+                            )
                         }
                     }
-                    None => (EVAL_SCORE_MIN, EVAL_SCORE_MAX, None),
+                    None => (self.evaluator.score_min(), self.evaluator.score_max(), None),
                 }
             } else {
-                (EVAL_SCORE_MIN, EVAL_SCORE_MAX, None)
+                (self.evaluator.score_min(), self.evaluator.score_max(), None)
             };
             let new_alpha = alpha.max(lower);
             let new_beta = beta.min(upper);
@@ -226,9 +247,9 @@ impl Searcher {
             let (res, best) = self.think_impl(board, new_alpha, new_beta, passed, old_best, depth)?;
             if depth >= min_cache_depth {
                 let range = if res <= new_alpha {
-                    (EVAL_SCORE_MIN, res)
+                    (self.evaluator.score_min(), res)
                 } else if res >= new_beta {
-                    (res, EVAL_SCORE_MAX)
+                    (res, self.evaluator.score_max())
                 } else {
                     (res, res)
                 };
@@ -260,7 +281,7 @@ impl Searcher {
             return Some((score, b));
         }
 
-        let mut current_score = EVAL_SCORE_MIN - 1;
+        let mut current_score = self.evaluator.score_min() - 1;
         let mut current_hand = None;
         let mut pass = true;
         for (next, hand) in board.next_iter() {
@@ -323,26 +344,40 @@ impl Searcher {
     }
 }
 
-pub fn think_parallel(searcher: &Searcher, board: Board, alpha: i16, beta: i16, passed: bool) -> (i16, Hand, i8) {
+pub fn think_parallel<Eval: Evaluator>(
+    searcher: &Searcher<Eval>,
+    board: Board,
+    alpha: i16,
+    beta: i16,
+    passed: bool,
+) -> (i16, Hand, i8, usize) {
     thread::scope(|s| {
         let mut handles = Vec::new();
         for i in 0..num_cpus::get() {
             handles.push(s.spawn(move || {
                 let mut ctx = searcher.clone();
-                ctx.iterative_think(board, alpha, beta, passed, 3, i)
+                let (score, hand, depth) = ctx.iterative_think(board, alpha, beta, passed, 3, i);
+                (score, hand, depth, ctx.node_count)
             }));
         }
         let mut result_depth = 0;
         let mut result_score = None;
         let mut result_hand = None;
+        let mut result_node_count = 0;
         for h in handles {
-            let (tscore, thand, tdepth) = h.join().unwrap();
+            let (tscore, thand, tdepth, node_count) = h.join().unwrap();
+            result_node_count += node_count;
             if tdepth > result_depth {
                 result_depth = tdepth;
                 result_score = Some(tscore);
                 result_hand = Some(thand);
             }
         }
-        (result_score.unwrap(), result_hand.unwrap(), result_depth)
+        (
+            result_score.unwrap(),
+            result_hand.unwrap(),
+            result_depth,
+            result_node_count,
+        )
     })
 }

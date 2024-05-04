@@ -1,6 +1,7 @@
 use crate::engine::board::*;
 use crate::engine::endgame::*;
 use crate::engine::eval::*;
+use crate::engine::pattern_eval::*;
 use crate::engine::search::*;
 use crate::engine::table::*;
 use clap::ArgMatches;
@@ -15,7 +16,10 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-async fn worker_impl(solve_obj: SolveObj, req: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error> {
+async fn worker_impl<Eval: Evaluator>(
+    solve_obj: SolveObj<Eval>,
+    req: Request<Incoming>,
+) -> Result<Response<Full<Bytes>>, hyper::Error> {
     match req.method() {
         &Method::POST => {}
         method => {
@@ -52,7 +56,7 @@ async fn worker_body() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         ffs_ordering_limit: 6,
         static_ordering_limit: 5,
     };
-    let evaluator = Arc::new(Evaluator::load(Path::new("table-220710")).unwrap());
+    let evaluator = Arc::new(PatternLinearEvaluator::load(Path::new("table-220710")).unwrap());
     let res_cache = Arc::new(ResCacheTable::new(256, 65536));
     let eval_cache = Arc::new(EvalCacheTable::new(256, 65536));
     let solve_obj = SolveObj::new(res_cache, eval_cache, evaluator, search_params, 0);
