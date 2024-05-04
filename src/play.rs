@@ -357,7 +357,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 node_count: 0,
                 cache_gen: solve_obj.cache_gen,
             };
-            let (score, best, depth) = think_parallel(
+            let (score, best, depth, node_count) = think_parallel(
                 &searcher,
                 board.board,
                 searcher.evaluator.score_min(),
@@ -366,7 +366,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             );
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}",
-                score, depth, searcher.node_count
+                score, depth, node_count
             );
             best
         } else {
