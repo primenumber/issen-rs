@@ -71,7 +71,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                 best
             } else {
                 let mut solve_obj = solve_obj.clone();
-                solve_with_move(board.board, &mut solve_obj, &sub_solver)
+                solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
             };
             solve_obj.cache_gen += 1;
             best
@@ -133,7 +133,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
             best
         } else {
             let mut solve_obj = solve_obj.clone();
-            solve_with_move(board.board, &mut solve_obj, &sub_solver)
+            solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
         };
         solve_obj.cache_gen += 1;
         let hand = best;
@@ -196,7 +196,7 @@ fn self_play_worker<Eval: Evaluator>(
             best
         } else {
             let mut obj = solve_obj.clone();
-            solve_with_move(board.board, &mut obj, &sub_solver)
+            solve_with_move(board.board, &mut obj, &sub_solver, Some(1))
         };
         solve_obj.cache_gen += 1;
         let hand = best;
@@ -286,6 +286,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         parallel_empties_limit: 16,
         eval_ordering_limit: 15,
         res_cache_limit: 12,
+        local_res_cache_limit: 9,
         stability_cut_limit: 8,
         ffs_ordering_limit: 6,
         static_ordering_limit: 5,
@@ -371,7 +372,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             best
         } else {
             let mut solve_obj = solve_obj.clone();
-            solve_with_move(board.board, &mut solve_obj, &sub_solver)
+            solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
         };
         solve_obj.cache_gen += 1;
         match best {

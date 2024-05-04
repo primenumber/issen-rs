@@ -124,13 +124,14 @@ impl CacheElement for ResCache {
     }
 }
 
-struct CacheArray<T: CacheElement> {
+#[derive(Clone)]
+pub struct CacheArray<T: CacheElement> {
     ary: Vec<T>,
     cycle: u64,
 }
 
 impl<T: CacheElement> CacheArray<T> {
-    fn new(size: usize) -> CacheArray<T> {
+    pub fn new(size: usize) -> CacheArray<T> {
         let dummy: T = Default::default();
         CacheArray {
             ary: vec![dummy; size],
@@ -138,7 +139,7 @@ impl<T: CacheElement> CacheArray<T> {
         }
     }
 
-    fn get(&self, board: Board, hash: u64) -> Option<T> {
+    pub fn get(&self, board: Board, hash: u64) -> Option<T> {
         let index = (hash % self.cycle) as usize;
         let elem = &self.ary[index];
         if elem.has_key(board) {
@@ -148,7 +149,7 @@ impl<T: CacheElement> CacheArray<T> {
         }
     }
 
-    fn update(&mut self, new_elem: &T, hash: u64) {
+    pub fn update(&mut self, new_elem: &T, hash: u64) {
         let index = (hash % self.cycle) as usize;
         let elem = &mut self.ary[index];
         elem.update(new_elem);
@@ -197,7 +198,7 @@ impl<T: CacheElement> CacheTable<T> {
 pub type EvalCacheTable = CacheTable<EvalCache>;
 pub type ResCacheTable = CacheTable<ResCache>;
 
-fn make_record(
+pub fn make_record(
     gen: u32,
     board: Board,
     mut res: i8,

@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod test;
-#[cfg(target_feature = "neon")]
-use std::arch::aarch64::*;
 use crate::engine::bits::*;
 use crate::engine::hand::*;
 use anyhow::Result;
 use clap::ArgMatches;
+#[cfg(target_feature = "neon")]
+use std::arch::aarch64::*;
 use std::cmp::min;
 use std::fmt;
 use std::io::{BufWriter, Write};
@@ -55,7 +55,10 @@ fn smart_upper_bit(x: u64x4) -> u64x4 {
     }
 }
 
-#[cfg(not(any(target_feature = "neon", all(target_feature = "avx512cd", target_feature = "avx512vl"))))]
+#[cfg(not(any(
+    target_feature = "neon",
+    all(target_feature = "avx512cd", target_feature = "avx512vl")
+)))]
 fn smart_upper_bit(mut x: u64x4) -> u64x4 {
     x |= x >> u64x4::from_array([8, 1, 7, 9]);
     x |= x >> u64x4::from_array([16, 2, 14, 18]);
