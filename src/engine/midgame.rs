@@ -148,12 +148,14 @@ pub fn simplified_abdada(
     (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
+    num_threads: Option<usize>,
 ) -> (i8, Option<Hand>, SolveStat) {
     thread::scope(|s| {
         let mut handles = Vec::new();
         let cs_hash = Arc::new(DashSet::new());
         let finished = Arc::new(AtomicBool::new(false));
-        for _ in 0..num_cpus::get() {
+        let num_threads = num_threads.unwrap_or(num_cpus::get());
+        for _ in 0..num_threads {
             let solve_obj = solve_obj.clone();
             let cs_hash = cs_hash.clone();
             let finished = finished.clone();
