@@ -7,12 +7,12 @@ pub trait BitManip {
 }
 
 impl BitManip for u64 {
-    #[cfg(target_feature = "avx2")]
+    #[cfg(all(target_feature = "bmi2", not(slow_pext)))]
     fn pext(&self, mask: u64) -> u64 {
         unsafe { _pext_u64(*self, mask) }
     }
 
-    #[cfg(not(target_feature = "avx2"))]
+    #[cfg(not(all(target_feature = "bmi2", not(slow_pext))))]
     fn pext(&self, mut mask: u64) -> u64 {
         let mut x = *self;
         x = x & mask;
@@ -33,7 +33,7 @@ impl BitManip for u64 {
         x
     }
 
-    #[cfg(target_feature = "bmi1")]
+    #[cfg(target_feature = "bmi2")]
     fn pdep(&self, mask: u64) -> u64 {
         unsafe { _pdep_u64(*self, mask) }
     }
