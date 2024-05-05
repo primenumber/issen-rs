@@ -109,28 +109,27 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 period: start,
                 time_limit,
             };
-            let mut searcher = Searcher {
+            let searcher = Searcher {
                 evaluator: solve_obj.evaluator.clone(),
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
                 cache_gen: solve_obj.cache_gen,
             };
-            let (score, best, depth) = searcher.iterative_think(
+            let (score, best, depth, node_count) = think_parallel(
+                &searcher,
                 board.board,
                 searcher.evaluator.score_min(),
                 searcher.evaluator.score_max(),
                 false,
-                3,
-                0,
             );
             let secs = start.elapsed().as_secs_f64();
-            let nps = (searcher.node_count as f64 / secs) as u64;
+            let nps = (node_count as f64 / secs) as u64;
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}, NPS: {}",
                 score as f32 / searcher.evaluator.score_scale() as f32,
                 depth,
-                searcher.node_count,
+                node_count,
                 nps
             );
             best
