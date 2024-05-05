@@ -178,7 +178,7 @@ fn search<Eval: Evaluator>(
     solve_obj.cache_gen += 1;
     if board.empty().count_ones() <= 18 {
         let mut solve_obj = solve_obj.clone();
-        solve_with_move(board, &mut solve_obj, &sub_solver.clone())
+        solve_with_move(board, &mut solve_obj, &sub_solver.clone(), None)
     } else {
         let start = Instant::now();
         let timer = Timer {

@@ -28,7 +28,7 @@ impl Record {
         for i in 0..(l / 2) {
             let h = Hand::from_str(&record_str[(2 * i)..(2 * i + 2)])?;
             hands.push(h);
-            board = board.play_hand(h).ok_or(UnmovableError{})?;
+            board = board.play_hand(h).ok_or(UnmovableError {})?;
         }
         let score = if let Some(score) = splitted.get(1) {
             score.parse().unwrap()
@@ -52,7 +52,7 @@ impl Record {
         };
         for &h in &self.hands {
             res.push((board, h, score));
-            board = board.play_hand(h).ok_or(UnmovableError{})?;
+            board = board.play_hand(h).ok_or(UnmovableError {})?;
             score = -score;
         }
         res.push((board, Hand::Pass, score));
