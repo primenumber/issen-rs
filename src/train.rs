@@ -17,74 +17,6 @@ use std::path::Path;
 use std::str;
 use std::sync::Arc;
 
-// parse pos string [A-H][1-8]
-fn parse_pos(s: &[u8]) -> Option<usize> {
-    const CODE_1: u8 = '1' as u32 as u8;
-    const CODE_8: u8 = '8' as u32 as u8;
-    const CODE_A: u8 = 'A' as u32 as u8;
-    const CODE_H: u8 = 'H' as u32 as u8;
-    if s.len() != 2 {
-        None
-    } else if s[0] < CODE_A || s[0] > CODE_H {
-        None
-    } else if s[1] < CODE_1 || s[1] > CODE_8 {
-        None
-    } else {
-        Some(((s[0] - CODE_A) + (s[1] - CODE_1) * 8) as usize)
-    }
-}
-
-pub fn parse_record(line: &str) -> Vec<usize> {
-    let mut result = Vec::new();
-    for chunk in line.as_bytes().chunks(2) {
-        if chunk == "ps".as_bytes() {
-            continue;
-        }
-        match parse_pos(chunk) {
-            Some(pos) => result.push(pos),
-            None => {
-                return result;
-            }
-        }
-    }
-    result
-}
-
-pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
-    match board.play(pos) {
-        Some(next) => Some(next),
-        None => {
-            if !board.mobility().is_empty() {
-                None
-            } else {
-                board.pass_unchecked().play(pos)
-            }
-        }
-    }
-}
-
-pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
-    let mut board = Board {
-        player: 0x0000_0008_1000_0000,
-        opponent: 0x0000_0010_0800_0000,
-    };
-    let mut boards = Vec::with_capacity(70); // enough large
-    for &pos in record {
-        boards.push(board);
-        board = match step_by_pos(&board, pos) {
-            Some(next) => next,
-            None => {
-                return None;
-            }
-        };
-    }
-    if !board.is_gameover() {
-        return None;
-    }
-    boards.push(board);
-    Some(boards)
-}
-
 fn boards_from_record(line: &str) -> Vec<(Board, Hand, i16)> {
     let record = Record::parse(line).unwrap();
     record.timeline().unwrap()
@@ -104,9 +36,10 @@ pub fn clean_record(matches: &ArgMatches) {
     for _i in 0..num_records {
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();
-        let record = parse_record(&input_line);
-        if let Some(_boards) = collect_boards(&record) {
-            result.push(input_line);
+        if let Ok(record) = Record::parse(&input_line) {
+            if let Ok(_timeline) = record.timeline() {
+                result.push(input_line);
+            }
         }
     }
 
