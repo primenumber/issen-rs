@@ -5,7 +5,7 @@ use crate::engine::hand::*;
 use anyhow::Result;
 use std::fmt::*;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
@@ -111,19 +111,43 @@ impl FromStr for Record {
     }
 }
 
-pub fn load_records(path: &Path) -> Result<Vec<Record>> {
+pub struct LoadRecords<R: Read> {
+    reader: BufReader<R>,
+    buffer: String,
+    remain: usize,
+}
+
+impl<R: Read> Iterator for LoadRecords<R> {
+    type Item = Result<Record>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remain > 0 {
+            self.remain -= 1;
+            self.reader.read_line(&mut self.buffer).ok()?;
+            return Some(self.buffer.parse::<Record>().map_err(|e| e.into()));
+        }
+        None
+    }
+}
+
+pub fn load_records_iter(path: &Path) -> Result<LoadRecords<File>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
-    let mut input_line = String::new();
+    let mut buffer = String::new();
 
-    reader.read_line(&mut input_line)?;
-    let num_records = input_line.trim().parse()?;
+    reader.read_line(&mut buffer)?;
+    let remain = buffer.trim().parse()?;
 
+    Ok(LoadRecords {
+        reader,
+        buffer,
+        remain,
+    })
+}
+
+pub fn load_records(path: &Path) -> Result<Vec<Record>> {
     let mut records = Vec::new();
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line)?;
-        records.push(input_line.parse::<Record>()?);
+    for record in load_records_iter(path)? {
+        records.push(record?);
     }
     Ok(records)
 }

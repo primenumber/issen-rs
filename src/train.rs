@@ -21,19 +21,11 @@ pub fn clean_record(matches: &ArgMatches) {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_records = input_line.trim().parse().unwrap();
     let mut result = Vec::new();
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line).unwrap();
-        if let Ok(record) = input_line.parse::<Record>() {
+    for record in load_records_iter(Path::new(input_path)).unwrap() {
+        if let Ok(record) = record {
             if let Ok(_timeline) = record.timeline() {
-                result.push(input_line);
+                result.push(record);
             }
         }
     }
@@ -42,8 +34,8 @@ pub fn clean_record(matches: &ArgMatches) {
     let mut writer = BufWriter::new(out_f);
 
     writeln!(writer, "{}", result.len()).unwrap();
-    for line in result {
-        write!(writer, "{}", line).unwrap();
+    for record in result {
+        write!(writer, "{}", record).unwrap();
     }
 }
 
