@@ -3,7 +3,7 @@ use super::*;
 
 #[test]
 fn test_parse_record() {
-    let record = Record::parse("f5d6c3d3 0").unwrap();
+    let record = "f5d6c3d3 0".parse::<Record>().unwrap();
     assert_eq!(record.initial_board, Board::initial_state());
     let timeline = record.timeline().unwrap();
     assert_eq!(timeline.len(), 5);
@@ -16,7 +16,7 @@ fn test_parse_record() {
 
 #[test]
 fn test_parse_record_with_pass() {
-    let record_with_pass = Record::parse("f5f6d3g5h5h4f7h6psc5 0").unwrap();
-    let record_without_pass = Record::parse("f5f6d3g5h5h4f7h6c5 0").unwrap();
+    let record_with_pass = "f5f6d3g5h5h4f7h6psc5 0".parse::<Record>().unwrap();
+    let record_without_pass = "f5f6d3g5h5h4f7h6c5 0".parse::<Record>().unwrap();
     assert_eq!(record_with_pass, record_without_pass);
 }
