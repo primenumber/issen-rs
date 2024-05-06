@@ -8,7 +8,6 @@ use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::setup::*;
-use crate::train::*;
 use clap::ArgMatches;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -377,11 +376,6 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
         };
         solve_obj.cache_gen += 1;
-        match best {
-            Hand::Play(pos) => {
-                println!("{}", pos_to_str(pos).to_ascii_lowercase());
-            }
-            _ => panic!(),
-        }
+        println!("{}", format!("{}", best).to_ascii_lowercase());
     }
 }

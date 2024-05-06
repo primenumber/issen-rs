@@ -52,17 +52,6 @@ pub fn clean_record(matches: &ArgMatches) {
     }
 }
 
-pub fn pos_to_str(pos: usize) -> String {
-    let row = pos / 8;
-    let col = pos % 8;
-    let first = (col as u8) + b'A';
-    let second = (row as u8) + b'1';
-    let mut result = String::new();
-    result.push(first as char);
-    result.push(second as char);
-    result
-}
-
 pub fn gen_dataset(matches: &ArgMatches) {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
