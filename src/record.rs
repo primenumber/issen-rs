@@ -32,9 +32,20 @@ impl Record {
         let l = splitted[0].len();
         for i in 0..(l / 2) {
             let h = Hand::from_str(&record_str[(2 * i)..(2 * i + 2)])?;
+            board = match board.play_hand(h) {
+                Some(next) => next,
+                None => {
+                    let passed = board.pass().ok_or(UnmovableError {})?;
+                    match passed.play_hand(h) {
+                        Some(next) => {
+                            hands.push(Hand::Pass);
+                            next
+                        }
+                        None => return Err(UnmovableError {}.into()),
+                    }
+                }
+            };
             hands.push(h);
-            // TODO: Consider implicit pass
-            board = board.play_hand(h).ok_or(UnmovableError {})?;
         }
         let score = if let Some(score) = splitted.get(1) {
             score.parse().ok()
