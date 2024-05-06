@@ -4,6 +4,9 @@ use crate::engine::board::*;
 use crate::engine::hand::*;
 use anyhow::Result;
 use std::fmt::*;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -92,4 +95,21 @@ impl Display for Record {
         }
         Ok(())
     }
+}
+
+pub fn load_records(path: &Path) -> Result<Vec<Record>> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut input_line = String::new();
+
+    reader.read_line(&mut input_line)?;
+    let num_records = input_line.trim().parse()?;
+
+    let mut records = Vec::new();
+    for _i in 0..num_records {
+        let mut input_line = String::new();
+        reader.read_line(&mut input_line)?;
+        records.push(Record::parse(&input_line)?);
+    }
+    Ok(records)
 }

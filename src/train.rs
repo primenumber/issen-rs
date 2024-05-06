@@ -53,17 +53,9 @@ pub fn gen_dataset(matches: &ArgMatches) {
     let max_output = *matches.get_one::<usize>("MAX_OUT").unwrap();
 
     eprintln!("Parse input...");
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_records = input_line.trim().parse().unwrap();
+    let records = load_records(Path::new(input_path)).unwrap();
     let mut boards_with_results = Vec::new();
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line).unwrap();
-        let record = Record::parse(&input_line).unwrap();
+    for record in records {
         let mut timeline = record.timeline().unwrap();
         boards_with_results.append(&mut timeline);
     }
