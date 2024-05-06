@@ -17,11 +17,6 @@ use std::path::Path;
 use std::str;
 use std::sync::Arc;
 
-fn boards_from_record(line: &str) -> Vec<(Board, Hand, i16)> {
-    let record = Record::parse(line).unwrap();
-    record.timeline().unwrap()
-}
-
 pub fn clean_record(matches: &ArgMatches) {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
@@ -68,7 +63,9 @@ pub fn gen_dataset(matches: &ArgMatches) {
     for _i in 0..num_records {
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();
-        boards_with_results.append(&mut boards_from_record(&input_line));
+        let record = Record::parse(&input_line).unwrap();
+        let mut timeline = record.timeline().unwrap();
+        boards_with_results.append(&mut timeline);
     }
 
     eprintln!("Total board count = {}", boards_with_results.len());
