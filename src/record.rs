@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod test;
 use crate::engine::board::*;
 use crate::engine::hand::*;
 use anyhow::Result;
