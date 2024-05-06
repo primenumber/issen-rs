@@ -33,6 +33,7 @@ impl Record {
         for i in 0..(l / 2) {
             let h = Hand::from_str(&record_str[(2 * i)..(2 * i + 2)])?;
             hands.push(h);
+            // TODO: Consider implicit pass
             board = board.play_hand(h).ok_or(UnmovableError {})?;
         }
         let score = if let Some(score) = splitted.get(1) {
