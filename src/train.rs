@@ -5,6 +5,7 @@ use crate::engine::hand::*;
 use crate::engine::pattern_eval::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
+use crate::record::*;
 use crate::sparse_mat::*;
 use clap::ArgMatches;
 use rayon::prelude::*;
@@ -84,31 +85,9 @@ pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
     Some(boards)
 }
 
-fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, Hand)>, i8) {
-    match record.first() {
-        Some(&first) => {
-            let ((mut boards, score), hand) = if board.mobility_bits() == 0 {
-                (
-                    boards_from_record_impl(board.pass_unchecked(), record),
-                    Hand::Pass,
-                )
-            } else {
-                (
-                    boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
-                    Hand::Play(first),
-                )
-            };
-            boards.insert(0, (board, -score, hand));
-            (boards, -score)
-        }
-        None => (vec![(board, board.score(), Hand::Pass)], board.score()),
-    }
-}
-
-fn boards_from_record(line: &str) -> Vec<(Board, i8, Hand)> {
-    let record = parse_record(line);
-    let board = Board::initial_state();
-    boards_from_record_impl(board, &record).0
+fn boards_from_record(line: &str) -> Vec<(Board, Hand, i16)> {
+    let record = Record::parse(line).unwrap();
+    record.timeline().unwrap()
 }
 
 pub fn clean_record(matches: &ArgMatches) {
@@ -182,7 +161,7 @@ pub fn gen_dataset(matches: &ArgMatches) {
         min(boards_with_results.len(), max_output)
     )
     .unwrap();
-    for (idx, (board, score, hand)) in boards_with_results.iter().enumerate() {
+    for (idx, (board, hand, score)) in boards_with_results.iter().enumerate() {
         if idx >= max_output {
             break;
         }
