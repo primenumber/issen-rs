@@ -129,7 +129,7 @@ impl<R: Read> Iterator for LoadRecords<R> {
     }
 }
 
-pub fn load_records_iter(path: &Path) -> Result<LoadRecords<File>> {
+pub fn load_records(path: &Path) -> Result<LoadRecords<File>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut buffer = String::new();
@@ -142,12 +142,4 @@ pub fn load_records_iter(path: &Path) -> Result<LoadRecords<File>> {
         buffer,
         remain,
     })
-}
-
-pub fn load_records(path: &Path) -> Result<Vec<Record>> {
-    let mut records = Vec::new();
-    for record in load_records_iter(path)? {
-        records.push(record?);
-    }
-    Ok(records)
 }

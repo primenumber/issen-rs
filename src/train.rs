@@ -22,7 +22,7 @@ pub fn clean_record(matches: &ArgMatches) {
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
     let mut result = Vec::new();
-    for record in load_records_iter(Path::new(input_path)).unwrap() {
+    for record in load_records(Path::new(input_path)).unwrap() {
         if let Ok(record) = record {
             if let Ok(_timeline) = record.timeline() {
                 result.push(record);
@@ -45,10 +45,9 @@ pub fn gen_dataset(matches: &ArgMatches) {
     let max_output = *matches.get_one::<usize>("MAX_OUT").unwrap();
 
     eprintln!("Parse input...");
-    let records = load_records(Path::new(input_path)).unwrap();
     let mut boards_with_results = Vec::new();
-    for record in records {
-        let mut timeline = record.timeline().unwrap();
+    for record in load_records(Path::new(input_path)).unwrap() {
+        let mut timeline = record.unwrap().timeline().unwrap();
         boards_with_results.append(&mut timeline);
     }
 
