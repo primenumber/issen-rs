@@ -7,10 +7,10 @@ fn test_parse_record() {
     assert_eq!(record.initial_board, Board::initial_state());
     let timeline = record.timeline().unwrap();
     assert_eq!(timeline.len(), 5);
-    assert_eq!(timeline[0].1, Hand::from_str("f5").unwrap());
-    assert_eq!(timeline[1].1, Hand::from_str("d6").unwrap());
-    assert_eq!(timeline[2].1, Hand::from_str("c3").unwrap());
-    assert_eq!(timeline[3].1, Hand::from_str("d3").unwrap());
+    assert_eq!(timeline[0].1, "f5".parse::<Hand>().unwrap());
+    assert_eq!(timeline[1].1, "d6".parse::<Hand>().unwrap());
+    assert_eq!(timeline[2].1, "c3".parse::<Hand>().unwrap());
+    assert_eq!(timeline[3].1, "d3".parse::<Hand>().unwrap());
     assert_eq!(timeline[4].1, Hand::Pass);
 }
 

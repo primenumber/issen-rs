@@ -7,7 +7,6 @@ use std::fmt::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -36,7 +35,7 @@ impl Record {
         let splitted = record_str.split_ascii_whitespace().collect::<Vec<_>>();
         let l = splitted[0].len();
         for i in 0..(l / 2) {
-            let h = Hand::from_str(&record_str[(2 * i)..(2 * i + 2)])?;
+            let h = splitted[0][(2 * i)..(2 * i + 2)].parse::<Hand>()?;
             board = match board.play_hand(h) {
                 Some(next) => next,
                 None => {
