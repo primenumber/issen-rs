@@ -45,7 +45,7 @@ impl Book {
         let reader = BufReader::new(f);
         let mut book = Book::new();
         for line in reader.lines() {
-            book.append(Record::parse(&line?)?)?;
+            book.append(line?.parse::<Record>()?)?;
         }
         Ok(book)
     }

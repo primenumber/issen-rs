@@ -31,7 +31,7 @@ pub fn clean_record(matches: &ArgMatches) {
     for _i in 0..num_records {
         let mut input_line = String::new();
         reader.read_line(&mut input_line).unwrap();
-        if let Ok(record) = Record::parse(&input_line) {
+        if let Ok(record) = input_line.parse::<Record>() {
             if let Ok(_timeline) = record.timeline() {
                 result.push(input_line);
             }
