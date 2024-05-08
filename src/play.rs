@@ -8,7 +8,6 @@ use crate::engine::search::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
 use crate::setup::*;
-use crate::train::*;
 use clap::ArgMatches;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -109,26 +108,28 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 period: start,
                 time_limit,
             };
-            let mut searcher = Searcher {
+            let searcher = Searcher {
                 evaluator: solve_obj.evaluator.clone(),
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
                 cache_gen: solve_obj.cache_gen,
             };
-            let (score, best, depth) = searcher.iterative_think(
+            let (score, best, depth, node_count) = think_parallel(
+                &searcher,
                 board.board,
                 searcher.evaluator.score_min(),
                 searcher.evaluator.score_max(),
                 false,
-                3,
-                0,
             );
             let secs = start.elapsed().as_secs_f64();
-            let nps = (searcher.node_count as f64 / secs) as u64;
+            let nps = (node_count as f64 / secs) as u64;
             eprintln!(
                 "Estimated result: {}, Depth: {}, Nodes: {}, NPS: {}",
-                score, depth, searcher.node_count, nps
+                score as f32 / searcher.evaluator.score_scale() as f32,
+                depth,
+                node_count,
+                nps
             );
             best
         } else {
@@ -375,11 +376,6 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
         };
         solve_obj.cache_gen += 1;
-        match best {
-            Hand::Play(pos) => {
-                println!("{}", pos_to_str(pos).to_ascii_lowercase());
-            }
-            _ => panic!(),
-        }
+        println!("{}", format!("{}", best).to_ascii_lowercase());
     }
 }

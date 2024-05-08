@@ -45,7 +45,7 @@ impl Book {
         let reader = BufReader::new(f);
         let mut book = Book::new();
         for line in reader.lines() {
-            book.append(Record::parse(&line?)?)?;
+            book.append(line?.parse::<Record>()?)?;
         }
         Ok(book)
     }
@@ -162,7 +162,7 @@ impl Book {
                 }
                 hands.push(hand);
             }
-            new_records.push(Record::new(rec.get_initial(), &hands, last_score.unwrap()));
+            new_records.push(Record::new(rec.get_initial(), &hands, last_score));
         }
         new_records.dedup();
         Book::from_records(&new_records)
@@ -242,7 +242,7 @@ fn play_with_book<Eval: Evaluator>(
         hands.push(hand);
         board = board.play_hand(hand).unwrap();
     }
-    let record = Record::new(Board::initial_state(), &hands, board.score().into());
+    let record = Record::new(Board::initial_state(), &hands, Some(board.score().into()));
     eprintln!("{}", record);
     book.lock().unwrap().append(record).unwrap();
 }
