@@ -45,7 +45,7 @@ impl Book {
         let reader = BufReader::new(f);
         let mut book = Book::new();
         for line in reader.lines() {
-            book.append(Record::parse(&line?)?)?;
+            book.append(line?.parse::<Record>()?)?;
         }
         Ok(book)
     }
@@ -162,7 +162,7 @@ impl Book {
                 }
                 hands.push(hand);
             }
-            new_records.push(Record::new(rec.get_initial(), &hands, last_score.unwrap()));
+            new_records.push(Record::new(rec.get_initial(), &hands, last_score));
         }
         new_records.dedup();
         Book::from_records(&new_records)
@@ -178,7 +178,7 @@ fn search<Eval: Evaluator>(
     solve_obj.cache_gen += 1;
     if board.empty().count_ones() <= 18 {
         let mut solve_obj = solve_obj.clone();
-        solve_with_move(board, &mut solve_obj, &sub_solver.clone())
+        solve_with_move(board, &mut solve_obj, &sub_solver.clone(), None)
     } else {
         let start = Instant::now();
         let timer = Timer {
@@ -192,7 +192,7 @@ fn search<Eval: Evaluator>(
             node_count: 0,
             cache_gen: solve_obj.cache_gen,
         };
-        let (_score, hand, _depth) = think_parallel(
+        let (_score, hand, _depth, _node_count) = think_parallel(
             &searcher,
             board,
             solve_obj.evaluator.score_min(),
@@ -242,7 +242,7 @@ fn play_with_book<Eval: Evaluator>(
         hands.push(hand);
         board = board.play_hand(hand).unwrap();
     }
-    let record = Record::new(Board::initial_state(), &hands, board.score().into());
+    let record = Record::new(Board::initial_state(), &hands, Some(board.score().into()));
     eprintln!("{}", record);
     book.lock().unwrap().append(record).unwrap();
 }

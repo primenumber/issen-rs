@@ -350,26 +350,34 @@ pub fn think_parallel<Eval: Evaluator>(
     alpha: i16,
     beta: i16,
     passed: bool,
-) -> (i16, Hand, i8) {
+) -> (i16, Hand, i8, usize) {
     thread::scope(|s| {
         let mut handles = Vec::new();
         for i in 0..num_cpus::get() {
             handles.push(s.spawn(move || {
                 let mut ctx = searcher.clone();
-                ctx.iterative_think(board, alpha, beta, passed, 3, i)
+                let (score, hand, depth) = ctx.iterative_think(board, alpha, beta, passed, 3, i);
+                (score, hand, depth, ctx.node_count)
             }));
         }
         let mut result_depth = 0;
         let mut result_score = None;
         let mut result_hand = None;
+        let mut result_node_count = 0;
         for h in handles {
-            let (tscore, thand, tdepth) = h.join().unwrap();
+            let (tscore, thand, tdepth, node_count) = h.join().unwrap();
+            result_node_count += node_count;
             if tdepth > result_depth {
                 result_depth = tdepth;
                 result_score = Some(tscore);
                 result_hand = Some(thand);
             }
         }
-        (result_score.unwrap(), result_hand.unwrap(), result_depth)
+        (
+            result_score.unwrap(),
+            result_hand.unwrap(),
+            result_depth,
+            result_node_count,
+        )
     })
 }

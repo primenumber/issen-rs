@@ -5,6 +5,7 @@ use crate::engine::hand::*;
 use crate::engine::pattern_eval::*;
 use crate::engine::table::*;
 use crate::engine::think::*;
+use crate::record::*;
 use crate::sparse_mat::*;
 use clap::ArgMatches;
 use rayon::prelude::*;
@@ -16,118 +17,16 @@ use std::path::Path;
 use std::str;
 use std::sync::Arc;
 
-// parse pos string [A-H][1-8]
-fn parse_pos(s: &[u8]) -> Option<usize> {
-    const CODE_1: u8 = '1' as u32 as u8;
-    const CODE_8: u8 = '8' as u32 as u8;
-    const CODE_A: u8 = 'A' as u32 as u8;
-    const CODE_H: u8 = 'H' as u32 as u8;
-    if s.len() != 2 {
-        None
-    } else if s[0] < CODE_A || s[0] > CODE_H {
-        None
-    } else if s[1] < CODE_1 || s[1] > CODE_8 {
-        None
-    } else {
-        Some(((s[0] - CODE_A) + (s[1] - CODE_1) * 8) as usize)
-    }
-}
-
-pub fn parse_record(line: &str) -> Vec<usize> {
-    let mut result = Vec::new();
-    for chunk in line.as_bytes().chunks(2) {
-        if chunk == "ps".as_bytes() {
-            continue;
-        }
-        match parse_pos(chunk) {
-            Some(pos) => result.push(pos),
-            None => {
-                return result;
-            }
-        }
-    }
-    result
-}
-
-pub fn step_by_pos(board: &Board, pos: usize) -> Option<Board> {
-    match board.play(pos) {
-        Some(next) => Some(next),
-        None => {
-            if !board.mobility().is_empty() {
-                None
-            } else {
-                board.pass_unchecked().play(pos)
-            }
-        }
-    }
-}
-
-pub fn collect_boards(record: &[usize]) -> Option<Vec<Board>> {
-    let mut board = Board {
-        player: 0x0000_0008_1000_0000,
-        opponent: 0x0000_0010_0800_0000,
-    };
-    let mut boards = Vec::with_capacity(70); // enough large
-    for &pos in record {
-        boards.push(board);
-        board = match step_by_pos(&board, pos) {
-            Some(next) => next,
-            None => {
-                return None;
-            }
-        };
-    }
-    if !board.is_gameover() {
-        return None;
-    }
-    boards.push(board);
-    Some(boards)
-}
-
-fn boards_from_record_impl(board: Board, record: &[usize]) -> (Vec<(Board, i8, Hand)>, i8) {
-    match record.first() {
-        Some(&first) => {
-            let ((mut boards, score), hand) = if board.mobility_bits() == 0 {
-                (
-                    boards_from_record_impl(board.pass_unchecked(), record),
-                    Hand::Pass,
-                )
-            } else {
-                (
-                    boards_from_record_impl(step_by_pos(&board, first).unwrap(), &record[1..]),
-                    Hand::Play(first),
-                )
-            };
-            boards.insert(0, (board, -score, hand));
-            (boards, -score)
-        }
-        None => (vec![(board, board.score(), Hand::Pass)], board.score()),
-    }
-}
-
-fn boards_from_record(line: &str) -> Vec<(Board, i8, Hand)> {
-    let record = parse_record(line);
-    let board = Board::initial_state();
-    boards_from_record_impl(board, &record).0
-}
-
 pub fn clean_record(matches: &ArgMatches) {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
 
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_records = input_line.trim().parse().unwrap();
     let mut result = Vec::new();
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line).unwrap();
-        let record = parse_record(&input_line);
-        if let Some(_boards) = collect_boards(&record) {
-            result.push(input_line);
+    for record in load_records(Path::new(input_path)).unwrap() {
+        if let Ok(record) = record {
+            if let Ok(_timeline) = record.timeline() {
+                result.push(record);
+            }
         }
     }
 
@@ -135,20 +34,9 @@ pub fn clean_record(matches: &ArgMatches) {
     let mut writer = BufWriter::new(out_f);
 
     writeln!(writer, "{}", result.len()).unwrap();
-    for line in result {
-        write!(writer, "{}", line).unwrap();
+    for record in result {
+        write!(writer, "{}", record).unwrap();
     }
-}
-
-pub fn pos_to_str(pos: usize) -> String {
-    let row = pos / 8;
-    let col = pos % 8;
-    let first = (col as u8) + b'A';
-    let second = (row as u8) + b'1';
-    let mut result = String::new();
-    result.push(first as char);
-    result.push(second as char);
-    result
 }
 
 pub fn gen_dataset(matches: &ArgMatches) {
@@ -157,17 +45,10 @@ pub fn gen_dataset(matches: &ArgMatches) {
     let max_output = *matches.get_one::<usize>("MAX_OUT").unwrap();
 
     eprintln!("Parse input...");
-    let in_f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(in_f);
-
-    let mut input_line = String::new();
-    reader.read_line(&mut input_line).unwrap();
-    let num_records = input_line.trim().parse().unwrap();
     let mut boards_with_results = Vec::new();
-    for _i in 0..num_records {
-        let mut input_line = String::new();
-        reader.read_line(&mut input_line).unwrap();
-        boards_with_results.append(&mut boards_from_record(&input_line));
+    for record in load_records(Path::new(input_path)).unwrap() {
+        let mut timeline = record.unwrap().timeline().unwrap();
+        boards_with_results.append(&mut timeline);
     }
 
     eprintln!("Total board count = {}", boards_with_results.len());
@@ -182,7 +63,7 @@ pub fn gen_dataset(matches: &ArgMatches) {
         min(boards_with_results.len(), max_output)
     )
     .unwrap();
-    for (idx, (board, score, hand)) in boards_with_results.iter().enumerate() {
+    for (idx, (board, hand, score)) in boards_with_results.iter().enumerate() {
         if idx >= max_output {
             break;
         }

@@ -40,6 +40,7 @@ pub struct SearchParams {
     pub parallel_empties_limit: i8,
     pub eval_ordering_limit: i8,
     pub res_cache_limit: i8,
+    pub local_res_cache_limit: i8,
     pub stability_cut_limit: i8,
     pub ffs_ordering_limit: i8,
     pub static_ordering_limit: i8,
@@ -48,10 +49,12 @@ pub struct SearchParams {
 pub struct SolveObj<Eval: Evaluator> {
     pub res_cache: Arc<ResCacheTable>,
     pub eval_cache: Arc<EvalCacheTable>,
+    pub local_res_cache: CacheArray<ResCache>,
     pub evaluator: Arc<Eval>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
     pub cache_gen: u32,
+    pub local_cache_gen: u32,
 }
 
 impl<Eval: Evaluator> Clone for SolveObj<Eval> {
@@ -59,10 +62,12 @@ impl<Eval: Evaluator> Clone for SolveObj<Eval> {
         SolveObj::<Eval> {
             res_cache: self.res_cache.clone(),
             eval_cache: self.eval_cache.clone(),
+            local_res_cache: self.local_res_cache.clone(),
             evaluator: self.evaluator.clone(),
             last_cache: self.last_cache.clone(),
             params: self.params.clone(),
             cache_gen: self.cache_gen.clone(),
+            local_cache_gen: self.local_cache_gen.clone(),
         }
     }
 }
@@ -78,10 +83,12 @@ impl<Eval: Evaluator> SolveObj<Eval> {
         SolveObj {
             res_cache,
             eval_cache,
+            local_res_cache: CacheArray::<ResCache>::new(65536),
             evaluator,
             last_cache: Arc::new(LastCache::new()),
             params,
             cache_gen,
+            local_cache_gen: 0,
         }
     }
 }
@@ -294,14 +301,17 @@ pub fn solve<Eval: Evaluator>(
     (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
+    num_threads: Option<usize>,
 ) -> (i8, Option<Hand>, SolveStat) {
-    simplified_abdada(solve_obj, board, (alpha, beta), passed, depth)
+    simplified_abdada(solve_obj, board, (alpha, beta), passed, depth, num_threads)
 }
 
+// num_threads: number of searching threads, use number of cpus when None
 pub fn solve_with_move<Eval: Evaluator>(
     board: Board,
     solve_obj: &mut SolveObj<Eval>,
     _sub_solver: &Arc<SubSolver>,
+    num_threads: Option<usize>,
 ) -> Hand {
     if let Some(best) = simplified_abdada(
         solve_obj,
@@ -309,6 +319,7 @@ pub fn solve_with_move<Eval: Evaluator>(
         (-(BOARD_SIZE as i8), BOARD_SIZE as i8),
         false,
         0,
+        num_threads,
     )
     .1
     {
@@ -318,7 +329,15 @@ pub fn solve_with_move<Eval: Evaluator>(
     let mut result = -65;
     for pos in board.mobility() {
         let next = board.play(pos).unwrap();
-        let res = -simplified_abdada(solve_obj, next, (-(BOARD_SIZE as i8), -result), false, 0).0;
+        let res = -simplified_abdada(
+            solve_obj,
+            next,
+            (-(BOARD_SIZE as i8), -result),
+            false,
+            0,
+            num_threads,
+        )
+        .0;
         if res > result {
             result = res;
             best_pos = Some(pos);

@@ -100,6 +100,7 @@ fn simplified_abdada_intro<Eval: Evaluator>(
     if depth >= ctx.solve_obj.params.parallel_depth_limit || rem < ctx.solve_obj.params.parallel_empties_limit {
         let (res, stat) = solve_inner(&mut ctx.solve_obj, board, (alpha, beta), passed);
         ctx.stats.merge(stat);
+        ctx.solve_obj.local_cache_gen += 1;
         return Some((res, None));
     }
     ctx.stats.merge(SolveStat::one());
@@ -148,12 +149,14 @@ pub fn simplified_abdada<Eval: Evaluator>(
     (alpha, beta): (i8, i8),
     passed: bool,
     depth: i8,
+    num_threads: Option<usize>,
 ) -> (i8, Option<Hand>, SolveStat) {
     thread::scope(|s| {
         let mut handles = Vec::new();
         let cs_hash = Arc::new(DashSet::new());
         let finished = Arc::new(AtomicBool::new(false));
-        for _ in 0..num_cpus::get() {
+        let num_threads = num_threads.unwrap_or(num_cpus::get());
+        for _ in 0..num_threads {
             let solve_obj = solve_obj.clone();
             let cs_hash = cs_hash.clone();
             let finished = finished.clone();
