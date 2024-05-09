@@ -1,3 +1,4 @@
+#![feature(stdarch_x86_avx512)]
 #![feature(const_option)]
 #![feature(array_chunks)]
 #![feature(portable_simd)]

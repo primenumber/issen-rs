@@ -98,7 +98,7 @@ fn get_line_to_indices(patterns: &[u64]) -> Vec<u16> {
     result
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Bf16(u16);
 
 impl From<f32> for Bf16 {
@@ -116,9 +116,13 @@ impl From<Bf16> for f32 {
     }
 }
 
+#[derive(Clone, Debug)]
+#[repr(C, align(64))]
+struct AlignedBF16Array([Bf16; 32]);
+
 pub struct NNUEEvaluator {
     config: NNUEConfig,
-    embedding: Vec<Bf16>,
+    embedding: Vec<AlignedBF16Array>,
     offsets_extended: Vec<u32>,
     line_to_idx_vec: Vec<u16>,
     layer1_weight: Vec<f32>,
@@ -169,8 +173,9 @@ impl NNUEEvaluator {
         v.copy_from_slice(&tmp);
     }
 
-    fn trunc_to_bf16(v: &[f32]) -> Vec<Bf16> {
-        let mut result = vec![Bf16(0); v.len()];
+    #[cfg(not(target_feature = "avx512bf16"))]
+    fn trunc_to_bf16(v: &[f32]) -> Vec<AlignedBF16Array> {
+        let mut result = vec![AlignedBF16Array([Bf16(0); 32]); v.len() / 32];
         unsafe {
             use std::arch::x86_64::*;
             let (head, _tail) = v.as_chunks::<16>();
@@ -178,7 +183,26 @@ impl NNUEEvaluator {
                 let v0 = _mm256_castps_si256(_mm256_loadu_ps(&chunk[0] as *const f32));
                 let v1 = _mm256_castps_si256(_mm256_loadu_ps(&chunk[8] as *const f32));
                 let packed = _mm256_packus_epi32(_mm256_srli_epi32(v0, 16), _mm256_srli_epi32(v1, 16));
-                _mm256_storeu_si256(&mut result[i * 16] as *mut Bf16 as *mut __m256i, packed);
+                _mm256_storeu_si256(
+                    &mut result[i * 16] as *mut AlignedBF16Array as *mut __m256i,
+                    packed,
+                );
+            }
+        }
+        result
+    }
+
+    #[cfg(target_feature = "avx512bf16")]
+    fn trunc_to_bf16(v: &[f32]) -> Vec<AlignedBF16Array> {
+        let mut result = vec![AlignedBF16Array([Bf16(0); 32]); v.len() / 32];
+        unsafe {
+            use std::arch::x86_64::*;
+            let (head, _tail) = v.as_chunks::<32>();
+            for (i, chunk) in head.into_iter().enumerate() {
+                let v0 = _mm512_castps_si512(_mm512_loadu_ps(&chunk[0] as *const f32));
+                let v1 = _mm512_castps_si512(_mm512_loadu_ps(&chunk[16] as *const f32));
+                let packed = _mm512_packus_epi32(_mm512_srli_epi32(v0, 16), _mm512_srli_epi32(v1, 16));
+                _mm512_storeu_si512(&mut result[i] as *mut AlignedBF16Array as *mut i32, packed);
             }
         }
         result
@@ -235,9 +259,9 @@ impl NNUEEvaluator {
         })
     }
 
-    unsafe fn lookup_vec(&self, index: usize) -> &[Bf16] {
-        let first = index * EXPECTED_FRONT;
-        let last = first + EXPECTED_FRONT;
+    unsafe fn lookup_vec(&self, index: usize) -> &[AlignedBF16Array] {
+        let first = (index * EXPECTED_FRONT) / 32;
+        let last = first + EXPECTED_FRONT / 32;
         &self.embedding.get_unchecked(first..last)
     }
 
@@ -331,7 +355,28 @@ impl NNUEEvaluator {
         idx_vec
     }
 
-    #[cfg(target_feature = "avx2")]
+    #[cfg(target_feature = "avx512bf16")]
+    #[inline(never)]
+    fn embedding_bag(&self, board: Board, front_vec: &mut [f32]) {
+        let idx_vec = self.feature_indices(board);
+        unsafe {
+            use std::arch::x86_64::*;
+            let mut v0 = _mm512_setzero_ps();
+            let mut v1 = _mm512_setzero_ps();
+            for (index, offset) in idx_vec.iter().zip(self.offsets_extended.iter()) {
+                let emb_vec = self.lookup_vec(*index as usize + *offset as usize);
+                let ve01_int = _mm512_load_si512(&emb_vec[0] as *const AlignedBF16Array as *const i32);
+                let ve0 = _mm512_unpacklo_epi16(_mm512_setzero_si512(), ve01_int);
+                let ve1 = _mm512_unpackhi_epi16(_mm512_setzero_si512(), ve01_int);
+                v0 = _mm512_add_ps(v0, _mm512_castsi512_ps(ve0));
+                v1 = _mm512_add_ps(v1, _mm512_castsi512_ps(ve1));
+            }
+            _mm512_storeu_ps(&mut front_vec[0] as *mut f32, v0);
+            _mm512_storeu_ps(&mut front_vec[16] as *mut f32, v1);
+        }
+    }
+
+    #[cfg(all(not(target_feature = "avx512bf16"), target_feature = "avx2"))]
     #[inline(never)]
     fn embedding_bag(&self, board: Board, front_vec: &mut [f32]) {
         let idx_vec = self.feature_indices(board);
