@@ -242,8 +242,16 @@ fn generate_depth_n(board: Board, depth: usize, prev_passed: bool, record: &mut 
 
 pub fn parallel_self_play(matches: &ArgMatches) {
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
-    let random_depth = *matches.get_one::<usize>("DEPTH").unwrap();
-    let take_count = *matches.get_one::<usize>("COUNT").unwrap();
+    let random_depth = matches
+        .get_one::<String>("DEPTH")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let take_count = matches
+        .get_one::<String>("COUNT")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
 
     let out_f = File::create(output_path).unwrap();
     let mut writer = BufWriter::new(out_f);
