@@ -42,7 +42,11 @@ pub fn clean_record(matches: &ArgMatches) {
 pub fn gen_dataset(matches: &ArgMatches) {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
-    let max_output = *matches.get_one::<usize>("MAX_OUT").unwrap();
+    let max_output = matches
+        .get_one::<String>("MAX_OUT")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
 
     eprintln!("Parse input...");
     let mut boards_with_results = Vec::new();
@@ -232,9 +236,21 @@ const PATTERNS_LARGE: [u64; 10] = [
 pub fn train(matches: &ArgMatches) -> Option<()> {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
     let output_path = matches.get_one::<String>("OUTPUT").unwrap();
-    let range_min = *matches.get_one::<i8>("from").unwrap();
-    let range_max = *matches.get_one::<i8>("to").unwrap();
-    let width = matches.get_one::<i8>("width").unwrap();
+    let range_min = matches
+        .get_one::<String>("from")
+        .unwrap()
+        .parse::<i8>()
+        .unwrap();
+    let range_max = matches
+        .get_one::<String>("to")
+        .unwrap()
+        .parse::<i8>()
+        .unwrap();
+    let width = matches
+        .get_one::<String>("width")
+        .unwrap()
+        .parse::<i8>()
+        .unwrap();
 
     let in_f = File::open(input_path).ok()?;
     let mut reader = BufReader::new(in_f);
