@@ -288,9 +288,8 @@ impl NNUEEvaluator {
         }) as i16
     }
 
-    #[inline(never)]
     fn feature_indices(&self, board: Board) -> [u16; 128] {
-        let num_features = self.offsets_extended.len();
+        let num_features = 128;
         let mut iv0 = u16x64::splat(0);
         let mut iv1 = u16x64::splat(0);
         unsafe {
@@ -298,27 +297,23 @@ impl NNUEEvaluator {
                 let pbits = ((board.player >> (row * 8)) & 0xff) as usize;
                 let pfrom = (row * 256 + pbits) * num_features;
                 iv0 += u16x64::from_slice(
-                    &self
-                        .line_to_idx_vec
+                    self.line_to_idx_vec
                         .get_unchecked((pfrom + 0)..(pfrom + 64)),
                 );
                 iv1 += u16x64::from_slice(
-                    &self
-                        .line_to_idx_vec
+                    self.line_to_idx_vec
                         .get_unchecked((pfrom + 64)..(pfrom + 128)),
                 );
                 let obits = ((board.opponent >> (row * 8)) & 0xff) as usize;
                 let ofrom = (row * 256 + obits) * num_features;
                 iv0 += u16x64::splat(2)
                     * u16x64::from_slice(
-                        &self
-                            .line_to_idx_vec
+                        self.line_to_idx_vec
                             .get_unchecked((ofrom + 0)..(ofrom + 64)),
                     );
                 iv1 += u16x64::splat(2)
                     * u16x64::from_slice(
-                        &self
-                            .line_to_idx_vec
+                        self.line_to_idx_vec
                             .get_unchecked((ofrom + 64)..(ofrom + 128)),
                     );
             }
