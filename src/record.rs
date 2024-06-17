@@ -23,8 +23,8 @@ pub struct ScoreIsNotRegistered {}
 
 #[derive(Error, Debug)]
 pub enum ParseRecordError {
-    #[error("Failed to parse hand")]
-    FailedToParseHand,
+    #[error("Failed to parse hand :{0}")]
+    FailedToParseHand(String),
     #[error("invalid hand")]
     InvalidHand,
 }
@@ -82,9 +82,10 @@ impl FromStr for Record {
         let splitted = record_str.split_ascii_whitespace().collect::<Vec<_>>();
         let l = splitted[0].len();
         for i in 0..(l / 2) {
-            let h = splitted[0][(2 * i)..(2 * i + 2)]
+            let hand_s = &splitted[0][(2 * i)..(2 * i + 2)];
+            let h = hand_s
                 .parse::<Hand>()
-                .or(Err(ParseRecordError::FailedToParseHand))?;
+                .or(Err(ParseRecordError::FailedToParseHand(hand_s.to_string())))?;
             board = match board.play_hand(h) {
                 Some(next) => next,
                 None => {
@@ -136,6 +137,7 @@ pub fn load_records(path: &Path) -> Result<LoadRecords<File>> {
 
     reader.read_line(&mut buffer)?;
     let remain = buffer.trim().parse()?;
+    buffer.clear();
 
     Ok(LoadRecords {
         reader,

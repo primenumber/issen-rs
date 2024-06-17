@@ -50,8 +50,10 @@ pub fn gen_dataset(matches: &ArgMatches) {
 
     eprintln!("Parse input...");
     let mut boards_with_results = Vec::new();
-    for record in load_records(Path::new(input_path)).unwrap() {
-        let mut timeline = record.unwrap().timeline().unwrap();
+    let input_file = File::open(Path::new(input_path)).unwrap();
+    for line in BufReader::new(input_file).lines() {
+        let record = line.unwrap().parse::<Record>().unwrap();
+        let mut timeline = record.timeline().unwrap();
         boards_with_results.append(&mut timeline);
     }
 
