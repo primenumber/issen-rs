@@ -5,7 +5,7 @@ use crate::engine::hand::*;
 use anyhow::Result;
 use std::fmt::*;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
 use thiserror::Error;
@@ -23,8 +23,8 @@ pub struct ScoreIsNotRegistered {}
 
 #[derive(Error, Debug)]
 pub enum ParseRecordError {
-    #[error("Failed to parse hand")]
-    FailedToParseHand,
+    #[error("Failed to parse hand :{0}")]
+    FailedToParseHand(String),
     #[error("invalid hand")]
     InvalidHand,
 }
@@ -46,11 +46,7 @@ impl Record {
         let mut board = self.initial_board;
         let mut res = Vec::new();
         let final_score = self.final_score.ok_or(ScoreIsNotRegistered {})?;
-        let mut score = if self.hands.len() % 2 == 0 {
-            final_score
-        } else {
-            -final_score
-        };
+        let mut score = final_score;
         for &h in &self.hands {
             res.push((board, h, score));
             board = board.play_hand(h).ok_or(UnmovableError {})?;
@@ -82,9 +78,10 @@ impl FromStr for Record {
         let splitted = record_str.split_ascii_whitespace().collect::<Vec<_>>();
         let l = splitted[0].len();
         for i in 0..(l / 2) {
-            let h = splitted[0][(2 * i)..(2 * i + 2)]
+            let hand_s = &splitted[0][(2 * i)..(2 * i + 2)];
+            let h = hand_s
                 .parse::<Hand>()
-                .or(Err(ParseRecordError::FailedToParseHand))?;
+                .or(Err(ParseRecordError::FailedToParseHand(hand_s.to_string())))?;
             board = match board.play_hand(h) {
                 Some(next) => next,
                 None => {
@@ -103,7 +100,12 @@ impl FromStr for Record {
         let score = if let Some(score) = splitted.get(1) {
             score.parse().ok()
         } else if board.is_gameover() {
-            Some(board.score() as i16)
+            let absolute_score = if l % 2 == 0 {
+                board.score()
+            } else {
+                -board.score()
+            };
+            Some(absolute_score as i16)
         } else {
             None
         };
@@ -111,35 +113,9 @@ impl FromStr for Record {
     }
 }
 
-pub struct LoadRecords<R: Read> {
-    reader: BufReader<R>,
-    buffer: String,
-    remain: usize,
-}
-
-impl<R: Read> Iterator for LoadRecords<R> {
-    type Item = Result<Record>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.remain > 0 {
-            self.remain -= 1;
-            self.reader.read_line(&mut self.buffer).ok()?;
-            return Some(self.buffer.parse::<Record>().map_err(|e| e.into()));
-        }
-        None
-    }
-}
-
-pub fn load_records(path: &Path) -> Result<LoadRecords<File>> {
+pub fn load_records(path: &Path) -> Result<impl Iterator<Item = Result<Record, ParseRecordError>>> {
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
-    let mut buffer = String::new();
+    let reader = BufReader::new(file);
 
-    reader.read_line(&mut buffer)?;
-    let remain = buffer.trim().parse()?;
-
-    Ok(LoadRecords {
-        reader,
-        buffer,
-        remain,
-    })
+    Ok(reader.lines().map(|line| line.unwrap().parse::<Record>()))
 }

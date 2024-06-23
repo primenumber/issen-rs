@@ -16,6 +16,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
+use rand::prelude::*;
 
 pub fn clean_record(matches: &ArgMatches) {
     let input_path = matches.get_one::<String>("INPUT").unwrap();
@@ -23,10 +24,9 @@ pub fn clean_record(matches: &ArgMatches) {
 
     let mut result = Vec::new();
     for record in load_records(Path::new(input_path)).unwrap() {
-        if let Ok(record) = record {
-            if let Ok(_timeline) = record.timeline() {
-                result.push(record);
-            }
+        let Ok(record) = record else { continue; };
+        if let Ok(_timeline) = record.timeline() {
+            result.push(record);
         }
     }
 
@@ -47,15 +47,19 @@ pub fn gen_dataset(matches: &ArgMatches) {
         .unwrap()
         .parse::<usize>()
         .unwrap();
+    let mut rng = rand::thread_rng();
 
     eprintln!("Parse input...");
     let mut boards_with_results = Vec::new();
     for record in load_records(Path::new(input_path)).unwrap() {
-        let mut timeline = record.unwrap().timeline().unwrap();
+        let record = record.unwrap();
+        let mut timeline = record.timeline().unwrap();
         boards_with_results.append(&mut timeline);
     }
 
     eprintln!("Total board count = {}", boards_with_results.len());
+
+    boards_with_results.shuffle(&mut rng);
 
     eprintln!("Writing to file...");
     let out_f = File::create(output_path).unwrap();
@@ -71,13 +75,23 @@ pub fn gen_dataset(matches: &ArgMatches) {
         if idx >= max_output {
             break;
         }
-        if let Hand::Play(pos) = hand {
-            writeln!(
-                &mut writer,
-                "{:016x} {:016x} {} {}",
-                board.player, board.opponent, score, pos,
-            )
-            .unwrap();
+        match hand {
+            Hand::Play(pos) => {
+                writeln!(
+                    &mut writer,
+                    "{:016x} {:016x} {} {}",
+                    board.player, board.opponent, score, pos,
+                )
+                .unwrap();
+            }
+            Hand::Pass => {
+                writeln!(
+                    &mut writer,
+                    "{:016x} {:016x} {} ps",
+                    board.player, board.opponent, score,
+                )
+                .unwrap();
+            }
         }
     }
     eprintln!("Finished!");
