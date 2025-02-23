@@ -175,7 +175,7 @@ fn search<Eval: Evaluator>(
     solve_obj: &mut SolveObj<Eval>,
     sub_solver: &Arc<SubSolver>,
 ) -> Hand {
-    solve_obj.cache_gen += 1;
+    solve_obj.cache_generation += 1;
     if board.empty().count_ones() <= 18 {
         let mut solve_obj = solve_obj.clone();
         solve_with_move(board, &mut solve_obj, &sub_solver.clone(), None)
@@ -190,7 +190,7 @@ fn search<Eval: Evaluator>(
             cache: solve_obj.eval_cache.clone(),
             timer: Some(timer),
             node_count: 0,
-            cache_gen: solve_obj.cache_gen,
+            cache_generation: solve_obj.cache_generation,
         };
         let (_score, hand, _depth, _node_count) = think_parallel(
             &searcher,

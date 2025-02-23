@@ -196,7 +196,7 @@ mod tests {
         const LENGTH: usize = 256;
         let mut ary = [0u64; LENGTH];
         for i in 0..LENGTH {
-            ary[i] = rng.gen::<u64>();
+            ary[i] = rng.random::<u64>();
         }
         // flip_vertical
         for a in ary.iter() {

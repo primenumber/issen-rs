@@ -55,7 +55,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                     cache: solve_obj.eval_cache.clone(),
                     timer: Some(timer),
                     node_count: 0,
-                    cache_gen: solve_obj.cache_gen,
+                    cache_generation: solve_obj.cache_generation,
                 };
                 let (score, best, depth) = searcher.iterative_think(
                     board.board,
@@ -72,7 +72,7 @@ pub fn play(matches: &ArgMatches) -> Board {
                 let mut solve_obj = solve_obj.clone();
                 solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
             };
-            solve_obj.cache_gen += 1;
+            solve_obj.cache_generation += 1;
             best
         };
         match hand {
@@ -113,7 +113,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
-                cache_gen: solve_obj.cache_gen,
+                cache_generation: solve_obj.cache_generation,
             };
             let (score, best, depth, node_count) = think_parallel(
                 &searcher,
@@ -136,7 +136,7 @@ pub fn self_play(matches: &ArgMatches) -> Board {
             let mut solve_obj = solve_obj.clone();
             solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
         };
-        solve_obj.cache_gen += 1;
+        solve_obj.cache_generation += 1;
         let hand = best;
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
@@ -184,7 +184,7 @@ fn self_play_worker<Eval: Evaluator>(
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
-                cache_gen: solve_obj.cache_gen,
+                cache_generation: solve_obj.cache_generation,
             };
             let (_score, best, _depth) = searcher.iterative_think(
                 board.board,
@@ -199,7 +199,7 @@ fn self_play_worker<Eval: Evaluator>(
             let mut obj = solve_obj.clone();
             solve_with_move(board.board, &mut obj, &sub_solver, Some(1))
         };
-        solve_obj.cache_gen += 1;
+        solve_obj.cache_generation += 1;
         let hand = best;
         match hand {
             Hand::Pass => board = board.pass_unchecked(),
@@ -365,7 +365,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
                 cache: solve_obj.eval_cache.clone(),
                 timer: Some(timer),
                 node_count: 0,
-                cache_gen: solve_obj.cache_gen,
+                cache_generation: solve_obj.cache_generation,
             };
             let (score, best, depth, node_count) = think_parallel(
                 &searcher,
@@ -383,7 +383,7 @@ pub fn codingame(_matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
             let mut solve_obj = solve_obj.clone();
             solve_with_move(board.board, &mut solve_obj, &sub_solver, None)
         };
-        solve_obj.cache_gen += 1;
+        solve_obj.cache_generation += 1;
         println!("{}", format!("{}", best).to_ascii_lowercase());
     }
 }

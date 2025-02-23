@@ -17,7 +17,7 @@ pub struct EvalCache {
     pub board: Board,
     pub lower: i16,
     pub upper: i16,
-    pub gen: u32,
+    pub generation: u32,
     pub best: Option<Hand>,
     pub depth: i32,
 }
@@ -31,7 +31,7 @@ impl Default for EvalCache {
             },
             lower: 0,
             upper: 0,
-            gen: 0,
+            generation: 0,
             best: None,
             depth: 0,
         }
@@ -59,14 +59,14 @@ impl CacheElement for EvalCache {
                 } else {
                     *self = that.clone();
                 }
-                self.gen = that.gen;
+                self.generation = that.generation;
             }
         } else {
             let empty_self = popcnt(self.board.empty());
             let empty_that = popcnt(that.board.empty());
-            if empty_that >= empty_self || that.gen > self.gen {
+            if empty_that >= empty_self || that.generation > self.generation {
                 *self = that.clone();
-                self.gen = that.gen;
+                self.generation = that.generation;
             }
         }
     }
@@ -77,7 +77,7 @@ pub struct ResCache {
     pub board: Board,
     pub lower: i8,
     pub upper: i8,
-    pub gen: u32,
+    pub generation: u32,
     pub best: Option<Hand>,
 }
 
@@ -90,7 +90,7 @@ impl Default for ResCache {
             },
             lower: 0,
             upper: 0,
-            gen: 0,
+            generation: 0,
             best: None,
         }
     }
@@ -112,13 +112,13 @@ impl CacheElement for ResCache {
             *self = that.clone();
             self.lower = lower;
             self.upper = upper;
-            self.gen = that.gen;
+            self.generation = that.generation;
         } else {
             let empty_self = popcnt(self.board.empty());
             let empty_that = popcnt(that.board.empty());
-            if empty_that >= empty_self || that.gen > self.gen {
+            if empty_that >= empty_self || that.generation > self.generation {
                 *self = that.clone();
-                self.gen = that.gen;
+                self.generation = that.generation;
             }
         }
     }
@@ -199,7 +199,7 @@ pub type EvalCacheTable = CacheTable<EvalCache>;
 pub type ResCacheTable = CacheTable<ResCache>;
 
 pub fn make_record(
-    gen: u32,
+    generation: u32,
     board: Board,
     mut res: i8,
     best: Option<Hand>,
@@ -218,20 +218,20 @@ pub fn make_record(
         board,
         lower: updated_range.0,
         upper: updated_range.1,
-        gen,
+        generation,
         best,
     }
 }
 
 pub fn update_table(
     res_cache: Arc<ResCacheTable>,
-    cache_gen: u32,
+    cache_generation: u32,
     board: Board,
     res: i8,
     best: Option<Hand>,
     (alpha, beta): (i8, i8),
     range: (i8, i8),
 ) {
-    let record = make_record(cache_gen, board, res, best, (alpha, beta), range);
+    let record = make_record(cache_generation, board, res, best, (alpha, beta), range);
     res_cache.update(record);
 }

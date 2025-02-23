@@ -228,7 +228,7 @@ pub fn solve_inner<Eval: Evaluator>(
             };
             let (res, stat) = fastest_first(solve_obj, board, (alpha, beta), passed);
             let record = make_record(
-                solve_obj.local_cache_gen,
+                solve_obj.local_cache_generation,
                 board,
                 res,
                 None,
@@ -245,7 +245,7 @@ pub fn solve_inner<Eval: Evaluator>(
             let (res, stat) = fastest_first(solve_obj, board, (alpha, beta), passed);
             update_table(
                 solve_obj.res_cache.clone(),
-                solve_obj.cache_gen,
+                solve_obj.cache_generation,
                 board,
                 res,
                 None,
@@ -262,7 +262,7 @@ pub fn solve_inner<Eval: Evaluator>(
             if rem >= solve_obj.params.res_cache_limit {
                 update_table(
                     solve_obj.res_cache.clone(),
-                    solve_obj.cache_gen,
+                    solve_obj.cache_generation,
                     board,
                     res,
                     best,

@@ -100,7 +100,7 @@ fn simplified_abdada_intro<Eval: Evaluator>(
     if depth >= ctx.solve_obj.params.parallel_depth_limit || rem < ctx.solve_obj.params.parallel_empties_limit {
         let (res, stat) = solve_inner(&mut ctx.solve_obj, board, (alpha, beta), passed);
         ctx.stats.merge(stat);
-        ctx.solve_obj.local_cache_gen += 1;
+        ctx.solve_obj.local_cache_generation += 1;
         return Some((res, None));
     }
     ctx.stats.merge(SolveStat::one());
@@ -120,7 +120,7 @@ fn simplified_abdada_intro<Eval: Evaluator>(
     if rem >= ctx.solve_obj.params.res_cache_limit {
         update_table(
             ctx.solve_obj.res_cache.clone(),
-            ctx.solve_obj.cache_gen,
+            ctx.solve_obj.cache_generation,
             board,
             res,
             best,

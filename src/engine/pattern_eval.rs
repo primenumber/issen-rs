@@ -491,22 +491,26 @@ impl PatternLinearEvaluator {
     #[cfg(target_feature = "avx2")]
     fn lookup_patterns(&self, param: &Parameters, vidx: [u16x16; 3]) -> i32 {
         unsafe {
-            unsafe fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
+            fn unpack_idx(idx: __m256i) -> (__m256i, __m256i) {
                 const MM_PERM_ACBD: i32 = 0b11011000;
-                let permed = _mm256_permute4x64_epi64(idx, MM_PERM_ACBD);
-                let lo = _mm256_unpacklo_epi16(permed, _mm256_setzero_si256());
-                let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
-                (lo, hi)
+                unsafe {
+                    let permed = _mm256_permute4x64_epi64(idx, MM_PERM_ACBD);
+                    let lo = _mm256_unpacklo_epi16(permed, _mm256_setzero_si256());
+                    let hi = _mm256_unpackhi_epi16(permed, _mm256_setzero_si256());
+                    (lo, hi)
+                }
             }
             let (idxh0, idxh1) = unpack_idx((*vidx.get_unchecked(0)).into());
             let (idxh2, idxh3) = unpack_idx((*vidx.get_unchecked(1)).into());
             let (idxh4, idxh5) = unpack_idx((*vidx.get_unchecked(2)).into());
-            unsafe fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
-                let offset = _mm256_add_epi32(
-                    idx,
-                    _mm256_loadu_si256(param.offsets.get_unchecked(start) as *const u32 as *const __m256i),
-                );
-                _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
+            fn gather_weight(param: &Parameters, idx: __m256i, start: usize) -> __m256i {
+                unsafe {
+                    let offset = _mm256_add_epi32(
+                        idx,
+                        _mm256_loadu_si256(param.offsets.get_unchecked(start) as *const u32 as *const __m256i),
+                    );
+                    _mm256_i32gather_epi32(param.pattern_weights.as_ptr() as *const i32, offset, 2)
+                }
             }
             let vw0 = gather_weight(param, idxh0, 0);
             let vw1 = gather_weight(param, idxh1, 8);
@@ -522,10 +526,12 @@ impl PatternLinearEvaluator {
                 v4: __m256i,
                 v5: __m256i,
             ) -> u16x16 {
-                let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
-                let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
-                let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
-                _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2).into()
+                unsafe {
+                    let sum0 = _mm256_blend_epi16(v0, _mm256_slli_epi32(v1, 16), 0b10101010);
+                    let sum1 = _mm256_blend_epi16(v2, _mm256_slli_epi32(v3, 16), 0b10101010);
+                    let sum2 = _mm256_blend_epi16(v4, _mm256_slli_epi32(v5, 16), 0b10101010);
+                    _mm256_add_epi16(_mm256_add_epi16(sum0, sum1), sum2).into()
+                }
             }
             vector_sum(vw0, vw1, vw2, vw3, vw4, vw5).reduce_sum() as i16 as i32
         }
