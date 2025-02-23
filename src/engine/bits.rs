@@ -128,6 +128,7 @@ pub const BASE3: [usize; 256] = {
 mod tests {
     use super::*;
     use rand::{Rng, SeedableRng};
+    use rand::rngs::SmallRng;
 
     fn flip_vertical_naive(x: u64) -> u64 {
         let mut res = 0;
@@ -192,7 +193,7 @@ mod tests {
     #[test]
     fn test_ops() {
         // gen data
-        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+        let mut rng = SmallRng::seed_from_u64(0xDEADBEAF);
         const LENGTH: usize = 256;
         let mut ary = [0u64; LENGTH];
         for i in 0..LENGTH {

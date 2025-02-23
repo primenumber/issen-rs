@@ -210,7 +210,7 @@ fn gen_opening(rng: &mut SmallRng) -> (Board, Vec<Hand>) {
     hands.push(initial_hand);
     board = board.play_hand(initial_hand).unwrap();
     // NOTE: Prevent searcher from always choosing D6
-    let second_hand = if rng.gen_bool(0.5) { "D6" } else { "F6" }.parse().unwrap();
+    let second_hand = if rng.random_bool(0.5) { "D6" } else { "F6" }.parse().unwrap();
     hands.push(second_hand);
     board = board.play_hand(second_hand).unwrap();
     (board, hands)
@@ -228,7 +228,7 @@ fn play_with_book<Eval: Evaluator>(
         if let Some((best_hands, score)) = book.lock().unwrap().lookup(board) {
             let from_book = match score.cmp(&0) {
                 Ordering::Less => false,
-                Ordering::Equal => rng.gen_bool(0.8),
+                Ordering::Equal => rng.random_bool(0.8),
                 Ordering::Greater => true,
             };
             if from_book {
@@ -254,7 +254,7 @@ fn grow_book(in_book_path: &Path, out_book_path: &Path, repeat: usize) -> Result
     let sub_solver = Arc::new(SubSolver::new(&[]));
     for i in 0..repeat {
         let mut rng = SmallRng::seed_from_u64(0xbeefbeef + i as u64);
-        let think_time_limit = 1 << rng.gen_range(8..=12);
+        let think_time_limit = 1 << rng.random_range(8..=12);
         eprintln!("i={}, tl={}", i, think_time_limit);
         let mut solve_obj = SolveObj::new(
             Arc::new(ResCacheTable::new(256, 4096)),

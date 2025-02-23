@@ -5,8 +5,7 @@ version = "0.2.0"
 authors = ["prime <prime@kmc.gr.jp>"]
 
 [dependencies]
-rand = { version = "0.8", features = ["small_rng"] }
-rand_xoshiro = "0.6"
+rand = { version = "0.9", features = ["small_rng"] }
 futures = { version = "0.3", features = ["std"] }
 yaml-rust = "0.4"
 spin = "0.7"

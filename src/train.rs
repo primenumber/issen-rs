@@ -47,7 +47,7 @@ pub fn gen_dataset(matches: &ArgMatches) {
         .unwrap()
         .parse::<usize>()
         .unwrap();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     eprintln!("Parse input...");
     let mut boards_with_results = Vec::new();
