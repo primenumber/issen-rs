@@ -1,6 +1,7 @@
 extern crate test;
 use super::*;
 use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::num::Wrapping;
@@ -263,7 +264,7 @@ fn iszero_wrapper(x: [u64; 4]) -> [u64; 4] {
 #[test]
 fn test_upper_bit() {
     // gen data
-    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+    let mut rng = SmallRng::seed_from_u64(0xDEADBEAF);
     let mask = [
         0x0101_0101_0101_0100,
         0x0000_0000_0000_00fe,
@@ -273,7 +274,7 @@ fn test_upper_bit() {
     const LENGTH: usize = 256;
     let mut ary = [0u64; LENGTH];
     for i in 0..LENGTH {
-        ary[i] = rng.gen::<u64>() & (mask[i % 4] << rng.gen_range(0..64));
+        ary[i] = rng.random::<u64>() & (mask[i % 4] << rng.random_range(0..64));
     }
     // upper_bit
     for i in 0..(LENGTH / 4) {
@@ -288,11 +289,11 @@ fn test_upper_bit() {
 #[test]
 fn test_iszero() {
     // gen data
-    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+    let mut rng = SmallRng::seed_from_u64(0xDEADBEAF);
     const LENGTH: usize = 256;
     let mut ary = [0u64; LENGTH];
     for i in 0..LENGTH {
-        ary[i] = rng.gen::<u64>();
+        ary[i] = rng.random::<u64>();
     }
     // iszero
     for i in 0..=(LENGTH - 4) {

@@ -24,7 +24,7 @@ pub struct Searcher<Eval: Evaluator> {
     pub cache: Arc<EvalCacheTable>,
     pub timer: Option<Timer>,
     pub node_count: usize,
-    pub cache_gen: u32,
+    pub cache_generation: u32,
 }
 
 impl<Eval: Evaluator> Clone for Searcher<Eval> {
@@ -34,7 +34,7 @@ impl<Eval: Evaluator> Clone for Searcher<Eval> {
             cache: self.cache.clone(),
             timer: self.timer.clone(),
             node_count: self.node_count.clone(),
-            cache_gen: self.cache_gen.clone(),
+            cache_generation: self.cache_generation.clone(),
         }
     }
 }
@@ -257,7 +257,7 @@ impl<Eval: Evaluator> Searcher<Eval> {
                     board,
                     lower: range.0,
                     upper: range.1,
-                    gen: self.cache_gen,
+                    generation: self.cache_generation,
                     best: Some(best),
                     depth,
                 };

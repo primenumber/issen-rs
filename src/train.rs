@@ -47,7 +47,7 @@ pub fn gen_dataset(matches: &ArgMatches) {
         .unwrap()
         .parse::<usize>()
         .unwrap();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     eprintln!("Parse input...");
     let mut boards_with_results = Vec::new();
@@ -371,7 +371,7 @@ pub fn eval_stats(matches: &ArgMatches) -> Option<()> {
                 cache: eval_cache.clone(),
                 timer: None,
                 node_count: 0,
-                cache_gen: 0,
+                cache_generation: 0,
             };
             for depth in 1..=depth_max {
                 if let Some((evaluated, _)) = searcher.think(

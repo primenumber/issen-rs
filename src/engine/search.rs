@@ -53,8 +53,8 @@ pub struct SolveObj<Eval: Evaluator> {
     pub evaluator: Arc<Eval>,
     pub last_cache: Arc<LastCache>,
     pub params: SearchParams,
-    pub cache_gen: u32,
-    pub local_cache_gen: u32,
+    pub cache_generation: u32,
+    pub local_cache_generation: u32,
 }
 
 impl<Eval: Evaluator> Clone for SolveObj<Eval> {
@@ -66,8 +66,8 @@ impl<Eval: Evaluator> Clone for SolveObj<Eval> {
             evaluator: self.evaluator.clone(),
             last_cache: self.last_cache.clone(),
             params: self.params.clone(),
-            cache_gen: self.cache_gen.clone(),
-            local_cache_gen: self.local_cache_gen.clone(),
+            cache_generation: self.cache_generation.clone(),
+            local_cache_generation: self.local_cache_generation.clone(),
         }
     }
 }
@@ -78,7 +78,7 @@ impl<Eval: Evaluator> SolveObj<Eval> {
         eval_cache: Arc<EvalCacheTable>,
         evaluator: Arc<Eval>,
         params: SearchParams,
-        cache_gen: u32,
+        cache_generation: u32,
     ) -> SolveObj<Eval> {
         SolveObj {
             res_cache,
@@ -87,8 +87,8 @@ impl<Eval: Evaluator> SolveObj<Eval> {
             evaluator,
             last_cache: Arc::new(LastCache::new()),
             params,
-            cache_gen,
-            local_cache_gen: 0,
+            cache_generation,
+            local_cache_generation: 0,
         }
     }
 }
@@ -265,7 +265,7 @@ pub fn move_ordering_impl<Eval: Evaluator>(
                 cache: solve_obj.eval_cache.clone(),
                 timer: None,
                 node_count: 0,
-                cache_gen: solve_obj.cache_gen,
+                cache_generation: solve_obj.cache_generation,
             };
             let score = searcher
                 .think(

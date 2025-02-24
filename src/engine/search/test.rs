@@ -13,7 +13,7 @@ fn test_lookup_result() {
         board,
         lower: -24,
         upper: 16,
-        gen: 3,
+        generation: 3,
         best: Some(Hand::Play(0)),
     };
     // [alpha, beta] is contained in [lower, upper]
@@ -118,7 +118,7 @@ fn test_lookup_result() {
             board,
             lower: 16,
             upper: 16,
-            gen: 3,
+            generation: 3,
             best: Some(Hand::Play(0)),
         };
         let mut alpha = -38;

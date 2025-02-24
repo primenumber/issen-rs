@@ -1,6 +1,7 @@
 use super::*;
 
 use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 
 fn solve_last_naive(board: Board) -> (i8, usize) {
     let pos = board.empty().trailing_zeros() as usize;
@@ -16,13 +17,13 @@ fn solve_last_naive(board: Board) -> (i8, usize) {
 #[test]
 fn test_last_cache() {
     // gen data
-    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0xDEADBEAF);
+    let mut rng = SmallRng::seed_from_u64(0xDEADBEAF);
     const LENGTH: usize = 256;
     let last_cache = LastCache::new();
     // last_cache
     for _ in 0..LENGTH {
-        let bit = rng.gen::<u64>();
-        let pos = rng.gen_range(0..BOARD_SIZE);
+        let bit = rng.random::<u64>();
+        let pos = rng.random_range(0..BOARD_SIZE);
         let pos_mask = !(1 << pos);
         let player = bit & pos_mask;
         let opponent = !bit & pos_mask;

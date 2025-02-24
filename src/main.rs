@@ -1,4 +1,3 @@
-#![feature(const_option)]
 #![feature(portable_simd)]
 #![feature(iterator_try_collect)]
 #![feature(test)]
@@ -111,7 +110,7 @@ fn solve_ffo<Eval: Evaluator>(
                     end.subsec_millis(),
                     nodes_per_sec / 1_000_000
                 );
-                solve_obj.cache_gen += 1;
+                solve_obj.cache_generation += 1;
                 stats.push(Stat {
                     nodes: stat.node_count,
                     elapsed: end.as_secs_f64(),
