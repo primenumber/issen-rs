@@ -7,7 +7,6 @@ use crate::engine::eval::*;
 use core::arch::x86_64::*;
 use std::fs::File;
 use std::io::Read;
-use std::mem;
 use std::ops::RangeInclusive;
 use std::path::Path;
 use std::simd::prelude::*;
@@ -90,7 +89,7 @@ impl FoldedEvaluator {
         for i in 0usize..length {
             let mut ary: [u8; 8] = Default::default();
             ary.copy_from_slice(&buf[(8 * i)..(8 * (i + 1))]);
-            let raw_weight = unsafe { mem::transmute::<[u8; 8], f64>(ary) };
+            let raw_weight = f64::from_ne_bytes(ary);
             v.push(
                 (SCALE as f64 * raw_weight)
                     .max(SCALE as f64 * -64.0)
