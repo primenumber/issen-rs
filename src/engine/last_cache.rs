@@ -63,23 +63,23 @@ impl LastCache {
         }
     }
 
-    #[cfg(all(target_feature = "bmi2", not(slow_pext)))]
+    #[cfg(all(target_feature = "bmi2", not(feature="slow_pext")))]
     fn get_col_bits(bits: u64, mask: u64, _col: usize) -> u64 {
         bits.pext(mask)
     }
 
-    #[cfg(not(all(target_feature = "bmi2", not(slow_pext))))]
+    #[cfg(not(all(target_feature = "bmi2", not(feature="slow_pext"))))]
     fn get_col_bits(mut bits: u64, mask: u64, col: usize) -> u64 {
         bits &= mask;
         ((bits >> col).wrapping_mul(0x0002_0408_1020_4081) >> 49) & 0xff
     }
 
-    #[cfg(all(target_feature = "bmi2", not(slow_pext)))]
+    #[cfg(all(target_feature = "bmi2", not(feature="slow_pext")))]
     fn get_diag1_bits(bits: u64, mask: u64, _row: usize, _col: usize) -> u64 {
         bits.pext(mask)
     }
 
-    #[cfg(not(all(target_feature = "bmi2", not(slow_pext))))]
+    #[cfg(not(all(target_feature = "bmi2", not(feature="slow_pext"))))]
     fn get_diag1_bits(mut bits: u64, mask: u64, row: usize, col: usize) -> u64 {
         bits &= mask;
         let width = if row >= col {
@@ -92,12 +92,12 @@ impl LastCache {
         (bits.wrapping_mul(0x0101_0101_0101_0101) >> 56) & ((1 << width) - 1)
     }
 
-    #[cfg(all(target_feature = "bmi2", not(slow_pext)))]
+    #[cfg(all(target_feature = "bmi2", not(feature="slow_pext")))]
     fn get_diag2_bits(bits: u64, mask: u64, _row: usize, _col: usize) -> u64 {
         bits.pext(mask)
     }
 
-    #[cfg(not(all(target_feature = "bmi2", not(slow_pext))))]
+    #[cfg(not(all(target_feature = "bmi2", not(feature="slow_pext"))))]
     fn get_diag2_bits(mut bits: u64, mask: u64, row: usize, col: usize) -> u64 {
         bits &= mask;
         let width = if row + col >= 7 {
