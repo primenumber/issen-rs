@@ -25,3 +25,7 @@ arrayvec = "0.7"
 num_cpus = "1.16"
 async-recursion = "1.0"
 dashmap = "5.5"
+
+[features]
+default = []
+slow_pext = []
