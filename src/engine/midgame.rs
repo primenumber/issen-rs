@@ -52,6 +52,17 @@ fn simplified_abdada_body<Eval: Evaluator>(
             deffered.push((pos, next));
             continue;
         }
+        if deffered.len() > 0 {
+            if let Some(entry) = ctx.solve_obj.res_cache.get(board) {
+                if entry.lower >= beta {
+                    return Some((entry.lower, entry.best));
+                } else if entry.lower > res {
+                    res = entry.lower;
+                    best = entry.best;
+                    alpha = max(alpha, res);
+                }
+            }
+        }
         start_search(next, &ctx.cs_hash);
         let (cres, _chand) = simplified_abdada_intro(ctx, next, (-alpha - 1, -alpha), false, depth + 1)?;
         finish_search(next, &ctx.cs_hash);
