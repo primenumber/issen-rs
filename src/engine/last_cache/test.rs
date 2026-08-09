@@ -1,6 +1,6 @@
 use super::*;
 
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand::rngs::SmallRng;
 
 fn solve_last_naive(board: Board) -> (i8, usize) {

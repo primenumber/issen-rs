@@ -265,9 +265,9 @@ pub fn parallel_self_play(matches: &ArgMatches) {
     let mut record = Vec::new();
     let initial_records = generate_depth_n(initial_board, random_depth, false, &mut record);
     eprintln!("{}", initial_records.len());
-    let mut rng = SmallRng::from_os_rng();
+    let mut rng: SmallRng = rand::make_rng();
     let initial_records = initial_records
-        .choose_multiple(&mut rng, take_count)
+        .sample(&mut rng, take_count)
         .collect::<Vec<_>>();
     let mut results = Vec::new();
     initial_records

@@ -127,7 +127,7 @@ pub const BASE3: [usize; 256] = {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
     use rand::rngs::SmallRng;
 
     fn flip_vertical_naive(x: u64) -> u64 {

@@ -1,5 +1,4 @@
 #![feature(portable_simd)]
-#![feature(iterator_try_collect)]
 #![feature(test)]
 mod book;
 mod compression;
