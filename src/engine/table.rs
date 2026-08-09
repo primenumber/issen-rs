@@ -2,9 +2,10 @@ use crate::engine::bits::*;
 use crate::engine::board::*;
 use crate::engine::hand::*;
 use crc64::Crc64;
-use spin::Mutex;
+use parking_lot::Mutex;
 use std::io::Write;
 use std::sync::Arc;
+use crossbeam_utils::CachePadded;
 
 pub trait CacheElement: Clone + Default {
     fn has_key(&self, board: Board) -> bool;
@@ -157,7 +158,7 @@ impl<T: CacheElement> CacheArray<T> {
 }
 
 pub struct CacheTable<T: CacheElement> {
-    arrays: Vec<Mutex<CacheArray<T>>>,
+    arrays: Vec<CachePadded<Mutex<CacheArray<T>>>>,
     buckets: u64,
 }
 
@@ -165,7 +166,7 @@ impl<T: CacheElement> CacheTable<T> {
     pub fn new(buckets: usize, capacity_per_bucket: usize) -> CacheTable<T> {
         let mut vec = Vec::new();
         for _ in 0..buckets {
-            vec.push(Mutex::new(CacheArray::<T>::new(capacity_per_bucket)));
+            vec.push(Mutex::new(CacheArray::<T>::new(capacity_per_bucket)).into());
         }
         CacheTable::<T> {
             arrays: vec,

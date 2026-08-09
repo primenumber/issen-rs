@@ -1,6 +1,6 @@
 extern crate test;
 use super::*;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand::rngs::SmallRng;
 use std::fs::File;
 use std::io::{BufRead, BufReader};

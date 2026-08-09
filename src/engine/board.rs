@@ -88,7 +88,7 @@ fn upper_bit(mut x: u64x4) -> u64x4 {
 }
 
 fn iszero(x: u64x4) -> u64x4 {
-    x.simd_eq(Simd::splat(0u64)).to_int().cast()
+    x.simd_eq(Simd::splat(0u64)).to_simd().cast()
 }
 
 impl Board {
