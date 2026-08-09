@@ -8,7 +8,7 @@ authors = ["prime <prime@kmc.gr.jp>"]
 rand = "0.10"
 futures = { version = "0.3", features = ["std"] }
 yaml-rust = "0.4"
-spin = "0.12"
+parking_lot = "0.12"
 clap = "4.2"
 rayon = "1.5"
 serde = { version = "1.0", features = ["derive"] }
@@ -25,6 +25,7 @@ arrayvec = "0.7"
 num_cpus = "1.16"
 async-recursion = "1.0"
 dashmap = "5.5"
+crossbeam-utils = "0.8"
 
 [features]
 default = []

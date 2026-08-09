@@ -722,18 +722,19 @@ dependencies = [
  "async-recursion",
  "clap",
  "crc64",
+ "crossbeam-utils",
  "dashmap",
  "futures",
  "http-body-util",
  "hyper 1.11.0",
  "hyper-util",
  "num_cpus",
+ "parking_lot",
  "rand",
  "rayon",
  "reqwest",
  "serde",
  "serde_json",
- "spin",
  "thiserror",
  "tokio",
  "yaml-rust",
@@ -1097,15 +1098,6 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "spin"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8abadc99fd9c7bbb7d0ca2b31d72a067d0c0dcd7aad25ab8cac71ba91417694b"
-dependencies = [
- "lock_api",
 ]
 
 [[package]]
